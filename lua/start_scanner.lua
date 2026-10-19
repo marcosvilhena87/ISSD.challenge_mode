@@ -1,12 +1,8 @@
--- Ponto de entrada para Tools > Lua Console > Open Script (BizHawk).
--- Resolve a pasta do projeto a partir deste arquivo, inclusive se movida.
-local source = debug.getinfo(1, "S").source
-assert(source:sub(1, 1) == "@", "Abra este arquivo como script no Lua Console")
-local lua_dir = source:sub(2):match("^(.*)[/\\][^/\\]+$")
-assert(lua_dir, "Nao foi possivel identificar a pasta lua")
-local root = lua_dir:gsub("[/\\]$", ""):match("^(.*)[/\\]lua$")
-assert(root, "O iniciador deve estar na pasta lua/ do projeto")
-_G.ISSD_PROJECT_ROOT = root:gsub("\\", "/")
+-- BizHawk NLua costuma identificar o script como [string "main"].
+-- Portanto, nao inferir o diretorio com debug.getinfo().
+-- Ajuste este caminho apenas se mover a pasta do projeto.
+_G.ISSD_PROJECT_ROOT = [[C:/Minha_Pasta/Jogos/BizHawk-2.11.1-win-x64/SNES/ISSD.challenge_mode-main]]
 print("[WRAM] Raiz: " .. _G.ISSD_PROJECT_ROOT)
 local scanner = dofile(_G.ISSD_PROJECT_ROOT .. "/lua/challenge/wram_scanner.lua")
+assert(type(scanner) == "table" and type(scanner.run) == "function", "Scanner nao retornou .run()")
 scanner.run()
