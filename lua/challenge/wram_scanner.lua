@@ -79,7 +79,11 @@ function M.run()
     local f6=not not keys.F6
     local f7=not not keys.F7
     if f7 and not prev7 then
-      M.capture("outside",nil,nil,nil)
+      if not exists(snapshot_dir .. "/outside.hex") then
+        M.capture("outside",nil,nil,nil)
+      else
+        print("[WRAM] Baseline ja capturado nesta sessao.")
+      end
     end
     if f6 and not prev6 then
       if index < 48 then
