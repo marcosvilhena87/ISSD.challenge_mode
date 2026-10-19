@@ -52,6 +52,6 @@ Guia detalhado: [docs/START_SCANNER.md](docs/START_SCANNER.md). Protocolo de col
 - Fora dos desafios: pressione F7 uma vez (baseline).
 - Para cada um dos 24 cenários, pressione F6; repita em duas rodadas.
 - Em Lua local: `lua tests/test_wram_analyzer.lua` e `lua lua/analyze_snapshots.lua`.
-- Saída local: `snapshots/candidates.csv`. Os offsets são apenas hipóteses.
+- Cada execução cria `snapshots/session_AAAAMMDD_HHMMSS/` com `manifest.csv` e arquivos `.hex`; não é mais necessário excluir `snapshots/manifest.csv`.\n- Para analisar uma coleta: `lua lua/analyze_snapshots.lua "snapshots/session_AAAAMMDD_HHMMSS"`. O `candidates.csv` é salvo na própria sessão. Os offsets são hipóteses.
 
 O scanner não reconhece automaticamente o menu. Não envie ROM ou snapshots para o Git.
