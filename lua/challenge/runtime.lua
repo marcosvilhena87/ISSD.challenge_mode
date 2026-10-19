@@ -1,4 +1,5 @@
-local recognizer = dofile("lua/challenge/recognizer.lua")
+local root = _G.ISSD_PROJECT_ROOT or "."
+local recognizer = dofile(root .. "/lua/challenge/recognizer.lua")
 local M = {}
 local function signature(s)
   return table.concat({s.status or "", s.challenge or "", tostring(s.level or ""), s.reason or ""}, "|")
