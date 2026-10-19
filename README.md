@@ -5,7 +5,7 @@ Projeto independente de reconhecimento, instrumentação e futura automação do
 ## Estado
 
 - Catálogo inicial: 6 modalidades x 4 níveis = 24 cenários.
-- Reconhecimento experimental v0.3: sondas WRAM redundantes (0xD708/0xE52C e 0xD70A/0xE52E), com concordância e estabilidade; resultado `candidate`, **não validado fora do modo**.
+- Reconhecimento experimental v0.4: desafio em 0xD708/0xE52C, nivel destacado em 0x1550. Os antigos 0xD70A/0xE52E permanecem apenas como sondas auxiliares. Resultado `candidate`, sem validacao de presenca do menu.
 - Leitura de memória implementada como hipótese. Detecção comprovada do modo ainda requer controles negativos em menus e partidas normais.
 - Botões de controle: **não acionados** nesta etapa.
 
@@ -66,3 +66,7 @@ Execute `lua/main.lua` no Lua Console para observar mudanças de desafio/nível.
 ## Monitor WRAM ao vivo (menu)
 
 Para investigar falso positivo (exemplo: menu em DRIBBLE LV.1 mas sonda reporta FREE KICK LV.4), abra `lua/start_live_monitor.lua` no Lua Console. A janela permite capturar uma referencia e comparar as mudancas apos alternar **somente** o desafio ou o nivel. O CSV sera salvo em `snapshots/live_menu_changes.csv`. Guia: [docs/LIVE_WRAM_MONITOR.md](docs/LIVE_WRAM_MONITOR.md).
+
+### Mudanca v0.4
+
+O nivel selecionado no menu vem de `WRAM 0x1550` (0..3), e nao mais dos enderecos legados `0xD70A/0xE52E`. A leitura de desafio usa a concordancia `0xD708 == 0xE52C` (0..5). Sem uma flag comprovada de presenca do menu, o status continua `candidate` mesmo fora dele.
