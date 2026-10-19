@@ -13,7 +13,7 @@ local function readfile(path)
   local f=assert(io.open(path,"rb"));local s=f:read("*a");f:close();return s
 end
 local function parse_manifest(path)
-  local s=readfile(path); local rows,seen={},{}
+  local s=readfile(path); local rows,seen={},{}\n  -- Compatibilidade com manifestos anteriores cujo cabecalho usou \\n literal.\n  s=s:gsub("name,challenge,level,round\\\\n", "name,challenge,level,round\\n")
   for line in (s.."\n"):gmatch("(.-)\r?\n") do
     if line~="" and line~="name,challenge,level,round" then
       local name,ch,lv,round=line:match("^([%w_%-]+),([%w_%-]+),(%d+),(%d+)$")
