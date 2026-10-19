@@ -4,7 +4,7 @@
 Exporta a WRAM inteira (128 KiB) como arquivos `.hex` e compara os 24 cenários (seis desafios × LV1–4) em **duas rodadas**. O algoritmo encontra offsets de byte e word little-endian cujos valores sejam constantes dentro do mesmo grupo e variem entre grupos. **Correlação não é validação.** O uso de `memory.read_u8(..., "WRAM")` deve ser confirmado na versão instalada do BizHawk.
 
 ## Coleta
-1. Abra a ROM no BizHawk e carregue `lua/start_scanner.lua` no Lua Console.\n2. O scanner cria automaticamente `snapshots/session_AAAAMMDD_HHMMSS/` (sufixos numéricos evitam colisões). Coletas anteriores não são apagadas.\n3. Fora do Challenge Mode, aperte **P** uma vez para registrar o baseline. O script **não** seleciona desafios automaticamente.
+1. Abra a ROM no BizHawk e carregue `lua/start_scanner.lua` no Lua Console.\n2. O scanner cria automaticamente `snapshots/session_AAAAMMDD_HHMMSS/` (sufixos numéricos evitam colisões). Coletas anteriores não são apagadas.\n3. Fora do Challenge Mode, aperte **K** uma vez para registrar o baseline. O script **não** seleciona desafios automaticamente.
 4. Na seleção de desafios, vá a **DRIBBLE LV1**, aguarde a tela estabilizar e pressione **O**. Continue na ordem indicada abaixo. Uma tecla registra o conteúdo atual da WRAM: o script não garante que você esteja na tela correta.
 5. Ordem de cada rodada: `dribble`, `pass`, `shoot`, `defense`, `corner_kick`, `free_kick`; para cada modalidade capture LV1, LV2, LV3 e LV4. Depois repita todos os 24 casos em uma segunda rodada.
 6. Ao concluir, feche o scanner e rode `lua tests/test_wram_analyzer.lua` e `lua lua/analyze_snapshots.lua` a partir da raiz (Lua 5.1+), após `cd "C:\Minha_Pasta\Jogos\BizHawk-2.11.1-win-x64\ISSD.challenge_mode-main"` no PowerShell.
@@ -24,4 +24,4 @@ Exporta a WRAM inteira (128 KiB) como arquivos `.hex` e compara os 24 cenários 
 - Para validar um candidato, alterar modalidade/nível repetidamente, comparar valores em tempo real, testar fora do Challenge Mode e usar evidência CSV; só então atualizar `ISSD.memory_map`.
 
 
-> **Teclas do scanner:** `P` captura o baseline e `O` captura o proximo cenario. As teclas F1-F10 sao reservadas para atalhos de savestate no BizHawk. Caso P/O estejam mapeadas no seu emulador, altere `BASELINE_KEY` e `CAPTURE_KEY` em `lua/challenge/wram_scanner.lua` e revise os atalhos do BizHawk.
+> **Teclas do scanner:** `K` captura o baseline e `O` captura o proximo cenario. As teclas F1-F10 sao reservadas para atalhos de savestate no BizHawk. Caso K/O estejam mapeadas no seu emulador, altere `BASELINE_KEY` e `CAPTURE_KEY` em `lua/challenge/wram_scanner.lua` e revise os atalhos do BizHawk.
