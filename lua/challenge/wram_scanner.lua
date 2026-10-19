@@ -74,13 +74,21 @@ function M.run()
   append(snapshot_dir.."/manifest.csv","name,challenge,level,round\\n")
   local index = 0
   local request_baseline, request_capture = false, false
+  local previous_k, previous_o = false, false
   local window = forms.newform(410, 155, "ISSD WRAM Scanner")
   forms.label(window, "Baseline fora do desafio; depois 48 cenarios em ordem.", 10, 10, 385, 25)
   forms.button(window, "Capturar baseline", function() request_baseline = true end, 10, 45, 175, 35)
   forms.button(window, "Proximo cenario", function() request_capture = true end, 205, 45, 175, 35)
-  print("[WRAM] Use os botoes da janela ISSD WRAM Scanner; nenhum atalho de teclado.")
+  print("[WRAM] Use os botoes da janela ou K = baseline; O = proximo cenario.")
   print("[WRAM] Ordem: DRIBBLE LV1..4, PASS LV1..4, SHOOT, DEFENSE, CORNER_KICK, FREE_KICK; 2 rodadas.")
   while true do
+    if input and input.get then
+      local keys = input.get()
+      local k, o = not not (keys.K or keys.k), not not (keys.O or keys.o)
+      if k and not previous_k then request_baseline = true end
+      if o and not previous_o then request_capture = true end
+      previous_k, previous_o = k, o
+    end
     if request_baseline then
       request_baseline = false
       if not exists(snapshot_dir .. "/outside.hex") then
