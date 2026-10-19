@@ -49,7 +49,7 @@ Abra **`lua/start_scanner.lua`** pelo **Tools > Lua Console > Open Script** do B
 
 Guia detalhado: [docs/START_SCANNER.md](docs/START_SCANNER.md). Protocolo de coleta e análise: [docs/WRAM_SCANNER.md](docs/WRAM_SCANNER.md).
 
-- Fora dos desafios: pressione P uma vez (baseline).
+- Fora dos desafios: pressione K uma vez (baseline).
 - Para cada um dos 24 cenários, pressione O; repita em duas rodadas.
 - Em Lua local: `lua tests/test_wram_analyzer.lua` e `lua lua/analyze_snapshots.lua`.
 - Cada execução cria `snapshots/session_AAAAMMDD_HHMMSS/` com `manifest.csv` e arquivos `.hex`; não é mais necessário excluir `snapshots/manifest.csv`.\n- Para analisar uma coleta: `lua lua/analyze_snapshots.lua "snapshots/session_AAAAMMDD_HHMMSS"`. O `candidates.csv` é salvo na própria sessão. Os offsets são hipóteses.
@@ -57,4 +57,4 @@ Guia detalhado: [docs/START_SCANNER.md](docs/START_SCANNER.md). Protocolo de col
 O scanner não reconhece automaticamente o menu. Não envie ROM ou snapshots para o Git.
 
 
-> **Teclas do scanner:** `P` captura o baseline e `O` captura o proximo cenario. As teclas F1-F10 sao reservadas para atalhos de savestate no BizHawk. Caso P/O estejam mapeadas no seu emulador, altere `BASELINE_KEY` e `CAPTURE_KEY` em `lua/challenge/wram_scanner.lua` e revise os atalhos do BizHawk.
+> **Teclas do scanner:** `K` captura o baseline e `O` captura o proximo cenario. As teclas F1-F10 sao reservadas para atalhos de savestate no BizHawk. Caso K/O estejam mapeadas no seu emulador, altere `BASELINE_KEY` e `CAPTURE_KEY` em `lua/challenge/wram_scanner.lua` e revise os atalhos do BizHawk.
