@@ -1,28 +1,25 @@
-# Iniciar o scanner WRAM no BizHawk
+# Iniciar o scanner WRAM no BizHawk 2.11.1
 
-## Pelo Lua Console (recomendado)
+## Importante: erro NLua `[string "main"]:4`
 
-1. Atualize o repositório local com `git pull` ou baixe o ZIP atualizado.
+O BizHawk pode identificar o script carregado como `[string "main"]`; portanto, **não use** `debug.getinfo(1, "S").source` para descobrir o caminho do arquivo. O iniciador `lua/start_scanner.lua` usa uma raiz explícita, apontando para a instalação informada:
+
+`C:/Minha_Pasta/Jogos/BizHawk-2.11.1-win-x64/SNES/ISSD.challenge_mode-main`
+
+## Executar
+
+1. Atualize a pasta local com `git pull` ou baixe o ZIP mais recente e substitua os arquivos antigos (preserve a pasta `snapshots`).
 2. Abra a ROM de International Superstar Soccer Deluxe no BizHawk.
-3. Em **Tools > Lua Console > Open Script**, selecione **`lua/start_scanner.lua`** — **não** selecione diretamente `lua/challenge/wram_scanner.lua`.
-4. A janela de saída deve imprimir `[WRAM] Raiz: ...` e `[WRAM] Inicie FORA do desafio...`.
-5. Na tela fora do desafio, pressione F7 para o baseline; depois F6 para cada um dos 48 casos na ordem documentada em `WRAM_SCANNER.md`.
+3. Em **Tools > Lua Console > Open Script**, selecione **`lua/start_scanner.lua`**, não `lua/challenge/wram_scanner.lua`.
+4. Confirme no console `[WRAM] Raiz: ...` e as instruções de F6/F7.
+5. Fora do desafio, pressione **F7** para o baseline; em seguida, pressione **F6** para os 48 cenários na ordem de `docs/WRAM_SCANNER.md`.
 
-O iniciador descobre a raiz com base na localização do próprio arquivo. Funciona mesmo quando o projeto está dentro de uma subpasta `SNES`.
+Se ainda surgir a mensagem `Abra este arquivo como script no Lua Console`, a **versão local é antiga**: abra `lua/start_scanner.lua`, remova todas as linhas com `local source = debug.getinfo`, `assert(source:sub`, `lua_dir` e `local root =`, ou substitua o arquivo integralmente pela versão da branch main.
 
-## Alternativa para Lua Console: execução de expressão
+## Diagnóstico
 
-Se o console permitir comandos Lua interativos, rode a partir da raiz correta (ajuste o caminho):
-
-```lua
-_G.ISSD_PROJECT_ROOT = [[C:/Minha_Pasta/Jogos/BizHawk-2.11.1-win-x64/SNES/ISSD.challenge_mode-main]]
-dofile(_G.ISSD_PROJECT_ROOT .. "/lua/challenge/wram_scanner.lua").run()
-```
-
-## Se fechar ou mostrar erro
-
-- Verifique se `snapshots/` existe no diretório do projeto e permite gravação.
-- Se `snapshots/manifest.csv` já existir, **não o apague sem salvar os dados**; arquive a coleta anterior antes de recomeçar.
-- Observe as mensagens e exceções na saída do Lua Console.
-- Confirme que a ROM SNES está carregada e que o domínio `WRAM` existe com ao menos 128 KiB.
-- A coleta é manual; não detecta desafio ou nível automaticamente.
+- Se a pasta foi movida, ajuste somente `_G.ISSD_PROJECT_ROOT` dentro de `lua/start_scanner.lua`.
+- Verifique que `snapshots/` existe e permite gravação.
+- Se `snapshots/manifest.csv` já existe, **arquive a coleta** antes de reiniciar; não apague registros.
+- Em erros novos, copie a exceção completa da saída do Lua Console.
+- O scanner registra dados; não reconhece modalidade e nível automaticamente nem controla jogadores.
