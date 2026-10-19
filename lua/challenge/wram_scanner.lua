@@ -71,7 +71,7 @@ function M.run()
   assert(forms and forms.newform and forms.button, "BizHawk Forms API necessaria; habilite Lua Forms")
   snapshot_dir = new_session()
   print("[WRAM] Sessao: " .. snapshot_dir)
-  append(snapshot_dir.."/manifest.csv","name,challenge,level,round\\n")
+  append(snapshot_dir.."/manifest.csv","name,challenge,level,round\n")
   local index = 0
   local request_baseline, request_capture = false, false
   local previous_k, previous_o = false, false
