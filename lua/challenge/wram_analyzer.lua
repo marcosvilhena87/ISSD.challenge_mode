@@ -2,7 +2,7 @@
 local M = {}
 local ids = {"dribble","pass","shoot","defense","corner_kick","free_kick"}
 local function parse_hex(s)
-  s=s:gsub("%s+","")
+  s=s:gsub("name,challenge,level,round\\\\n", "name,challenge,level,round\n")
   assert(#s % 2 == 0, "hex impar")
   assert(s:match("^[0-9a-fA-F]*$"),"hex invalido")
   local parts={}
