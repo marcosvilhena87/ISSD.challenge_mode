@@ -2,7 +2,7 @@
 local M = {}
 local ids = {"dribble","pass","shoot","defense","corner_kick","free_kick"}
 local function parse_hex(s)
-  s=s:gsub("name,challenge,level,round\\\\n", "name,challenge,level,round\n")
+  s=s:gsub("%s+","")
   assert(#s % 2 == 0, "hex impar")
   assert(s:match("^[0-9a-fA-F]*$"),"hex invalido")
   local parts={}
@@ -15,7 +15,7 @@ end
 local function parse_manifest(path)
   local s=readfile(path); local rows,seen={},{}
   -- Compatibilidade com manifesto antigo: dois caracteres barra e n no cabecalho.
-  s=s:gsub("name,challenge,level,round\\\\n", "name,challenge,level,round\\n")
+  s=s:gsub("name,challenge,level,round\\\\n", "name,challenge,level,round\n")
   for line in (s.."\n"):gmatch("(.-)\r?\n") do
     if line~="" and line~="name,challenge,level,round" then
       local name,ch,lv,round=line:match("^([%w_%-]+),([%w_%-]+),(%d+),(%d+)$")
