@@ -3,7 +3,8 @@
 -- F6: proximo caso (duas rodadas de 24). F7: baseline fora do desafio.
 local M = {}
 local root = _G.ISSD_PROJECT_ROOT or [[C:/Minha_Pasta/Jogos/BizHawk-2.11.1-win-x64/ISSD.challenge_mode-main]]
-local snapshot_dir = root .. "/snapshots"
+local snapshots_root = root .. "/snapshots"
+local snapshot_dir = nil
 local ids = {"dribble","pass","shoot","defense","corner_kick","free_kick"}
 local size = 0x20000
 local function hex(bytes)
@@ -23,18 +24,38 @@ local function read()
   if #part>0 then chunks[#chunks+1]=table.concat(part) end
   return table.concat(chunks)
 end
-local function mkdir()
-  -- Diretorio deve existir; evitar os.execute em ambiente restrito.
-  local f,err=io.open(snapshot_dir .. "/.write_test","wb")
+local function exists(path)
+  local f=io.open(path,"rb"); if f then f:close();return true end;return false
+end
+local function ensure_root()
+  local f,err=io.open(snapshots_root .. "/.write_test","wb")
   if not f then error("Crie a pasta snapshots/ na raiz do repositorio: "..tostring(err)) end
   f:close()
-  os.remove(snapshot_dir .. "/.write_test")
+  os.remove(snapshots_root .. "/.write_test")
+end
+local function new_session()
+  ensure_root()
+  local timestamp=os.date("%Y%m%d_%H%M%S")
+  for n=1,999 do
+    local suffix=n==1 and "" or string.format("_%03d",n)
+    local dir=snapshots_root .. "/session_" .. timestamp .. suffix
+    -- Em Windows/BizHawk os.execute cria a pasta; a verificacao abaixo
+    -- impede reutilizar uma sessao ja iniciada no mesmo segundo.
+    if not exists(dir .. "/manifest.csv") then
+      local cmd='mkdir "' .. dir:gsub("/", "\\") .. '" 2>nul'
+      os.execute(cmd)
+      local test=io.open(dir .. "/.write_test","wb")
+      if test then
+        test:close()
+        os.remove(dir .. "/.write_test")
+        return dir
+      end
+    end
+  end
+  error("Nao foi possivel criar uma pasta de sessao gravavel")
 end
 local function append(path,s)
   local f=assert(io.open(path,"ab")); f:write(s);f:close()
-end
-local function exists(path)
-  local f=io.open(path,"rb"); if f then f:close();return true end;return false
 end
 function M.capture(name, challenge, level, round)
   assert(name:match("^[%w_%-]+$"), "nome inseguro")
@@ -47,8 +68,8 @@ function M.capture(name, challenge, level, round)
 end
 function M.run()
   assert(emu and emu.frameadvance and input and input.get, "BizHawk emu.frameadvance e input.get necessarios")
-  mkdir()
-  assert(not exists(snapshot_dir.."/manifest.csv"), "manifest.csv ja existe; arquive ou limpe snapshots para iniciar coleta")
+  snapshot_dir = new_session()
+  print("[WRAM] Sessao: " .. snapshot_dir)
   append(snapshot_dir.."/manifest.csv","name,challenge,level,round\n")
   local index,prev6,prev7=0,false,false
   print("[WRAM] Inicie FORA do desafio: F7 = baseline. F6 = proximo caso da sequencia.")
