@@ -9,7 +9,8 @@ local function read_byte(address, domain)
   return memory.read_u8(address, domain)
 end
 function M.run()
-  assert(emu ~= nil and type(emu.frameadvance) == "function", "API emu.frameadvance indisponivel: confira se esta executando no Lua Console do BizHawk")
+  -- NLua pode expor funcoes host como userdata/proxies (nao "function").
+  assert(emu and emu.frameadvance, "BizHawk emu.frameadvance indisponivel")
   local last, stable_key, stable_count = nil, nil, 0
   while true do
     local manual = recognizer.recognize(_G.ISSD_CHALLENGE_OBSERVATION)
