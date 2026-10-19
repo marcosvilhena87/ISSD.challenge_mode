@@ -43,12 +43,15 @@ Descrições e recordes foram transcritos das seis capturas fornecidas pelo usu�
 
 ## Scanner de WRAM (v0.2)
 
-O coletor e o comparador estão documentados em [docs/WRAM_SCANNER.md](docs/WRAM_SCANNER.md).
+Abra **`lua/start_scanner.lua`** pelo **Tools > Lua Console > Open Script** do BizHawk. Não abra diretamente `lua/challenge/wram_scanner.lua` — esse arquivo é um módulo e não chama `.run()` sozinho.
 
-- No Lua Console BizHawk: `dofile([[C:/Minha_Pasta/Jogos/BizHawk-2.11.1-win-x64/ISSD.challenge_mode-main/lua/challenge/wram_scanner.lua]]).run()`.
-- Fora dos desafios: F7 uma vez (baseline).
-- Para cada um dos 24 cenários na ordem descrita: F6; repetir em duas rodadas.
+**Erro NLua `[string "main"]:4: Abra este arquivo como script no Lua Console`?** Sua cópia local do iniciador é antiga. Atualize-a com a versão da branch `main`, que não usa `debug.getinfo()` e tem o caminho da pasta `SNES` configurado.
+
+Guia detalhado: [docs/START_SCANNER.md](docs/START_SCANNER.md). Protocolo de coleta e análise: [docs/WRAM_SCANNER.md](docs/WRAM_SCANNER.md).
+
+- Fora dos desafios: pressione F7 uma vez (baseline).
+- Para cada um dos 24 cenários, pressione F6; repita em duas rodadas.
 - Em Lua local: `lua tests/test_wram_analyzer.lua` e `lua lua/analyze_snapshots.lua`.
-- Saída local: `snapshots/candidates.csv`. Os offsets são apenas hipóteses para validação.
+- Saída local: `snapshots/candidates.csv`. Os offsets são apenas hipóteses.
 
-A coleta é manual e o projeto **não promete reconhecer automaticamente o menu** sem a descoberta dos endereços. Os snapshots ficam ignorados pelo Git.
+O scanner não reconhece automaticamente o menu. Não envie ROM ou snapshots para o Git.
