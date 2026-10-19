@@ -16,7 +16,7 @@ local function log_row(file,frame,kind,current,previous,scanned)
   local row={frame,kind,current.status,current.challenge,current.level,current.reason,
     current.source,previous and previous.challenge or nil,previous and previous.level or nil}
   for _,name in ipairs(fields) do row[#row+1]=raw[name] end
-  for i,v in ipairs(row) do row[i]=csv(v) end
+  for i=1,14 do row[i]=csv(row[i]) end
   file:write(table.concat(row,",").."\n")
   file:flush()
 end
@@ -62,7 +62,7 @@ function M.run()
       end
     else result=scanned end
     local key=signature(result)
-    if key~=last_signature then
+    if key~=last_signature and result.status~="pending" then
       print(string.format("[ISSD.challenge_mode] %s challenge=%s level=%s source=%s reason=%s",
         result.status,tostring(result.challenge),tostring(result.level),
         tostring(result.source),tostring(result.reason)))
