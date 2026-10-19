@@ -25,6 +25,8 @@ function M.read(reader)
     if not ok or type(val)~="number" then return {status="unknown",reason="read_failed"} end
     values[field]=val
   end
-  return M.decode(values)
+  local result=M.decode(values)
+  result.raw=values
+  return result
 end
 return M
