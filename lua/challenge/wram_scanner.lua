@@ -1,6 +1,6 @@
 -- Snapshot WRAM 128 KiB, sem modificar memoria ou pressionar botoes no jogo.
 -- No Lua Console do BizHawk execute: dofile("lua/challenge/wram_scanner.lua").run()
--- Teclas configuraveis: P = baseline; O = proximo caso. Evita F1..F10 (savestates).
+-- Baseline automatico ao iniciar fora do desafio; O = proximo caso.
 local M = {}
 local root = _G.ISSD_PROJECT_ROOT or [[C:/Minha_Pasta/Jogos/BizHawk-2.11.1-win-x64/ISSD.challenge_mode-main]]
 local snapshots_root = root .. "/snapshots"
