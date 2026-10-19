@@ -5,8 +5,8 @@ Projeto independente de reconhecimento, instrumentação e futura automação do
 ## Estado
 
 - Catálogo inicial: 6 modalidades x 4 níveis = 24 cenários.
-- Reconhecimento v0.1: por metadados explícitos de sessão (sem endereços WRAM inventados).
-- Detecção de seleção por pixels, OCR ou memória: **não implementada**; requer calibração empírica.
+- Reconhecimento experimental v0.3: sondas WRAM redundantes (0xD708/0xE52C e 0xD70A/0xE52E), com concordância e estabilidade; resultado `candidate`, **não validado fora do modo**.
+- Leitura de memória implementada como hipótese. Detecção comprovada do modo ainda requer controles negativos em menus e partidas normais.
 - Botões de controle: **não acionados** nesta etapa.
 
 ## Estrutura
@@ -58,3 +58,7 @@ O scanner não reconhece automaticamente o menu. Não envie ROM ou snapshots par
 
 
 > **Teclas do scanner:** `K` captura o baseline e `O` captura o proximo cenario. As teclas F1-F10 sao reservadas para atalhos de savestate no BizHawk. Caso K/O estejam mapeadas no seu emulador, altere `BASELINE_KEY` e `CAPTURE_KEY` em `lua/challenge/wram_scanner.lua` e revise os atalhos do BizHawk.
+
+## Reconhecimento por WRAM (experimental)
+
+Execute `lua/main.lua` no Lua Console para observar mudanças de desafio/nível. Leia [docs/AUTO_RECOGNITION.md](docs/AUTO_RECOGNITION.md) para endereços, interpretação, limitações e testes. O scanner continua independente em `lua/start_scanner.lua`.
