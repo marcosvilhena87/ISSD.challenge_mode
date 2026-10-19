@@ -9,7 +9,7 @@ local function read_byte(address, domain)
   return memory.read_u8(address, domain)
 end
 function M.run()
-  assert(type(emu) == "table" and type(emu.frameadvance) == "function", "Execute no BizHawk com emu.frameadvance")
+  assert(emu ~= nil and type(emu.frameadvance) == "function", "API emu.frameadvance indisponivel: confira se esta executando no Lua Console do BizHawk")
   local last, stable_key, stable_count = nil, nil, 0
   while true do
     local manual = recognizer.recognize(_G.ISSD_CHALLENGE_OBSERVATION)
