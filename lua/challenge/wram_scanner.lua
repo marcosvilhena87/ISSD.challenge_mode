@@ -1,12 +1,14 @@
 -- Snapshot WRAM 128 KiB, sem modificar memoria ou pressionar botoes no jogo.
 -- No Lua Console do BizHawk execute: dofile("lua/challenge/wram_scanner.lua").run()
--- F6: proximo caso (duas rodadas de 24). F7: baseline fora do desafio.
+-- Teclas configuraveis: P = baseline; O = proximo caso. Evita F1..F10 (savestates).
 local M = {}
 local root = _G.ISSD_PROJECT_ROOT or [[C:/Minha_Pasta/Jogos/BizHawk-2.11.1-win-x64/ISSD.challenge_mode-main]]
 local snapshots_root = root .. "/snapshots"
 local snapshot_dir = nil
 local ids = {"dribble","pass","shoot","defense","corner_kick","free_kick"}
 local size = 0x20000
+local BASELINE_KEY = "P"
+local CAPTURE_KEY = "O"
 local function hex(bytes)
   return (bytes:gsub(".", function(c) return string.format("%02X", string.byte(c)) end))
 end
@@ -71,21 +73,21 @@ function M.run()
   snapshot_dir = new_session()
   print("[WRAM] Sessao: " .. snapshot_dir)
   append(snapshot_dir.."/manifest.csv","name,challenge,level,round\n")
-  local index,prev6,prev7=0,false,false
-  print("[WRAM] Inicie FORA do desafio: F7 = baseline. F6 = proximo caso da sequencia.")
+  local index,prev_capture,prev_baseline=0,false,false
+  print("[WRAM] Inicie FORA do desafio: " .. BASELINE_KEY .. " = baseline. " .. CAPTURE_KEY .. " = proximo caso.")
   print("[WRAM] Ordem: DRIBBLE LV1..4, PASS LV1..4, SHOOT, DEFENSE, CORNER_KICK, FREE_KICK; repita 2 rodadas.")
   while true do
     local keys=input.get()
-    local f6=not not keys.F6
-    local f7=not not keys.F7
-    if f7 and not prev7 then
+    local capture=not not keys[CAPTURE_KEY]
+    local baseline=not not keys[BASELINE_KEY]
+    if baseline and not prev_baseline then
       if not exists(snapshot_dir .. "/outside.hex") then
         M.capture("outside",nil,nil,nil)
       else
         print("[WRAM] Baseline ja capturado nesta sessao.")
       end
     end
-    if f6 and not prev6 then
+    if capture and not prev_capture then
       if index < 48 then
         index=index+1
         local round=math.floor((index-1)/24)+1
@@ -97,7 +99,7 @@ function M.run()
         if index<48 then print("[WRAM] Proxima captura: "..ids[math.floor(((index)%24)/4)+1].." LV"..(((index)%4)+1)) end
       else print("[WRAM] 48 capturas concluidas. Execute lua tests/test_wram_analyzer.lua e lua lua/analyze_snapshots.lua fora do BizHawk.") end
     end
-    prev6,prev7=f6,f7
+    prev_capture,prev_baseline=capture,baseline
     emu.frameadvance()
   end
 end
