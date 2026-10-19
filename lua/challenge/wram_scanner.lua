@@ -2,6 +2,8 @@
 -- No Lua Console do BizHawk execute: dofile("lua/challenge/wram_scanner.lua").run()
 -- F6: proximo caso (duas rodadas de 24). F7: baseline fora do desafio.
 local M = {}
+local root = _G.ISSD_PROJECT_ROOT or [[C:/Minha_Pasta/Jogos/BizHawk-2.11.1-win-x64/ISSD.challenge_mode-main]]
+local snapshot_dir = root .. "/snapshots"
 local ids = {"dribble","pass","shoot","defense","corner_kick","free_kick"}
 local size = 0x20000
 local function hex(bytes)
@@ -23,10 +25,10 @@ local function read()
 end
 local function mkdir()
   -- Diretorio deve existir; evitar os.execute em ambiente restrito.
-  local f,err=io.open("snapshots/.write_test","wb")
+  local f,err=io.open(snapshot_dir .. "/.write_test","wb")
   if not f then error("Crie a pasta snapshots/ na raiz do repositorio: "..tostring(err)) end
   f:close()
-  os.remove("snapshots/.write_test")
+  os.remove(snapshot_dir .. "/.write_test")
 end
 local function append(path,s)
   local f=assert(io.open(path,"ab")); f:write(s);f:close()
@@ -36,18 +38,18 @@ local function exists(path)
 end
 function M.capture(name, challenge, level, round)
   assert(name:match("^[%w_%-]+$"), "nome inseguro")
-  local path="snapshots/"..name..".hex"
+  local path=snapshot_dir.."/"..name..".hex"
   assert(not exists(path), "snapshot ja existe: "..path)
   local bytes=read()
   local f=assert(io.open(path,"wb"));f:write(hex(bytes),"\n");f:close()
-  append("snapshots/manifest.csv", table.concat({name,challenge or "outside",tostring(level or 0),tostring(round or 0)},",").."\n")
+  append(snapshot_dir.."/manifest.csv", table.concat({name,challenge or "outside",tostring(level or 0),tostring(round or 0)},",").."\n")
   print(string.format("[WRAM] %s %d bytes (%s LV%s rodada %s)",name,#bytes,challenge or "outside",tostring(level or 0),tostring(round or 0)))
 end
 function M.run()
   assert(emu and emu.frameadvance and input and input.get, "BizHawk emu.frameadvance e input.get necessarios")
   mkdir()
-  assert(not exists("snapshots/manifest.csv"), "manifest.csv ja existe; arquive ou limpe snapshots para iniciar coleta")
-  append("snapshots/manifest.csv","name,challenge,level,round\n")
+  assert(not exists(snapshot_dir.."/manifest.csv"), "manifest.csv ja existe; arquive ou limpe snapshots para iniciar coleta")
+  append(snapshot_dir.."/manifest.csv","name,challenge,level,round\n")
   local index,prev6,prev7=0,false,false
   print("[WRAM] Inicie FORA do desafio: F7 = baseline. F6 = proximo caso da sequencia.")
   print("[WRAM] Ordem: DRIBBLE LV1..4, PASS LV1..4, SHOOT, DEFENSE, CORNER_KICK, FREE_KICK; repita 2 rodadas.")
