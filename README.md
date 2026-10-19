@@ -62,3 +62,7 @@ O scanner não reconhece automaticamente o menu. Não envie ROM ou snapshots par
 ## Reconhecimento por WRAM (experimental)
 
 Execute `lua/main.lua` no Lua Console para observar mudanças de desafio/nível. Leia [docs/AUTO_RECOGNITION.md](docs/AUTO_RECOGNITION.md) para endereços, interpretação, limitações e testes. O scanner continua independente em `lua/start_scanner.lua`.
+
+## Monitor WRAM ao vivo (menu)
+
+Para investigar falso positivo (exemplo: menu em DRIBBLE LV.1 mas sonda reporta FREE KICK LV.4), abra `lua/start_live_monitor.lua` no Lua Console. A janela permite capturar uma referencia e comparar as mudancas apos alternar **somente** o desafio ou o nivel. O CSV sera salvo em `snapshots/live_menu_changes.csv`. Guia: [docs/LIVE_WRAM_MONITOR.md](docs/LIVE_WRAM_MONITOR.md).
