@@ -11,8 +11,8 @@ O BizHawk pode identificar o script carregado como `[string "main"]`; portanto, 
 1. Atualize a pasta local com `git pull` ou baixe o ZIP mais recente e substitua os arquivos antigos (preserve a pasta `snapshots`).
 2. Abra a ROM de International Superstar Soccer Deluxe no BizHawk.
 3. Em **Tools > Lua Console > Open Script**, selecione **`lua/start_scanner.lua`**, não `lua/challenge/wram_scanner.lua`.
-4. Confirme no console `[WRAM] Raiz: ...` e as instruções de O/P.
-5. Veja `[WRAM] Sessao: .../snapshots/session_AAAAMMDD_HHMMSS`. Fora do desafio, pressione **P** para o baseline; em seguida, pressione **O** para os 48 cenários na ordem de `docs/WRAM_SCANNER.md`.
+4. Confirme no console `[WRAM] Raiz: ...` e as instruções de O/K.
+5. Veja `[WRAM] Sessao: .../snapshots/session_AAAAMMDD_HHMMSS`. Fora do desafio, pressione **K** para o baseline; em seguida, pressione **O** para os 48 cenários na ordem de `docs/WRAM_SCANNER.md`.
 
 Se ainda surgir a mensagem `Abra este arquivo como script no Lua Console`, a **versão local é antiga**: abra `lua/start_scanner.lua`, remova todas as linhas com `local source = debug.getinfo`, `assert(source:sub`, `lua_dir` e `local root =`, ou substitua o arquivo integralmente pela versão da branch main.
 
@@ -25,4 +25,4 @@ Se ainda surgir a mensagem `Abra este arquivo como script no Lua Console`, a **v
 - O scanner registra dados; não reconhece modalidade e nível automaticamente nem controla jogadores.
 
 
-> **Teclas do scanner:** `P` captura o baseline e `O` captura o proximo cenario. As teclas F1-F10 sao reservadas para atalhos de savestate no BizHawk. Caso P/O estejam mapeadas no seu emulador, altere `BASELINE_KEY` e `CAPTURE_KEY` em `lua/challenge/wram_scanner.lua` e revise os atalhos do BizHawk.
+> **Teclas do scanner:** `K` captura o baseline e `O` captura o proximo cenario. As teclas F1-F10 sao reservadas para atalhos de savestate no BizHawk. Caso K/O estejam mapeadas no seu emulador, altere `BASELINE_KEY` e `CAPTURE_KEY` em `lua/challenge/wram_scanner.lua` e revise os atalhos do BizHawk.
