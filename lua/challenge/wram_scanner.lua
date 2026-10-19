@@ -7,8 +7,6 @@ local snapshots_root = root .. "/snapshots"
 local snapshot_dir = nil
 local ids = {"dribble","pass","shoot","defense","corner_kick","free_kick"}
 local size = 0x20000
-local BASELINE_KEY = "P"
-local CAPTURE_KEY = "O"
 local function hex(bytes)
   return (bytes:gsub(".", function(c) return string.format("%02X", string.byte(c)) end))
 end
@@ -69,37 +67,49 @@ function M.capture(name, challenge, level, round)
   print(string.format("[WRAM] %s %d bytes (%s LV%s rodada %s)",name,#bytes,challenge or "outside",tostring(level or 0),tostring(round or 0)))
 end
 function M.run()
-  assert(emu and emu.frameadvance and input and input.get, "BizHawk emu.frameadvance e input.get necessarios")
+  assert(emu and emu.frameadvance, "BizHawk emu.frameadvance necessario")
+  assert(forms and forms.newform and forms.button, "BizHawk Forms API necessaria; habilite Lua Forms")
   snapshot_dir = new_session()
   print("[WRAM] Sessao: " .. snapshot_dir)
-  append(snapshot_dir.."/manifest.csv","name,challenge,level,round\n")
-  local index,prev_capture,prev_baseline=0,false,false
-  print("[WRAM] Inicie FORA do desafio: " .. BASELINE_KEY .. " = baseline. " .. CAPTURE_KEY .. " = proximo caso.")
-  print("[WRAM] Ordem: DRIBBLE LV1..4, PASS LV1..4, SHOOT, DEFENSE, CORNER_KICK, FREE_KICK; repita 2 rodadas.")
+  append(snapshot_dir.."/manifest.csv","name,challenge,level,round\\n")
+  local index = 0
+  local request_baseline, request_capture = false, false
+  local window = forms.newform(410, 155, "ISSD WRAM Scanner")
+  forms.label(window, "Baseline fora do desafio; depois 48 cenarios em ordem.", 10, 10, 385, 25)
+  forms.button(window, "Capturar baseline", function() request_baseline = true end, 10, 45, 175, 35)
+  forms.button(window, "Proximo cenario", function() request_capture = true end, 205, 45, 175, 35)
+  print("[WRAM] Use os botoes da janela ISSD WRAM Scanner; nenhum atalho de teclado.")
+  print("[WRAM] Ordem: DRIBBLE LV1..4, PASS LV1..4, SHOOT, DEFENSE, CORNER_KICK, FREE_KICK; 2 rodadas.")
   while true do
-    local keys=input.get()
-    local capture=not not keys[CAPTURE_KEY]
-    local baseline=not not keys[BASELINE_KEY]
-    if baseline and not prev_baseline then
+    if request_baseline then
+      request_baseline = false
       if not exists(snapshot_dir .. "/outside.hex") then
         M.capture("outside",nil,nil,nil)
       else
         print("[WRAM] Baseline ja capturado nesta sessao.")
       end
     end
-    if capture and not prev_capture then
+    if request_capture then
+      request_capture = false
       if index < 48 then
-        index=index+1
-        local round=math.floor((index-1)/24)+1
-        local position=(index-1)%24
-        local challenge=ids[math.floor(position/4)+1]
-        local level=position%4+1
-        local name=string.format("r%d_%s_lv%d",round,challenge,level)
+        local next_index = index + 1
+        local round = math.floor((next_index - 1) / 24) + 1
+        local position = (next_index - 1) % 24
+        local challenge = ids[math.floor(position / 4) + 1]
+        local level = position % 4 + 1
+        local name = string.format("r%d_%s_lv%d",round,challenge,level)
         M.capture(name,challenge,level,round)
-        if index<48 then print("[WRAM] Proxima captura: "..ids[math.floor(((index)%24)/4)+1].." LV"..(((index)%4)+1)) end
-      else print("[WRAM] 48 capturas concluidas. Execute lua tests/test_wram_analyzer.lua e lua lua/analyze_snapshots.lua fora do BizHawk.") end
+        index = next_index
+        if index < 48 then
+          local p = index % 24
+          print("[WRAM] Proxima captura: "..ids[math.floor(p / 4) + 1].." LV"..(p % 4 + 1))
+        else
+          print("[WRAM] 48 capturas concluidas; execute o analisador da sessao.")
+        end
+      else
+        print("[WRAM] As 48 capturas ja foram concluidas.")
+      end
     end
-    prev_capture,prev_baseline=capture,baseline
     emu.frameadvance()
   end
 end
