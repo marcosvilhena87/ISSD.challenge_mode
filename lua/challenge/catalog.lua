@@ -1,5 +1,6 @@
 local M = {}
-local entries = dofile("data/challenges.lua")
+local root = _G.ISSD_PROJECT_ROOT or "."
+local entries = dofile(root .. "/data/challenges.lua")
 local lookup = {}
 for _, item in ipairs(entries) do lookup[item.id] = item end
 function M.get(id) return lookup[id] end
