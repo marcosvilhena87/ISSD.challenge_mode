@@ -1,33 +1,17 @@
-# Reconhecimento WRAM experimental (v0.3)
+# Reconhecedor experimental v0.4
 
-Os enderecos abaixo foram observados em duas sessoes com 24 cenarios cada:
+O detector identifica **candidatos de selecao do menu**, mas **nao prova que o menu Challenge Mode esta ativo**. Nunca usar seus resultados para acionamento automatico de botoes antes de validar uma flag de modo.
 
-| Campo | Par A | Par B | Codificacao |
-| --- | --- | --- | --- |
-| challenge | WRAM 0xD708 | WRAM 0xE52C | 0=dribble, 1=pass, 2=shoot, 3=defense, 4=corner_kick, 5=free_kick |
-| level | WRAM 0xD70A | WRAM 0xE52E | 0=LV1, 1=LV2, 2=LV3, 3=LV4 |
+| Campo | WRAM | Codificacao |
+| --- | --- | --- |
+| desafio A | 0xD708 | 0..5, Dribble ate Free Kick |
+| desafio B | 0xE52C | par redundante do desafio |
+| nivel destacado | 0x1550 | 0..3, LV1..LV4 |
+| nivel legado A | 0xD70A | telemetria apenas; nao determina nivel |
+| nivel legado B | 0xE52E | telemetria apenas; nao determina nivel |
 
-O runtime `lua/main.lua` le os quatro bytes atraves de `memory.read_u8(address, "WRAM")`. Se os pares concordam, estao nos intervalos esperados e permanecem iguais por pelo menos tres frames, ele emite:
+O valor do desafio exige concordancia entre A e B. O nivel e lido de `0x1550` e deve estar entre 0 e 3. O runtime aguarda tres frames consistentes e imprime `candidate`, nunca `identified` com base so na WRAM.
 
-```
-[ISSD.challenge_mode] candidate challenge=dribble level=1 source=candidate_wram reason=mode_not_validated
-```
+Para testar, execute `lua/main.lua` no Lua Console e alterne DRIBBLE LV1 -> LV2 -> LV3 -> LV4, depois alterne modalidade. Saia do menu: um candidato persistente fora do menu **nao e reconhecimento valido**, e sim memoria residual. Registre controles negativos com o Live Monitor.
 
-Se houver divergencia, ausencia de dados ou valor fora dos intervalos, emite `unknown`. Uma observacao manual explicita pode ser usada separadamente e tem precedencia.
-
-**Nao considerar `candidate` como detecao comprovada do Challenge Mode.** Valores espelhados ou retidos na WRAM podem existir em menus e partidas normais. Antes de promover o status para `identified`, testar em tempo real a transicao entre menus, as seis modalidades, os quatro niveis, o retorno ao menu principal e partidas normais, com registro da ROM/hash e evidencias negativas.
-
-## Execucao
-
-Abra a ROM no BizHawk, depois `lua/main.lua` no Lua Console. O scanner de capturas usa um script separado, `lua/start_scanner.lua`. Evite executar os dois simultaneamente durante calibracao.
-
-## Teste unitario
-
-A partir da raiz do projeto:
-
-```powershell
-lua tests/test_memory_probe.lua
-lua tests/test_recognizer.lua
-```
-
-Os testes exercitam a logica pura; nao substituem um ensaio dentro do BizHawk.
+Testes: `lua tests/test_memory_probe.lua`, `lua tests/test_recognizer.lua`.
