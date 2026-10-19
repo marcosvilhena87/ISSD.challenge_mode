@@ -21,7 +21,9 @@ Projeto independente de reconhecimento, instrumentação e futura automação do
 
 ## Execução no BizHawk
 
-Abra uma ROM legalmente obtida de ISSD no BizHawk (núcleo SNES com Lua habilitado). Em **Tools > Lua Console**, carregue `lua/main.lua` a partir da raiz do repositório. O script exibe estado "unknown" até haver evidência configurada.
+Pasta local: `C:\Minha_Pasta\Jogos\BizHawk-2.11.1-win-x64\ISSD.challenge_mode-main`.
+
+Abra a ROM no BizHawk 2.11.1. Em **Tools > Lua Console**, carregue `C:\Minha_Pasta\Jogos\BizHawk-2.11.1-win-x64\ISSD.challenge_mode-main\lua\main.lua`. O script usa o caminho absoluto, sem depender do diretório atual do Lua Console. O script exibe estado "unknown" até haver evidência configurada.
 
 Para teste manual, antes de carregar o script configure no Lua Console:
 ```lua
@@ -43,7 +45,7 @@ Descrições e recordes foram transcritos das seis capturas fornecidas pelo usu�
 
 O coletor e o comparador estão documentados em [docs/WRAM_SCANNER.md](docs/WRAM_SCANNER.md).
 
-- No Lua Console BizHawk: `dofile("lua/challenge/wram_scanner.lua").run()`.
+- No Lua Console BizHawk: `dofile([[C:/Minha_Pasta/Jogos/BizHawk-2.11.1-win-x64/ISSD.challenge_mode-main/lua/challenge/wram_scanner.lua]]).run()`.
 - Fora dos desafios: F7 uma vez (baseline).
 - Para cada um dos 24 cenários na ordem descrita: F6; repetir em duas rodadas.
 - Em Lua local: `lua tests/test_wram_analyzer.lua` e `lua lua/analyze_snapshots.lua`.
