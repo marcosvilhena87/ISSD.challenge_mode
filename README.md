@@ -38,3 +38,15 @@ Qualquer endereço ou assinatura deve ser registrado com domínio de memória, l
 ## Créditos dos dados
 
 Descrições e recordes foram transcritos das seis capturas fornecidas pelo usuário em 19/10/2026. Formato do cronômetro e significado exato de pontuação permanecem a validar.
+
+## Scanner de WRAM (v0.2)
+
+O coletor e o comparador estão documentados em [docs/WRAM_SCANNER.md](docs/WRAM_SCANNER.md).
+
+- No Lua Console BizHawk: `dofile("lua/challenge/wram_scanner.lua").run()`.
+- Fora dos desafios: F7 uma vez (baseline).
+- Para cada um dos 24 cenários na ordem descrita: F6; repetir em duas rodadas.
+- Em Lua local: `lua tests/test_wram_analyzer.lua` e `lua lua/analyze_snapshots.lua`.
+- Saída local: `snapshots/candidates.csv`. Os offsets são apenas hipóteses para validação.
+
+A coleta é manual e o projeto **não promete reconhecer automaticamente o menu** sem a descoberta dos endereços. Os snapshots ficam ignorados pelo Git.
