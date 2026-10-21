@@ -3,7 +3,7 @@ local M={}
 local names=require("challenge.mapping").names
 local screens={
   main_menu=true,mode_selection=true,input_name=true,
-  challenge_selection=true,level_select=true,playing=true,
+  challenge_selection=true,level_select=true,challenge_start_menu=true,playing=true,
   pause=true,training=true,exit=true,other=true
 }
 local function csv(v) return tostring(v or ""):gsub("[\r\n,]","_") end
@@ -27,6 +27,11 @@ function M:step(frame,r,phase)
   elseif screen=="challenge_selection" and type(c)=="number" and c%1==0 and c>=0 and c<=6 then
     selection=(c==6) and "EXIT" or names[c+1]
     confidence="candidate";reason="operator_labeled_challenge_selection_cursor_only"
+  elseif screen=="challenge_start_menu" and type(c)=="number" and c%1==0 and c>=0 and c<=2 then
+    -- Ordem visual conhecida, mas mapeamento WRAM do cursor ainda hipotetico.
+    local choices={"CHALLENGE_START","KEY_CONFIGURATION","CHANGE_CONTROLLER"}
+    selection=choices[c+1]
+    confidence="candidate";reason="operator_labeled_start_menu_cursor_hypothesis"
   elseif screen=="input_name" and type(c)=="number" then
     selection="CURSOR_"..c;confidence="candidate";reason="operator_labeled_name_input"
   elseif screen=="level_select" and r.status=="candidate" and a==b and type(c)=="number" and c>=0 and c<=3 then
