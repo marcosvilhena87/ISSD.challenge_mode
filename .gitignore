@@ -16,3 +16,6 @@ challenge_context_v04.csv
 
 cursor_capture_events_v1.txt
 cursor_candidates_v1.csv
+
+cursor_validation_events_v2.txt
+cursor_validation_v2.csv
