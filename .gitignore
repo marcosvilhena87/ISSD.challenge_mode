@@ -13,3 +13,6 @@ challenge_transitions_v03.csv
 operator_events_v03.txt
 
 challenge_context_v04.csv
+
+cursor_capture_events_v1.txt
+cursor_candidates_v1.csv
