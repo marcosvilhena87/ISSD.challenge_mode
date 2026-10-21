@@ -1,6 +1,6 @@
 # Reconhecedor contextual v0.4 (experimental)
 
-Executar `lua/main.lua` no console Lua do BizHawk. Mantem `challenge_transitions_v03.csv` e `operator_events_v03.txt`; adiciona `challenge_context_v04.csv`.
+Executar `main.lua` no console Lua do BizHawk. Mantem `challenge_transitions_v03.csv` e `operator_events_v03.txt`; adiciona `challenge_context_v04.csv`.
 
 O operador deve registrar as mudancas VISUAIS no PowerShell, a partir da raiz do repositorio:
 
