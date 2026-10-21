@@ -27,11 +27,11 @@ function M:step(frame,r,phase)
   elseif screen=="challenge_selection" and type(c)=="number" and c%1==0 and c>=0 and c<=6 then
     selection=(c==6) and "EXIT" or names[c+1]
     confidence="candidate";reason="operator_labeled_challenge_selection_cursor_only"
-  elseif screen=="challenge_start_menu" and type(c)=="number" and c%1==0 and c>=0 and c<=2 then
-    -- Ordem visual conhecida, mas mapeamento WRAM do cursor ainda hipotetico.
+  elseif screen=="challenge_start_menu" and type(raw.challenge_start_cursor)=="number" and raw.challenge_start_cursor%1==0 and raw.challenge_start_cursor>=0 and raw.challenge_start_cursor<=2 then
+    -- 0x01542: correlacao reproduzida; contexto exige rotulo do operador.
     local choices={"CHALLENGE_START","KEY_CONFIGURATION","CHANGE_CONTROLLER"}
-    selection=choices[c+1]
-    confidence="candidate";reason="operator_labeled_start_menu_cursor_hypothesis"
+    selection=choices[raw.challenge_start_cursor+1]
+    confidence="candidate";reason="operator_labeled_start_menu_01542_reproduced"
   elseif screen=="input_name" and type(c)=="number" then
     selection="CURSOR_"..c;confidence="candidate";reason="operator_labeled_name_input"
   elseif screen=="level_select" and r.status=="candidate" and a==b and type(c)=="number" and c>=0 and c<=3 then
@@ -40,7 +40,7 @@ function M:step(frame,r,phase)
   elseif screen~="unknown" then
     reason="screen_labeled_but_values_ambiguous"
   end
-  local key=table.concat({screen,confidence,tostring(selection),tostring(challenge),tostring(level),reason,tostring(a),tostring(b),tostring(c)},"|")
+  local key=table.concat({screen,confidence,tostring(selection),tostring(challenge),tostring(level),reason,tostring(a),tostring(b),tostring(c),tostring(raw.challenge_start_cursor)},"|")
   if key==self.previous then return end
   self.previous=key
   local f=assert(io.open(self.path,"a"))
