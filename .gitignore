@@ -27,3 +27,6 @@ controlled_player_events_v1.txt
 controlled_player_v1.csv
 
 dribble_lv1_focused_v1.csv
+
+dribble_state_events_v1.txt
+dribble_state_validation_v1.csv
