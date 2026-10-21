@@ -4,9 +4,9 @@ local probe=require("challenge.probe")
 local file="test_context_v04_tmp.csv"
 os.remove(file)
 local m=context.new(file,"synthetic")
-local function step(frame,phase,a,b,c)
+local function step(frame,phase,a,b,c,start_cursor)
   local r=probe.decode(a,b,c)
-  r.raw={challenge_a=a,challenge_b=b,selected_level=c}
+  r.raw={challenge_a=a,challenge_b=b,selected_level=c,challenge_start_cursor=start_cursor}
   m:step(frame,r,phase)
 end
 step(1,"unlabeled",1,1,0)
@@ -16,11 +16,13 @@ step(4,"input_name",5,255,42)
 step(5,"challenge_selection",0,0,6)
 step(51,"challenge_selection",0,0,0)
 step(52,"challenge_selection",0,0,5)
-step(53,"challenge_start_menu",0,0,0)
-step(54,"challenge_start_menu",0,0,1)
-step(55,"challenge_start_menu",0,0,2)
-step(56,"challenge_start_menu",0,0,3)
-step(57,"playing",0,0,0) -- mesmos bytes; nao e menu
+step(53,"challenge_start_menu",0,0,0,0)
+step(54,"challenge_start_menu",0,0,0,1)
+step(55,"challenge_start_menu",0,0,0,2)
+step(56,"challenge_start_menu",0,0,0,3)
+step(57,"playing",0,0,0,2) -- mesmos bytes; nao e menu
+step(58,"challenge_start_menu",0,0,0) -- sem leitura de 0x01542 => unknown
+step(59,"level_select",1,1,2,2) -- cursor start nao pode substituir nivel
 step(6,"level_select",1,1,2)
 step(7,"level_select",1,1,4)
 step(8,"main_menu",1,1,2) -- stale bytes must NOT classify PASS
@@ -36,6 +38,7 @@ assert(data:find("challenge_start_menu,candidate,KEY_CONFIGURATION",1,true))
 assert(data:find("challenge_start_menu,candidate,CHANGE_CONTROLLER",1,true))
 assert(data:find("challenge_start_menu,unknown",1,true))
 assert(data:find("playing,unknown",1,true))
+assert(data:find("challenge_start_menu,unknown",1,true))
 assert(data:find("level_select,candidate,,PASS,3",1,true))
 assert(data:find("level_select,unknown",1,true))
 assert(data:find("main_menu,unknown",1,true))
