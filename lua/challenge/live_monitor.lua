@@ -40,11 +40,15 @@ function M.run()
   if memory.getmemorydomainsize then
     assert(memory.getmemorydomainsize(domain)>=size,"WRAM menor que 128 KiB")
   end
-  local test=assert(io.open(folder.."/.live_write_test","wb"),"Crie a pasta snapshots")
-  test:close();os.remove(folder.."/.live_write_test")
+  local testpath=folder.."/.live_write_test"
+  local test,err=io.open(testpath,"wb")
+  assert(test,"[LIVE WRAM] Nao foi possivel gravar em "..folder..": "..tostring(err)..". Verifique ISSD_PROJECT_ROOT e crie a pasta snapshots.")
+  test:close()
+  os.remove(testpath)
   local exists=io.open(outfile,"rb")
   if exists then exists:close() else
-    local f=assert(io.open(outfile,"wb"))
+    local f,err=io.open(outfile,"wb")
+    assert(f,"[LIVE WRAM] Falha ao criar CSV em "..outfile..": "..tostring(err))
     f:write("capture,label,address_hex,address_dec,before,after\n");f:close()
   end
   local pending=nil
@@ -56,7 +60,7 @@ function M.run()
   forms.button(window,"Outra mudanca",function() pending="other" end,10,105,150,35)
   forms.button(window,"Nova referencia",function() pending="baseline" end,175,105,150,35)
   print("[LIVE WRAM] Referencia primeiro. Compare apos alterar apenas uma opcao.")
-  print("[LIVE WRAM] CSV: "..outfile)
+  print("[LIVE WRAM] CSV criado/verificado: "..outfile)
   while true do
     if pending then
       local action=pending;pending=nil
