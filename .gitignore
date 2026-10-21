@@ -1,2 +1,12 @@
-snapshots/*
-!snapshots/.gitkeep
+# Arquivos de jogo e execuções locais
+*.smc
+*.sfc
+*.zip
+*.state
+*.State
+*.bak
+*.log
+__pycache__/
+*.pyc
+output/
+captures/
