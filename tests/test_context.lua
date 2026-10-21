@@ -1,0 +1,30 @@
+package.path="lua/?.lua;lua/?/init.lua;"..package.path
+local context=require("challenge.context")
+local probe=require("challenge.probe")
+local file="test_context_v04_tmp.csv"
+os.remove(file)
+local m=context.new(file,"synthetic")
+local function step(frame,phase,a,b,c)
+  local r=probe.decode(a,b,c)
+  r.raw={challenge_a=a,challenge_b=b,selected_level=c}
+  m:step(frame,r,phase)
+end
+step(1,"unlabeled",1,1,0)
+step(2,"mode_selection",5,255,0)
+step(3,"mode_selection",5,255,1)
+step(4,"input_name",5,255,42)
+step(5,"challenge_selection",5,0,6)
+step(6,"level_select",1,1,2)
+step(7,"level_select",1,1,4)
+step(8,"main_menu",1,1,2) -- stale bytes must NOT classify PASS
+local f=assert(io.open(file,"r"));local data=f:read("*a");f:close()
+assert(data:find("mode_selection,candidate,TRAINING",1,true))
+assert(data:find("mode_selection,candidate,CHALLENGE",1,true))
+assert(data:find("input_name,candidate,CURSOR_42",1,true))
+assert(data:find("challenge_selection,candidate,EXIT",1,true))
+assert(data:find("level_select,candidate,,PASS,3",1,true))
+assert(data:find("level_select,unknown",1,true))
+assert(data:find("main_menu,unknown",1,true))
+assert(not data:find("confirmed",1,true))
+os.remove(file)
+print("test_context.lua: OK (synthetic only)")
