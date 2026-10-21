@@ -59,3 +59,8 @@ dribble_bot_trace_v022.csv
 dribble_timer_events_v1.txt
 dribble_timer_candidates_v1.csv
 dribble_timer_timeline_v1.csv
+
+dribble_timer_events_v2.txt
+dribble_time_candidates_v2.csv
+dribble_bonus_candidates_v2.csv
+dribble_timer_timeline_v2.csv
