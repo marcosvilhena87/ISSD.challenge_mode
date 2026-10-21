@@ -7,7 +7,7 @@ for i=1,8 do
  a[0x120+1]=(i<=5) and i or 5
  a[0x130+1]=(i<=5) and 0 or (i-5)
  a[0x140+1]=i
- samples[i]={frame=100+i*30,remaining=i<5 and 5-(i-1) or 0,gameplay=true,bytes=a}
+ samples[i]={frame=100+i*30,remaining=i<5 and 5-i or 0,gameplay=true,bytes=a}
 end
 local hits,total,fifth=M.rank(samples,20)
 assert(fifth==5)
