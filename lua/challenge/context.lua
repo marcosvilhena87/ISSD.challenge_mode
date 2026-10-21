@@ -24,9 +24,9 @@ function M:step(frame,r,phase)
   if screen=="mode_selection" and b==255 and (c==0 or c==1) then
     selection=(c==0) and "TRAINING" or "CHALLENGE"
     confidence="candidate";reason="operator_labeled_mode_selection"
-  elseif screen=="challenge_selection" and a==5 and b==0 and type(c)=="number" and c>=0 and c<=6 then
+  elseif screen=="challenge_selection" and type(c)=="number" and c%1==0 and c>=0 and c<=6 then
     selection=(c==6) and "EXIT" or names[c+1]
-    confidence="candidate";reason="operator_labeled_challenge_selection"
+    confidence="candidate";reason="operator_labeled_challenge_selection_cursor_only"
   elseif screen=="input_name" and type(c)=="number" then
     selection="CURSOR_"..c;confidence="candidate";reason="operator_labeled_name_input"
   elseif screen=="level_select" and r.status=="candidate" and a==b and type(c)=="number" and c>=0 and c<=3 then
