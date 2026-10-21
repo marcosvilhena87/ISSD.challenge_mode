@@ -3,7 +3,7 @@
 Coleta experimental no BizHawk 2.11.1 (Lua). **Nenhuma flag de menu validada**. O monitor é de leitura apenas.
 
 ## Execução
-Abra a ROM no BizHawk, execute `lua/main.lua` pelo console Lua com diretório de trabalho configurado para a raiz do repositório (onde estão `lua/` e os arquivos de saída).
+Abra a ROM no BizHawk, execute `main.lua` pelo console Lua com diretório de trabalho configurado para a raiz do repositório (onde estão `lua/` e os arquivos de saída).
 
 O arquivo `challenge_transitions_v03.csv` recebe linhas `transition` quando **qualquer um dos cinco bytes muda**, incluindo os valores inválidos 4 e 5; grava número do frame, estado candidato, bytes brutos, fase manual e a duração em frames do estado anterior. A linha inicial é um snapshot. O arquivo é acrescido entre sessões; a coluna `session` permite diferenciá-las.
 
