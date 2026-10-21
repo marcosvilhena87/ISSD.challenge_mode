@@ -1,4 +1,4 @@
--- ISSD.challenge_mode v0.4.2 - BizHawk NLua carrega como [string "main"].
+-- ISSD.challenge_mode v0.4.3 - BizHawk NLua carrega como [string "main"].
 -- A raiz e resolvida por arquivos conhecidos, sem depender de debug.getinfo.
 local function exists(path)
   local f=io.open(path,"rb")
@@ -16,7 +16,12 @@ for _,candidate in ipairs(roots) do
 end
 assert(root,"Raiz do projeto nao encontrada. Execute com diretorio de trabalho na raiz ou em <repo>/lua.")
 local function file(name) return root.."/"..name end
-package.path=package.path..";"..file("lua/?.lua")..";"..file("lua/?/init.lua")
+-- Prioriza modulos desta copia do repositorio (BizHawk pode ter outro Lua no path).
+package.path=file("lua/?.lua")..";"..file("lua/?/init.lua")..";"..package.path
+-- Descarta modulos de execucoes anteriores no mesmo estado Lua.
+for _,name in ipairs({"challenge.mapping","challenge.probe","challenge.monitor","challenge.context"}) do
+  package.loaded[name]=nil
+end
 local probe=require("challenge.probe")
 local monitor=require("challenge.monitor")
 local context=require("challenge.context")
@@ -26,21 +31,24 @@ local session=os.date("!%Y%m%dT%H%M%SZ")
 local context_csv=file("challenge_context_v04.csv")
 local transition_csv=file("challenge_transitions_v03.csv")
 local operator_file=file("operator_events_v03.txt")
-print("[ISSD.challenge_mode] v0.4.2 project_root="..root)
+print("[ISSD.challenge_mode] v0.4.3 project_root="..root)
 print("[ISSD.challenge_mode] transition_csv="..transition_csv)
 print("[ISSD.challenge_mode] context_csv="..context_csv)
 print("[ISSD.challenge_mode] operator_events="..operator_file)
+local ctx=context.new(context_csv,session)
+assert(type(ctx.step)=="function","Context module lacks step()")
 local m=monitor.new({
   read=function() return probe.read(memory.read_u8) end,
   frame=function() return emu.framecount() end,
   csv=transition_csv,
   events=operator_file,
   session=session,
-  context=context.new(context_csv,session)
+  context=ctx
 })
-assert(m.context and type(m.context.step)=="function","Context integration missing")
+assert(m.context, "Monitor loaded without context support; loaded from "..tostring(package.searchpath and package.searchpath("challenge.monitor",package.path) or "unknown path"))
+assert(type(m.context.step)=="function","Context object has no step method")
 m:step()
-print("[ISSD.challenge_mode] v0.4.2 first contextual step completed (no screen flag validated)")
+print("[ISSD.challenge_mode] v0.4.3 first contextual step completed (no screen flag validated)")
 while true do
   emu.frameadvance()
   m:step()
