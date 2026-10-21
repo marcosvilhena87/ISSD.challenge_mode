@@ -7,7 +7,10 @@ end
 assert(root,"Project root not found")
 package.path=root.."/lua/?.lua;"..root.."/lua/?/init.lua;"..package.path
 package.loaded["challenge.dribble_bot"]=nil
+package.loaded["challenge.player_control"]=nil
 local policy=require("challenge.dribble_bot")
+local controller=require("challenge.player_control")
+local policies={DRIBBLE=policy}
 assert(memory and memory.read_u16_le and memory.read_s16_le and emu and emu.framecount and emu.frameadvance and joypad and joypad.set,"BizHawk API unavailable")
 local events=root.."/dribble_bot_commands_v01.txt"
 local csv=root.."/dribble_bot_trace_v01.csv"
@@ -44,8 +47,8 @@ while true do
  local s={frame=frame,game_state=u16(0x00BA),ptr=u16(0x1ACC),possession=u16(0x00A6),player_x=s16(0x0F2A),player_y=s16(0x0F2C),ball_x=s16(0x042A),ball_y=s16(0x042C),field_length=u16(0x12A2)}
  local buttons,reason={},armed and "waiting" or "disarmed"
  if armed then
-  buttons,reason=policy.decide(s,{started=started})
-  if reason=="time_budget" or reason=="not_playing" or reason=="invalid_read" or reason=="unknown_field" then
+  buttons,reason=controller.decide("DRIBBLE",s,{armed=armed,started=started},policies)
+  if controller.should_disarm(reason) then
    armed=false;release()
    print("[ISSD.dribble_bot] auto DISARM reason="..reason.." frame="..frame)
   else joypad.set(buttons,1) end
