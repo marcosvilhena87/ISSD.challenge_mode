@@ -65,7 +65,7 @@ Execute `lua/main.lua` no Lua Console para observar mudanças de desafio/nível.
 
 ## Monitor WRAM ao vivo (menu)
 
-Para investigar falso positivo (exemplo: menu em DRIBBLE LV.1 mas sonda reporta FREE KICK LV.4), abra `lua/start_live_monitor.lua` no Lua Console. A janela permite capturar uma referencia e comparar as mudancas apos alternar **somente** o desafio ou o nivel. O CSV sera salvo em `snapshots/live_menu_changes.csv`. Guia: [docs/LIVE_WRAM_MONITOR.md](docs/LIVE_WRAM_MONITOR.md).
+Para investigar falso positivo (exemplo: menu em DRIBBLE LV.1 mas sonda reporta FREE KICK LV.4), abra `lua/start_live_monitor.lua` no Lua Console. A janela permite capturar uma referencia e comparar as mudancas apos alternar **somente** o desafio ou o nivel. O CSV sera criado na inicializacao em `snapshots/live_menu_changes.csv` (dentro da raiz configurada em `lua/start_live_monitor.lua`). Confirme a existencia da pasta `snapshots` e consulte a mensagem de caminho no Lua Console. Guia: [docs/LIVE_WRAM_MONITOR.md](docs/LIVE_WRAM_MONITOR.md).
 
 ### Mudanca v0.4
 
