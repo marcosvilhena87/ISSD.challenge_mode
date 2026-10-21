@@ -26,7 +26,7 @@ local function capture(reason)
  local gameplay=(gs==0 and ptr==0x0F00)
  local buf={}
  for a=0,M.SIZE-1 do buf[a+1]=memory.read_u8(a,"WRAM") end
- snapshots[#snapshots+1]={frame=frame,remaining=rem,gameplay=gameplay,bytes=buf}
+ snapshots[#snapshots+1]={frame=frame,gs=gs,ptr=ptr,remaining=rem,gameplay=gameplay,bytes=buf}
  log(reason,frame,gs,ptr,rem,gameplay,#snapshots)
  last=frame
  if gameplay then had_gameplay=true end
