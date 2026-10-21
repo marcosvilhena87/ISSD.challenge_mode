@@ -64,7 +64,7 @@ function M:poll_events(frame,r)
     end
     line=line:gsub("\r$",""):match("^%s*(.-)%s*$")
     if line ~= "" then
-      local allowed={menu=true,level_select=true,playing=true,pause=true,exit=true,main_menu=true,training=true,other=true,mode_selection=true,input_name=true,challenge_selection=true}
+      local allowed={menu=true,level_select=true,playing=true,pause=true,exit=true,main_menu=true,training=true,other=true,mode_selection=true,input_name=true,challenge_selection=true,challenge_start_menu=true}
       if allowed[line] then self.phase=line else line="note_"..clean(line) end
       self:emit(frame,"operator",line,r,"")
       print("[ISSD.challenge_mode] operator "..line.." frame="..frame)
