@@ -1,17 +1,11 @@
 # ISSD.challenge_mode
 
-Reiniciado em 21/10/2026. Versão **v0.2 experimental** para International Superstar Soccer Deluxe (SNES), BizHawk + Lua.
+Projeto reiniciado do zero em 21/10/2026. **v0.3 experimental**, BizHawk + Lua, International Superstar Soccer Deluxe (SNES).
 
-## Mapeamento
-O projeto reaproveita **somente hipóteses instrumentadas** documentadas em [ISSD.mapping/docs/CHALLENGE_MODE.md](https://github.com/marcosvilhena87/ISSD.mapping/blob/main/docs/CHALLENGE_MODE.md). Consulte [docs/MAPPING_INTEGRATION.md](docs/MAPPING_INTEGRATION.md). O `ISSD.mapping` é a fonte canônica; esta cópia local é um adaptador.
+Fonte canônica dos endereços e da avaliação das evidências: [ISSD.mapping/docs/CHALLENGE_MODE.md](https://github.com/marcosvilhena87/ISSD.mapping/blob/main/docs/CHALLENGE_MODE.md). Os cinco bytes são **hipóteses**, não mapeamento validado. Ver [docs/MAPPING_INTEGRATION.md](docs/MAPPING_INTEGRATION.md).
 
-## Uso
-No BizHawk, abra uma ROM obtida legitimamente e carregue `lua/main.lua` pelo console Lua, executando a partir da raiz deste repositório. O script apenas lê cinco endereços WRAM e informa `candidate` ou `unknown` quando os valores se alteram. Não envia comandos ao jogo.
+Carregue `lua/main.lua` no console Lua a partir da raiz do repositório. O monitor grava `challenge_transitions_v03.csv`, com frames, alterações brutas e duração dos estados. Registre mudanças de tela pelo PowerShell em `operator_events_v03.txt`, conforme [docs/MONITOR_V03.md](docs/MONITOR_V03.md).
 
-**Atenção:** `candidate` não comprova que o menu Challenge Mode esteja aberto. Nenhuma flag de presença foi validada. Não usar esta saída para controle automático.
+Com Lua instalado, rode `lua tests/test_probe.lua` e `lua tests/test_monitor.lua`. Esses testes são sintéticos, não equivalem a testes na ROM.
 
-## Testes
-Com Lua disponível no PATH, execute `lua tests/test_probe.lua`. Testes simulados não equivalem a validação no jogo.
-
-## Próximas etapas
-Ver [docs/ROADMAP.md](docs/ROADMAP.md) e [docs/EXPERIMENTOS.md](docs/EXPERIMENTOS.md). O histórico anterior permanece em Git.
+**Não existe flag de presença do menu validada**. O monitor nunca envia inputs ao jogo, e `candidate` não significa reconhecimento confirmado.

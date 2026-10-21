@@ -1,4 +1,3 @@
-# Arquivos de jogo e execuções locais
 *.smc
 *.sfc
 *.zip
@@ -10,3 +9,5 @@ __pycache__/
 *.pyc
 output/
 captures/
+challenge_transitions_v03.csv
+operator_events_v03.txt
