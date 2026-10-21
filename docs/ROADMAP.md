@@ -1,26 +1,20 @@
 # Roadmap
 
-## Fase 0 — Base limpa (v0.1)
-- [x] Substituir árvore ativa por estrutura mínima.
-- [x] Preservar o histórico Git.
-- [x] Criar entrada Lua independente de endereços.
-
-## Fase 1 — Observação e coleta
+## Fase 0 — Base limpa
+- [x] Reinício e preservação do histórico Git.
+## Fase 1 — Integração experimental v0.2
+- [x] Importar sondas candidatas do ISSD.mapping, com procedência.
+- [x] Construir probe de leitura segura e testes sintéticos.
 - [ ] Confirmar versão/hash da ROM e versão do BizHawk.
-- [ ] Documentar manualmente telas do Training/Challenge Mode.
-- [ ] Registrar sequência de transições e eventos operados pelo usuário.
-- [ ] Criar capturador de estados com metadados e timestamps/frames.
-
-## Fase 2 — Descoberta
-- [ ] Comparar capturas de menu, desafio e nível.
-- [ ] Identificar candidatos WRAM por correlação e repetibilidade.
-- [ ] Testar positivos e negativos, inclusive transições rápidas.
-
-## Fase 3 — Reconhecedor
-- [ ] Emitir `unknown` em estados ambíguos.
-- [ ] Validar reconhecimento com testes e capturas independentes.
-- [ ] Expor API estável de estado do desafio.
-
+- [ ] Testar script no BizHawk.
+- [ ] Capturar menu, nível, execução, pausa e controles negativos.
+- [ ] Reproduzir 6 desafios x 4 níveis em sessões independentes.
+## Fase 2 — Validação
+- [ ] Identificar flag de presença de menu por testes negativos.
+- [ ] Excluir falsos positivos e valores residuais.
+- [ ] Promover evidências no ISSD.mapping antes de alterar a classificação no projeto.
+## Fase 3 — Reconhecimento
+- [ ] Estado confirmed somente com evidência suficiente.
+- [ ] API de estados e testes de regressão.
 ## Fase 4 — Automação
-- [ ] Definir interface entre reconhecimento e controlador.
-- [ ] Automatizar um desafio por vez, com telemetria e segurança.
+- [ ] Interface para controle do bot, com salvaguardas.

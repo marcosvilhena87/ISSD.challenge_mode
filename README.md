@@ -1,32 +1,17 @@
 # ISSD.challenge_mode
 
-Projeto reiniciado do zero em 21/10/2026.
+Reiniciado em 21/10/2026. Versão **v0.2 experimental** para International Superstar Soccer Deluxe (SNES), BizHawk + Lua.
 
-## Objetivo
-Investigar e automatizar gradualmente os desafios do modo de treinamento de **International Superstar Soccer Deluxe (SNES)**, usando **BizHawk + Lua**.
+## Mapeamento
+O projeto reaproveita **somente hipóteses instrumentadas** documentadas em [ISSD.mapping/docs/CHALLENGE_MODE.md](https://github.com/marcosvilhena87/ISSD.mapping/blob/main/docs/CHALLENGE_MODE.md). Consulte [docs/MAPPING_INTEGRATION.md](docs/MAPPING_INTEGRATION.md). O `ISSD.mapping` é a fonte canônica; esta cópia local é um adaptador.
 
-## Estado atual
-**v0.1 — estrutura inicial.** Nenhuma identificação de desafios, níveis, endereços de WRAM ou transições está validada nesta versão.
+## Uso
+No BizHawk, abra uma ROM obtida legitimamente e carregue `lua/main.lua` pelo console Lua, executando a partir da raiz deste repositório. O script apenas lê cinco endereços WRAM e informa `candidate` ou `unknown` quando os valores se alteram. Não envia comandos ao jogo.
 
-## Princípios
-1. Registrar observações antes de implementar reconhecimento automático.
-2. Separar hipótese, evidência reproduzida e mapeamento validado.
-3. Não inferir desafio/nível apenas de valores isolados de memória.
-4. Guardar experimentos em registros reproduzíveis com ROM, emulador, fase e resultado.
-5. Manter o código deste repositório independente de projetos de bot até que a interface esteja estável.
-6. Nunca incluir ROMs ou savestates protegidos por direitos autorais no repositório.
+**Atenção:** `candidate` não comprova que o menu Challenge Mode esteja aberto. Nenhuma flag de presença foi validada. Não usar esta saída para controle automático.
 
-## Estrutura
-- `lua/main.lua`: ponto de entrada mínimo, sem leitura de memória.
-- `docs/ROADMAP.md`: etapas de implementação.
-- `docs/EXPERIMENTOS.md`: protocolo de evidências.
-- `tests/`: reservado para testes futuros.
+## Testes
+Com Lua disponível no PATH, execute `lua tests/test_probe.lua`. Testes simulados não equivalem a validação no jogo.
 
-## Primeira execução
-Abra a ROM legitimamente obtida no BizHawk, use o console Lua e carregue `lua/main.lua`. O script apenas imprime uma mensagem para verificar a execução.
-
-## Próximo experimento
-Capturar observações separadas para **menu de treinamento, seleção do desafio, seleção do nível e desafio em execução**, sem pressupor qualquer endereço WRAM.
-
-### Histórico
-O reinício substituiu os arquivos da árvore ativa por uma base mínima, **preservando os commits anteriores no histórico Git**.
+## Próximas etapas
+Ver [docs/ROADMAP.md](docs/ROADMAP.md) e [docs/EXPERIMENTOS.md](docs/EXPERIMENTOS.md). O histórico anterior permanece em Git.
