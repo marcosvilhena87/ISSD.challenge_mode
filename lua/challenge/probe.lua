@@ -21,7 +21,8 @@ function M.read(read_u8)
   local a, b, level = attempt(map.challenge_a), attempt(map.challenge_b), attempt(map.selected_level)
   local result = M.decode(a, b, level)
   result.raw = {challenge_a=a, challenge_b=b, selected_level=level,
-    legacy_level_a=attempt(map.legacy_level_a), legacy_level_b=attempt(map.legacy_level_b)}
+    legacy_level_a=attempt(map.legacy_level_a), legacy_level_b=attempt(map.legacy_level_b),
+    challenge_start_cursor=attempt(map.challenge_start_cursor)}
   return result
 end
 return M
