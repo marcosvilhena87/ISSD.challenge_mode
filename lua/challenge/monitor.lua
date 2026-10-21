@@ -12,7 +12,7 @@ end
 function M.new(opts)
   assert(opts and opts.read and opts.csv and opts.frame, "monitor requires read, csv and frame")
   local self = {read=opts.read, frame=opts.frame, csv=opts.csv,
-    events=opts.events, phase="unlabeled", previous=nil, since=nil,
+    events=opts.events, context=opts.context, phase="unlabeled", previous=nil, since=nil,
     session=opts.session or os.date("!%Y%m%dT%H%M%SZ"), event_offset=0}
   local f = assert(io.open(self.csv, "a+"))
   local size = f:seek("end")
@@ -64,7 +64,7 @@ function M:poll_events(frame,r)
     end
     line=line:gsub("\r$",""):match("^%s*(.-)%s*$")
     if line ~= "" then
-      local allowed={menu=true,level_select=true,playing=true,pause=true,exit=true,main_menu=true,training=true,other=true}
+      local allowed={menu=true,level_select=true,playing=true,pause=true,exit=true,main_menu=true,training=true,other=true,mode_selection=true,input_name=true,challenge_selection=true}
       if allowed[line] then self.phase=line else line="note_"..clean(line) end
       self:emit(frame,"operator",line,r,"")
       print("[ISSD.challenge_mode] operator "..line.." frame="..frame)
@@ -87,5 +87,6 @@ function M:step()
     self.since=frame
   end
   self:poll_events(frame,r)
+  if self.context then self.context:step(frame,r,self.phase) end
 end
 return M
