@@ -19,8 +19,9 @@ Enviar apenas o evento que descreve a tela visivel no momento, logo apos ela apa
 A v0.4 diferencia, exclusivamente em contexto ROTULADO:
 - `mode_selection`: b=255, cursor 0 Training / 1 Challenge.
 - `input_name`: cursor bruto; nao pressupor quantidade total de teclas.
-- `challenge_selection`: a=5, b=0, cursor 0..5 modalidades, 6 EXIT.
+- `challenge_selection`: cursor 0..5 modalidades, 6 EXIT, independente de a/b; apenas com tela rotulada.
 - `level_select`: a=b em 0..5; cursor 0..3 equivale LV1..LV4.
+- `challenge_start_menu`: apos escolher nivel e antes de jogar, tres opcoes visuais CHALLENGE START, KEY CONFIGURATION, CHANGE CONTROLLER. Hipotese provisoria de cursor 0..2 nessa ordem; ainda nao observada em CSV com rotulo deste menu. Fora da faixa: unknown. Nao chamar `playing` ate iniciar efetivamente o desafio.
 
 **Limites:** rotulos do operador sao evidencias manuais e nao uma flag de menu independente. Os mesmos bytes aparecem em outras telas. `candidate` nao significa confirmado. Sem rotulo confiavel, mantem `unknown`. Registros invalidos (por exemplo indices 4 e 5 em `level_select`) ficam `unknown`; nao existem LV5 ou LV6 validados. O monitor nao envia controles ao jogo.
 
