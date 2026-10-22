@@ -147,3 +147,17 @@ goal_counter_sessions_v3.csv
 goal_evidence_events_v4.txt
 goal_evidence_trace_v4.csv
 goal_evidence_sessions_v4.csv
+
+dribble_bot_commands_v033.txt
+dribble_bot_trace_v033.csv
+dribble_bot_summary_v033.csv
+dribble_initial_calibration_v033.csv
+dribble_start_sync_v033.csv
+dribble_flag_timing_v033.csv
+dribble_start_state_v033.csv
+dribble_active_start_v033.csv
+dribble_active_flag_timing_v033.csv
+dribble_route_segments_v033.csv
+dribble_route_benchmark_v033.csv
+dribble_goal_events_v033.csv
+dribble_goal_evidence_v033.csv
