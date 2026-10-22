@@ -2,13 +2,14 @@
 local M={}
 M.waypoints={{555,261},{772,304},{974,356},{1228,293},{1450,367}}
 M.TIME_LIMIT=1800
+M.approach_profile="CONTROL" -- reset on every ARM; only changes precision approach pulse
 local function int(x) return type(x)=="number" and x==x and x%1==0 end
 function M.new() return {started=nil,last_remaining=nil,target=1,near_since=nil,search_step=0,search_since=nil,motion_frame=nil,motion_x=nil,motion_y=nil,moving_frames=0,grace_until=nil,event=nil} end
-local function steer(dx,dy,frame,fine)
+local function steer(dx,dy,frame,fine,continuous)
  local b={}
  local dead=fine and 2 or 6
  -- Short pulses minimize crossing the target with high velocity.
- local pulse=not fine or frame%4==0
+ local pulse=not fine or continuous or frame%4==0
  if pulse then
   if dx>dead then b.Right=true elseif dx< -dead then b.Left=true end
   if dy>dead then b.Down=true elseif dy< -dead then b.Up=true end
@@ -61,7 +62,7 @@ function M.step(s,st)
   elseif math.abs(dx)<=24 and math.abs(dy)<=24 then reason="precision_approach" end
  end
  local fine=reason=="precision_approach" or reason=="local_search"
- local buttons=steer(dx,dy,s.frame,fine)
+ local buttons=steer(dx,dy,s.frame,fine,reason=="precision_approach" and M.approach_profile=="CONTINUOUS_PRECISION")
  if not st.motion_frame then st.motion_frame=s.frame;st.motion_x=s.px;st.motion_y=s.py end
  local moving=buttons.Left or buttons.Right or buttons.Up or buttons.Down
  if moving then st.moving_frames=st.moving_frames+1 end
