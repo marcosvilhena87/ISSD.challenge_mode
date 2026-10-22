@@ -9,7 +9,15 @@ local events=root.."/goal_counter_events_v3.txt"
 local trace=root.."/goal_counter_validation_v3.csv"
 local sessions=root.."/goal_counter_sessions_v3.csv"
 local function setup(p,h)
- local f=assert(io.open(p,"a+"));if f:seek("end")==0 then f:write(h.."\n") end;f:close()
+ local f=io.open(p,"r")
+ if f then
+  local first=f:read("*l")
+  f:close()
+  assert(first==h,"invalid CSV header in "..p.."; preserve/rename the existing file, then restart the validator")
+ else
+  local created=assert(io.open(p,"w"))
+  created:write(h.."\n");created:close()
+ end
 end
 setup(trace,"session,frame,event,operator_event,goal_u16,goal_low_u8,goal_high_u8,gs_u16,remaining_u8,delta_goal,read_consistent,classification_note")
 setup(sessions,"session,start_frame,start_goal,final_frame,final_goal,positive_changes,plausible_increments,resets_or_decrements,read_mismatches,invalid_reads,negative_control,visual_goal,exit_observed,first_positive_frame,gs_at_first_positive,remaining_at_first_positive,classification,quality,close_reason")
