@@ -28,3 +28,16 @@ Commands appended to the file after script initialization are consumed on emulat
 For each profile, compare at least three trials with comparable complete routes and positive goal evidence. Inspect `dribble_route_experiments_v035.csv` to see whether the changed segment improved **without slowing neighboring segments**. Validate that the fifth flag was collected, the shot happened and the goal counter incremented under expected context. Incomplete routes and increments outside the validated DRIBBLE context are not comparable as successful route experiments. Score remains independently verified, not inferred.
 
 Synthetic Lua test: `lua tests/test_dribble_route_optimization_v035.lua`. Real emulator validation is pending.
+
+## Profile-command reliability fix
+
+The latest v0.3.5 queues `PROFILE:<NAME>` for the **next ARM** even if the runner is finishing an attempt. Previously a profile change could be rejected during finalization, silently leaving CONTROL for the next run. Profile changes never alter an attempt already in progress. `ARM` first finalizes any prior attempt and then applies the queued profile. The new `dribble_profile_audit_v035.csv` records `profile_queued` and `arm_applied` (including waypoint 1 coordinates), and the Lua Console prints the applied profile in the ARMED line.
+
+**Restart the Lua script after git pull**; merely pulling files will not change already loaded Lua code. To test:
+```powershell
+Add-Content .\dribble_bot_commands_v035.txt 'PROFILE:FLAG1_X_MINUS_4'
+Add-Content .\dribble_bot_commands_v035.txt 'ARM'
+Import-Csv .\dribble_profile_audit_v035.csv | Select-Object -Last 4 | Format-Table -AutoSize
+```
+
+Expect `arm_applied` with `applied_profile=FLAG1_X_MINUS_4` and `wp1_x=551`; use `CONTROL` to restore `wp1_x=555`. The target route optimization report should match the applied profile. If they disagree, **do not compare performance** until the discrepancy is resolved.
