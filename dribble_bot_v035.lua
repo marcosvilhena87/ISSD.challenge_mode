@@ -11,7 +11,16 @@ local Start=require("challenge.dribble_start_detection_v0327")
 local Benchmark=require("challenge.dribble_route_benchmark_v0328")
 local Goal=require("challenge.dribble_goal_evidence_v4")
 local Performance=require("challenge.dribble_performance_v034")
+-- Reload mutable route modules on each runner start; BizHawk may retain package.loaded.
+package.loaded["challenge.dribble_waypoints_v022"]=nil
+package.loaded["challenge.dribble_route_optimization_v035"]=nil
 local Optimization=require("challenge.dribble_route_optimization_v035")
+local function profile_known(name)
+ for _,v in ipairs(Optimization.names) do if v==name then return true end end
+ return false
+end
+assert(profile_known("FLAG2_760_325"),
+ "outdated route optimization module: expected FLAG2_760_325 at "..root.."/lua/challenge/dribble_route_optimization_v035.lua")
 assert(memory and memory.read_u8 and memory.read_u16_le and memory.read_s16_le and emu and emu.frameadvance and emu.framecount and joypad and joypad.set,"BizHawk API missing")
 local session=os.date("!%Y%m%dT%H%M%SZ")
 local command=root.."/dribble_bot_commands_v035.txt"
