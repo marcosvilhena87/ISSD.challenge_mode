@@ -149,3 +149,7 @@ The single gameplay runner `dribble_bot_v033.lua` samples experimental goal coun
 ## DRIBBLE Bot v0.3.4 — Goal Evidence & Performance Benchmark
 
 Run `dribble_bot_v034.lua` for contextual goal counter evidence, integrated `dribble_summary_integrated_v034.csv` and per-phase timings in `dribble_performance_v034.csv`. Control strategy is unchanged; scores still require independent operator verification. [Usage and metrics](docs/DRIBBLE_BOT_V034.md).
+
+## DRIBBLE Bot v0.3.5 — Route Optimization Benchmark
+
+`dribble_bot_v035.lua` introduces reversible, isolated four-unit waypoint experiments (default `CONTROL`) with `dribble_route_optimization_v035.csv` and `dribble_route_experiments_v035.csv`. The goal and shot logic remain unchanged; no route improvement is asserted without emulator evidence. [Protocol](docs/DRIBBLE_BOT_V035.md).
