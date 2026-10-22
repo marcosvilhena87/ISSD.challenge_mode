@@ -10,7 +10,7 @@ import shutil
 
 ROOT = pathlib.Path(__file__).resolve().parent
 RUNNER = (ROOT / "dribble_bot_v035.lua").read_text(encoding="utf-8")
-PATTERN = re.compile(r'setup\((?:root\.\./")?([^"]+)"\s*,\s*"([^"]+)"\)')
+PATTERN = re.compile(r'setup\(root\.\."/([^"]+)"\s*,\s*"([^"]+)"\)')
 # Include standalone local variables trace / summary.
 HEADERS = {name: header for name, header in PATTERN.findall(RUNNER)}
 HEADERS["dribble_bot_trace_v035.csv"] = (
