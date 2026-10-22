@@ -129,3 +129,7 @@ Start `dribble_bot_v0327.lua` in BizHawk and ARM via `dribble_bot_commands_v0327
 ## DRIBBLE Bot v0.3.2.8 — Deterministic Route Benchmark
 
 Run `dribble_bot_v0328.lua` alone in BizHawk. Records five per-flag segment durations and positions in `dribble_route_segments_v0328.csv` and session comparability in `dribble_route_benchmark_v0328.csv`. The reference is the observed v0327 vector 176/244/204/172/192; **no gameplay commands are changed**. See [protocol](docs/DRIBBLE_BOT_V0328.md).
+
+## DRIBBLE Goal Counter Validation v2
+
+Passive BizHawk observer `goal_counter_validation_v2.lua` tests the experimental goal count at `WRAM 0x0DA2` with explicit START/STOP sessions, visual operator markers and negative controls. **Correlation is not yet an automatic goal confirmation**. See [protocol](docs/GOAL_COUNTER_VALIDATION_V2.md).
