@@ -35,8 +35,10 @@ setup(root.."/dribble_performance_v035.csv","session,arm_frame,active_frame,fift
 setup(root.."/dribble_summary_integrated_v035.csv","session,arm_frame,fifth_flag_frame,shot_frame,increment_frame,goal_initial,goal_final,goal_classification,goal_evidence,visual_confirmation,record_score,flags_elapsed_frames,preparation_frames,shot_to_increment_frames,total_to_increment_frames,route_comparable,route_delta_frames")
 setup(root.."/dribble_route_benchmark_v035.csv","session,observed_flags,comparable,delta_total_frames,status,arm_frame,active_candidate_frame,fifth_flag_frame,exit_frame")
 setup(root.."/dribble_route_optimization_v035.csv","session,profile,active_route_frames,baseline_delta_frames,complete,goal_classification,eligible,verdict")
+setup(root.."/dribble_profile_audit_v035.csv","frame,event,requested_profile,applied_profile,session,wp1_x,wp1_y")
 setup(root.."/dribble_route_experiments_v035.csv","session,profile,flag_number,segment_frames,baseline_frames,delta_frames,valid_start,player_x,player_y")
 local selected_profile="CONTROL"
+local requested_profile=nil
 assert(Optimization.apply(selected_profile))
 local pos=0;local f=io.open(command,"rb");if f then pos=f:seek("end");f:close() end
 local armed=false;local attempt=nil;local state=P.new();local pending=false;local grace_exit=nil
@@ -112,21 +114,24 @@ end
 local function command_handle(cmd)
  local c=cmd:upper()
  if c:match("^PROFILE:") then
-  if armed or pending or (attempt and not attempt.final) then
-   print("[ISSD.dribble_bot] change profile only when disarmed; STOP first")
-  else
-   local candidate=c:match("^PROFILE:(.+)$")
-   local ok,err=Optimization.apply(candidate)
-   if ok then selected_profile=candidate;print("[ISSD.dribble_bot] profile="..selected_profile)
-   else print("[ISSD.dribble_bot] rejected profile="..tostring(candidate).." "..tostring(err)) end
-  end
+  local candidate=c:match("^PROFILE:(.+)$")
+  local known=false
+  for _,name in ipairs(Optimization.names) do if name==candidate then known=true;break end end
+  if known then
+   requested_profile=candidate
+   print("[ISSD.dribble_bot] profile queued="..candidate.." next ARM")
+   write(root.."/dribble_profile_audit_v035.csv",{emu.framecount(),"profile_queued",candidate,selected_profile,attempt and attempt.id or "",nil,nil},7)
+  else print("[ISSD.dribble_bot] invalid profile="..tostring(candidate)) end
  elseif c=="ARM" then
   if attempt and not attempt.final then end_attempt() end
+  if requested_profile then selected_profile=requested_profile;requested_profile=nil end
   assert(Optimization.apply(selected_profile))
   state=P.new();armed=true;pending=false;grace_exit=nil
   local s=snapshot();attempt={id=session.."_"..tostring(s.frame),started=s.frame,profile=selected_profile,time_start=s.time,last=s,last_remaining=s.remaining,last_flag_frame=s.frame,flags_seen=0,active=Start.new(s),route=Benchmark.new(s.frame),goal=Goal.new(s),confirmed=false,score=nil,final=false}
   write(root.."/dribble_start_state_v035.csv",{attempt.id,s.frame,s.gs,s.ptr,s.remaining,s.poss,s.px,s.py,s.bx,s.by,s.time,s.timefrac,s.bonus,s.bonusfrac},14)
-  print("[ISSD.dribble_bot] v0.3.5 ARMED session="..attempt.id.." frame="..s.frame)
+  local W=require("challenge.dribble_waypoints_v022")
+  write(root.."/dribble_profile_audit_v035.csv",{s.frame,"arm_applied",selected_profile,selected_profile,attempt.id,W.waypoints[1][1],W.waypoints[1][2]},7)
+  print("[ISSD.dribble_bot] v0.3.5 ARMED profile="..selected_profile.." session="..attempt.id.." frame="..s.frame)
  elseif c=="STOP" then
   if attempt then attempt.exit_reason=attempt.exit_reason or "operator_stop" end
   end_attempt()
