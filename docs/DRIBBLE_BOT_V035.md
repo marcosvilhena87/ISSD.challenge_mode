@@ -104,3 +104,9 @@ Pure Lua regression test: `lua tests/test_dribble_approach_v035.lua` (requires a
 Route profile `FLAG2_760_330_FLAG5_1460_360` changes two waypoints relative to `CONTROL`: Flag 2 from `(772,304)` to `(760,330)`, and Flag 5 from `(1450,367)` to `(1460,360)`. Other waypoints remain unchanged. The route change is reversible and independent of `APPROACH:CONTROL` vs `APPROACH:CONTINUOUS_PRECISION`.
 
 After `git pull --ff-only origin main`, **restart** the Lua runner. Append `PROFILE:FLAG2_760_330_FLAG5_1460_360`, wait for `profile queued`, then append `ARM`. Restore the historical waypoints with `PROFILE:CONTROL` then `ARM`. Compare route timing and per-flag proximity by session; do not attribute changes to route alone if the approach profile also changes.
+
+## Current default (2026-10-22)
+
+The default route on a **fresh runner start**, even without a `PROFILE` command, is `FLAG2_760_330_FLAG5_1460_360`: Flag 2 `(760,330)`, Flag 5 `(1460,360)`, with Flags 1/3/4 unchanged. Default approach is `CONTINUOUS_PRECISION`. The independent module `dribble_waypoints_v022.lua` also starts with these coordinates and approach. The optimization module anchors every profile delta to fixed historical positions so a restart/profile switch cannot double-apply changes.
+
+The historical setup remains selectable with `PROFILE:CONTROL` followed by `APPROACH:CONTROL` and `ARM`. Restore the new standard with `PROFILE:FLAG2_760_330_FLAG5_1460_360`, `APPROACH:CONTINUOUS_PRECISION`, then `ARM`. Wait for the profile/approach queued console messages before sending ARM. `PROFILE:CONTROL` alone reverts only coordinates; `APPROACH:CONTROL` alone reverts only movement policy. Existing CSV files and their historical measurements are not changed.
