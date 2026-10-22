@@ -49,96 +49,41 @@ local function event(id,s,kind,note)
   {session,id or "",s.frame,kind,s.gs or "",s.ptr or "",s.remaining or "",
    s.time or "",s.bonus or "",s.total or "",s.copy or "",s.coherent and 1 or 0,note or ""})
 end
-local previous=nil
-local active=nil
-local next_id=0
-local consecutive=0
-local old_gameplay=false
-local post_exit_suppress=false
-local function start(s)
- next_id=next_id+1
- local id=session.."_"..next_id
- active={id=id,start=s.frame,start_value=key(s),initial_time=s.time,
-  initial_bonus=s.bonus,initial_total=s.total,first_zero=nil,flags=0,
-  exited=nil,changes=0,first_change=nil,last_change=nil,
-  latest_key=key(s),stable_since=s.frame,post_exit_changes=0,main_changed_post_exit=false,preliminary=nil,copy_confirmed_frame=nil}
- event(id,s,"gameplay_start_candidate","context_unverified")
- print("[score_probe] gameplay candidate "..id.." at frame "..s.frame)
-end
-local function preliminary(s)
- local a=active
- if not a or a.preliminary or not a.exited then return end
- if not s.valid or not s.coherent or not a.first_zero or not a.main_changed_post_exit then return end
- if s.frame-a.stable_since<STABLE_FRAMES then return end
- local verdict=s.bonus>0 and "positive_bonus_candidate" or
-  (s.time>0 and "time_only_candidate" or "zero_score_candidate")
- a.preliminary={frame=s.frame,time=s.time,bonus=s.bonus,total=s.total,verdict=verdict}
- event(a.id,s,"early_result_candidate",verdict)
- csv("score_early_results_v34.csv",
- "session,id,exit_frame,early_frame,latency_frames,time_score,bonus_score,total_score,copy_at_early,arithmetic_ok,fresh_post_exit,verdict",
- {session,a.id,a.exited,s.frame,s.frame-a.exited,s.time,s.bonus,s.total,s.copy or "",1,1,verdict})
- print("[score_probe] early "..a.id.." "..verdict.." frame="..s.frame)
-end
-local function endtrial(s,reason)
- local a=active
- if not a then return end
- local e=a.preliminary
- local copy_ok=e and s.copy~=nil and s.copy==e.total
- local verdict=not a.exited and "gameplay_interrupted" or
-  (not a.first_zero and "five_flags_unobserved" or
-  (not e and "no_stable_fresh_primary_result" or
-  (copy_ok and "copy_correlated_candidate" or "copy_unverified")))
- csv("score_auto_trials_v34.csv",
- "session,id,start_frame,fifth_flag_frame,exit_frame,early_frame,end_frame,time_score,bonus_score,total_score,copy_total,early_verdict,copy_match,copy_match_frame,final_verdict,finish_reason",
- {session,a.id,a.start,a.first_zero or "",a.exited or "",e and e.frame or "",s.frame,
- e and e.time or "",e and e.bonus or "",e and e.total or "",s.copy or "",
- e and e.verdict or "",copy_ok and 1 or 0,a.copy_confirmed_frame or "",verdict,reason})
- event(a.id,s,"trial_closed",verdict)
- active=nil;post_exit_suppress=true
- print("[score_probe] "..a.id.." "..verdict.." "..reason)
-end
+local Detector=require("challenge.dribble_result_detector")
+local detector=Detector.new()
 local function observe(s)
- local in_game=s.gameplay
- if in_game then consecutive=consecutive+1 else consecutive=0 end
- if not active and not post_exit_suppress and consecutive==ENTER_FRAMES and s.remaining==5 then start(s) end
- if active then
-  local a=active
-  local k=key(s)
-  if k~=a.latest_key then
-   local prior=a.latest_key
-   a.latest_key=k;a.stable_since=s.frame;a.changes=a.changes+1
-   a.first_change=a.first_change or s.frame;a.last_change=s.frame
-   if a.exited then a.post_exit_changes=a.post_exit_changes+1;a.main_changed_post_exit=true end
-   csv("score_auto_transitions_v34.csv","session,id,frame,phase,old_primary,new_primary,copy_total,gs,ptr,remaining",
-    {session,a.id,s.frame,a.exited and "POST_EXIT" or "GAMEPLAY",prior,k,s.copy or "",s.gs or "",s.ptr or "",s.remaining or ""})
-   if a.preliminary then
-    event(a.id,s,"early_candidate_superseded","primary_changed_again")
-    a.preliminary=nil;a.copy_confirmed_frame=nil
-   end
-  end
-  if in_game and s.remaining==0 and not a.first_zero then
-   a.first_zero=s.frame;event(a.id,s,"fifth_flag_candidate","remaining_0")
-  end
-  if not in_game and not a.exited then
-   a.exited=s.frame;event(a.id,s,"gameplay_exit_candidate","record_screen_unverified")
-  end
-  preliminary(s)
-  if a.preliminary and not a.copy_confirmed_frame and s.copy~=nil and s.copy==a.preliminary.total then
-   a.copy_confirmed_frame=s.frame
-   event(a.id,s,"late_copy_correlated","supplementary_only")
+ local events=Detector.step(detector,s)
+ for _,e in ipairs(events) do
+  local a=e.trial
+  local id=a and (session.."_"..a.id) or ""
+  if e.type=="gameplay_start_candidate" then
+   event(id,s,e.type,"context_unverified")
+  elseif e.type=="primary_change" then
+   csv("score_auto_transitions_v34.csv",
+    "session,id,frame,phase,old_primary,new_primary,copy_total,gs,ptr,remaining",
+    {session,id,s.frame,e.extra.phase,e.extra.previous,e.extra.current,s.copy or "",s.gs or "",s.ptr or "",s.remaining or ""})
+  elseif e.type=="early_result_candidate" then
+   local p=a.preliminary
+   event(id,s,e.type,p.verdict)
+   csv("score_early_results_v34.csv",
+    "session,id,exit_frame,early_frame,latency_frames,time_score,bonus_score,total_score,copy_at_early,arithmetic_ok,fresh_post_exit,verdict",
+    {session,id,a.exited,p.frame,p.frame-a.exited,p.time,p.bonus,p.total,s.copy or "",1,1,p.verdict})
+  elseif e.type=="late_copy_correlated" then
+   event(id,s,e.type,"supplementary_only")
    csv("score_copy_evidence_v34.csv","session,id,early_frame,copy_match_frame,lag_frames,total_score,copy_total",
-    {session,a.id,a.preliminary.frame,s.frame,s.frame-a.preliminary.frame,a.preliminary.total,s.copy})
-  end
-  if not a.exited then
-   if s.frame-a.start>MAX_GAME_FRAMES then endtrial(s,"gameplay_timeout") end
-  else
-   local age=s.frame-a.exited
-   if a.preliminary and a.copy_confirmed_frame then endtrial(s,"copy_correlation_observed")
-   elseif age>=COPY_WAIT_FRAMES then endtrial(s,"post_exit_timeout")
-   elseif in_game and consecutive>=ENTER_FRAMES then endtrial(s,"new_game_before_resolution") end
+    {session,id,a.preliminary.frame,s.frame,s.frame-a.preliminary.frame,a.preliminary.total,s.copy})
+  elseif e.type=="trial_closed" then
+   local p=a.preliminary
+   csv("score_auto_trials_v34.csv",
+    "session,id,start_frame,fifth_flag_frame,exit_frame,early_frame,end_frame,time_score,bonus_score,total_score,copy_total,early_verdict,copy_match,copy_match_frame,final_verdict,finish_reason",
+    {session,id,a.start,a.first_zero or "",a.exited or "",p and p.frame or "",s.frame,p and p.time or "",
+      p and p.bonus or "",p and p.total or "",s.copy or "",p and p.verdict or "",
+      a.copy_confirmed_frame and 1 or 0,a.copy_confirmed_frame or "",e.extra.verdict,e.extra.reason})
+   event(id,s,e.type,e.extra.verdict)
+  elseif e.type~="primary_change" then
+   event(id,s,e.type,"hypothesis_only")
   end
  end
- if post_exit_suppress and not in_game then post_exit_suppress=false end
 end
 print("[score_probe] v3.4 AUTOMATIC read-only; WRAM score + provisional gameplay context; session="..session)
 print("[score_probe] no commands required; reports in "..dir)
