@@ -42,7 +42,7 @@ function M.step(s,st)
   if pd>=M.MIN_PLAYER_MOVE then
    diagnostic(st,s,"player_delayed",pd,bd)
    st.detected_delays=st.detected_delays+1
-   st.observation=nil;reset(st,s)
+   st.observation=nil;st.base.recoveries=0;reset(st,s)
    st.event="delayed_player_movement"
    return {},st,"movement_detected"
   end
