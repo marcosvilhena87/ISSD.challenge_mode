@@ -113,3 +113,7 @@ Run `dribble_bot_v0323.lua` in BizHawk. After failed escape probes, the bot obse
 ## DRIBBLE Bot v0.3.2.4 — Initial Movement Calibration
 
 Use `dribble_bot_v0324.lua` alone in BizHawk with `dribble_bot_commands_v0324.txt` ARM/STOP. A passive 90-frame startup calibration logs first player/ball movement and possession changes in `dribble_initial_calibration_v0324.csv`; this postpones premature initial stuck detection without changing waypoint or goal inputs. [Protocol](docs/DRIBBLE_BOT_V0324.md). Not yet validated in the emulator.
+
+## DRIBBLE Bot v0.3.2.5 — Start Synchronization
+
+Load `dribble_bot_v0325.lua` alone in BizHawk; ARM/STOP through `dribble_bot_commands_v0325.txt`. Logs first player and ball motion versus ARM and first observed BCD TIME transition to `dribble_start_sync_v0325.csv`. This measures start latency without assuming BCD-second transitions are exact clock-start evidence; steering and shooting are unchanged. See [docs/DRIBBLE_BOT_V0325.md](docs/DRIBBLE_BOT_V0325.md).
