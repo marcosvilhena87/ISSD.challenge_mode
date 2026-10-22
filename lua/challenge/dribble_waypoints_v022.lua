@@ -2,9 +2,10 @@
 local M={}
 M.waypoints={{555,261},{760,330},{974,356},{1228,293},{1460,360}}
 M.TIME_LIMIT=1800
+M.travel_profile="AXIS" -- DIRECT_LINE is experimental; approach policy independent
 M.approach_profile="CONTINUOUS_PRECISION" -- default; reversible via APPROACH:CONTROL
 local function int(x) return type(x)=="number" and x==x and x%1==0 end
-function M.new() return {started=nil,last_remaining=nil,target=1,near_since=nil,search_step=0,search_since=nil,motion_frame=nil,motion_x=nil,motion_y=nil,moving_frames=0,grace_until=nil,event=nil} end
+function M.new() return {started=nil,last_remaining=nil,target=1,near_since=nil,search_step=0,search_since=nil,motion_frame=nil,motion_x=nil,motion_y=nil,moving_frames=0,grace_until=nil,event=nil,line=nil} end
 local function steer(dx,dy,frame,fine,continuous)
  local b={}
  local dead=fine and 2 or 6
@@ -27,12 +28,15 @@ function M.step(s,st)
  if st.last_remaining~=nil and s.remaining<st.last_remaining then
   st.near_since=nil;st.search_since=nil;st.search_step=0
   st.motion_frame=s.frame;st.motion_x=s.px;st.motion_y=s.py;st.moving_frames=0;st.grace_until=s.frame+60
+  st.line=nil
   st.event='flag_collected'
  else
   st.event=nil
  end
  st.last_remaining=s.remaining
- st.target=6-s.remaining
+ local target=6-s.remaining
+ if st.target~=target then st.line=nil end
+ st.target=target
  if s.remaining==0 then return {},st,"five_collected" end
  local wp=M.waypoints[st.target]
  if not wp then return {},st,"no_waypoint" end
@@ -44,6 +48,7 @@ function M.step(s,st)
   dx,dy=bx,by
   reason="recover_ball"
   st.near_since=nil;st.search_since=nil
+  st.line=nil
  else
   if math.abs(dx)<=12 and math.abs(dy)<=12 then
    if not st.near_since then st.near_since=s.frame end
@@ -62,7 +67,35 @@ function M.step(s,st)
   elseif math.abs(dx)<=24 and math.abs(dy)<=24 then reason="precision_approach" end
  end
  local fine=reason=="precision_approach" or reason=="local_search"
- local buttons=steer(dx,dy,s.frame,fine,reason=="precision_approach" and M.approach_profile=="CONTINUOUS_PRECISION")
+ local buttons
+ if reason=="waypoint" and M.travel_profile=="DIRECT_LINE" then
+  -- Stay near the straight segment from the initial position to the waypoint.
+  -- Drive the major axis continuously; correct the minor axis only if the
+  -- perpendicular error exceeds a bounded tolerance. Precision and recovery
+  -- remain delegated to the established controller.
+  if not st.line then st.line={x=s.px,y=s.py,tx=wp[1],ty=wp[2]} end
+  local line=st.line
+  local vx,vy=line.tx-line.x,line.ty-line.y
+  local major_x=math.abs(vx)>=math.abs(vy)
+  local minor_error
+  if major_x then
+   local expected_y=math.abs(vx)>0 and line.y+vy*(s.px-line.x)/vx or line.ty
+   minor_error=expected_y-s.py
+   buttons=steer(dx,0,s.frame,false,false)
+   if math.abs(minor_error)>3 then
+    if minor_error>0 then buttons.Down=true else buttons.Up=true end
+   end
+  else
+   local expected_x=math.abs(vy)>0 and line.x+vx*(s.py-line.y)/vy or line.tx
+   minor_error=expected_x-s.px
+   buttons=steer(0,dy,s.frame,false,false)
+   if math.abs(minor_error)>3 then
+    if minor_error>0 then buttons.Right=true else buttons.Left=true end
+   end
+  end
+ else
+  buttons=steer(dx,dy,s.frame,fine,reason=="precision_approach" and M.approach_profile=="CONTINUOUS_PRECISION")
+ end
  if not st.motion_frame then st.motion_frame=s.frame;st.motion_x=s.px;st.motion_y=s.py end
  local moving=buttons.Left or buttons.Right or buttons.Up or buttons.Down
  if moving then st.moving_frames=st.moving_frames+1 end
