@@ -1,8 +1,8 @@
 -- DRIBBLE v0.2.2 waypoint transition fix: pure policy, no BizHawk APIs.
 local M={}
-M.waypoints={{555,261},{772,304},{974,356},{1228,293},{1450,367}}
+M.waypoints={{555,261},{760,330},{974,356},{1228,293},{1460,360}}
 M.TIME_LIMIT=1800
-M.approach_profile="CONTROL" -- reset on every ARM; only changes precision approach pulse
+M.approach_profile="CONTINUOUS_PRECISION" -- default; reversible via APPROACH:CONTROL
 local function int(x) return type(x)=="number" and x==x and x%1==0 end
 function M.new() return {started=nil,last_remaining=nil,target=1,near_since=nil,search_step=0,search_since=nil,motion_frame=nil,motion_x=nil,motion_y=nil,moving_frames=0,grace_until=nil,event=nil} end
 local function steer(dx,dy,frame,fine,continuous)
