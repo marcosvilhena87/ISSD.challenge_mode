@@ -1,5 +1,8 @@
 -- DRIBBLE v0.2.2 waypoint transition fix: pure policy, no BizHawk APIs.
 local M={}
+local Route=require("challenge.dribble_route_optimization_v1")
+M.segment_modes={}
+function M.set_segment_modes(modes) M.segment_modes=modes or {} end
 M.waypoints={{555,261},{760,330},{974,356},{1228,293},{1460,360}}
 M.TIME_LIMIT=1800
 M.travel_profile="DIRECT_LINE" -- experimental straight path; AXIS remains available
@@ -68,7 +71,9 @@ function M.step(s,st)
  end
  local fine=reason=="precision_approach" or reason=="local_search"
  local buttons
- if reason=="waypoint" and M.travel_profile=="DIRECT_LINE" then
+ if reason=="waypoint" and (M.segment_modes[st.target]=="DIAGONAL_FIRST" or M.segment_modes[st.target]=="COLLECTION_ENTRY") then
+  buttons=Route.steer(M.segment_modes[st.target],s,wp,st.line)
+ elseif reason=="waypoint" and M.travel_profile=="DIRECT_LINE" then
   -- Stay near the straight segment from the initial position to the waypoint.
   -- Drive the major axis continuously; correct the minor axis only if the
   -- perpendicular error exceeds a bounded tolerance. Precision and recovery

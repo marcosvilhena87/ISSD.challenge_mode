@@ -56,6 +56,7 @@ local CSV=require("challenge.dribble_csv_v035")
 local Commands=require("challenge.dribble_commands_v035")
 local ResultDetector=require("challenge.dribble_result_detector")
 local Dash=require("challenge.dribble_dash_v3")
+local RouteV1=require("challenge.dribble_route_optimization_v1")
 local Straight=require("challenge.dribble_direct_line_calibration_v2")
 local result_observer=ResultDetector.new()
 -- Compact is the default: two canonical files + one multiplexed diagnostics CSV.
@@ -129,6 +130,7 @@ end
 print("[ISSD.dribble_bot] CSV mode="..output_mode..
  (output_mode=="COMPACT" and " (summary, observer, diagnostics v2; trace disabled)" or " (legacy full reports)"))
 
+setup(csv_dir.."/dribble_route_optimization_v1.csv","session,flag,event,mode,frame,travel_distance,elapsed_frames,samples,collection_x,collection_y")
 setup(csv_dir.."/dribble_direct_line_calibration_v2.csv","session,frame,flag,event,cross_track_error,signed_error,progress,diagonal,correcting,frames,max_error,avg_error,corrections,diagonal_frames,axis_frames,outside_segment_frames,closest_error")
 setup(csv_dir.."/dribble_dash_calibration_v3.csv","session,frame,flag,event,distance_to_waypoint,brake_distance,closing_speed,reason,dash_frames,starts,stops,off_cause,ball_gap,minimum_distance,frames_since_last_off")
 setup(csv_dir.."/dribble_result_observer_v1.csv","session,detector_trial,frame,event,gameplay,remaining,time_score,bonus_score,total_score,copy_total,start_frame,exit_frame,early_frame,early_verdict,copy_match_frame,final_verdict,finish_reason,status")
@@ -154,6 +156,9 @@ setup(csv_dir.."/dribble_approach_proximity_v035.csv","session,route_profile,app
 local W=require("challenge.dribble_waypoints_v022")
 local approach_names={CONTROL=true,CONTINUOUS_PRECISION=true}
 local selected_travel="DIRECT_LINE"
+local route_mode="DIRECT_LINE"
+local requested_route=nil
+local route_flag=2
 local requested_travel=nil
 local selected_approach="CONTINUOUS_PRECISION"
 local requested_approach=nil
@@ -274,7 +279,11 @@ local function end_attempt()
 end
 local function command_handle(cmd)
  local c=cmd:upper()
- if c:match("^TRAVEL:") then
+ if c:match("^ROUTE:") then
+  local mode=c:match("^ROUTE:(.+)$")
+  if RouteV1.NAMES[mode] then requested_route=mode;print("[ISSD.dribble_bot] route queued="..mode.." next ARM")
+  else print("[ISSD.dribble_bot] invalid route="..tostring(mode)) end
+ elseif c:match("^TRAVEL:") then
   local name=c:match("^TRAVEL:(.+)$")
   if name=="AXIS" or name=="DIRECT_LINE" then
    requested_travel=name
@@ -300,18 +309,20 @@ local function command_handle(cmd)
   if requested_profile then selected_profile=requested_profile;requested_profile=nil end
   if requested_approach then selected_approach=requested_approach;requested_approach=nil end
   if requested_travel then selected_travel=requested_travel;requested_travel=nil end
+  if requested_route then route_mode=requested_route;requested_route=nil end
+  W.set_segment_modes({[route_flag]=route_mode})
   assert(Optimization.apply(selected_profile))
   W.approach_profile=selected_approach
   W.travel_profile=selected_travel
   state=P.new();armed=true;pending=false;grace_exit=nil
-  local s=snapshot();attempt={dash=Dash.new(),straight=Straight.new(),id=session.."_"..tostring(s.frame),started=s.frame,profile=selected_profile,time_start=s.time,last=s,last_remaining=s.remaining,last_flag_frame=s.frame,flags_seen=0,active=Start.new(s),route=Benchmark.new(s.frame),goal=Goal.new(s),confirmed=false,score=nil,final=false,approach_profile=selected_approach,travel_profile=selected_travel,
+  local s=snapshot();attempt={dash=Dash.new(),straight=Straight.new(),route_v1=RouteV1.new(),route_mode=route_mode,id=session.."_"..tostring(s.frame),started=s.frame,profile=selected_profile,time_start=s.time,last=s,last_remaining=s.remaining,last_flag_frame=s.frame,flags_seen=0,active=Start.new(s),route=Benchmark.new(s.frame),goal=Goal.new(s),confirmed=false,score=nil,final=false,approach_profile=selected_approach,travel_profile=selected_travel,
    proximity={{},{},{},{},{}},proximity_written=false}
   for i=1,5 do attempt.proximity[i]={observed=0,near24=0,near12=0,
    precision=0,search=0,recover=0,precision_idle=0,collected=false} end
   write(csv_dir.."/dribble_start_state_v035.csv",{attempt.id,s.frame,s.gs,s.ptr,s.remaining,s.poss,s.px,s.py,s.bx,s.by,s.time,s.timefrac,s.bonus,s.bonusfrac},14)
   local W=require("challenge.dribble_waypoints_v022")
   write(csv_dir.."/dribble_profile_audit_v035.csv",{s.frame,"arm_applied",selected_profile,selected_profile,attempt.id,W.waypoints[1][1],W.waypoints[1][2]},7)
-  print("[ISSD.dribble_bot] approach applied="..selected_approach.." travel applied="..selected_travel)
+  print("[ISSD.dribble_bot] approach applied="..selected_approach.." travel applied="..selected_travel.." route flag2="..route_mode)
   print("[ISSD.dribble_bot] v0.3.5 ARMED profile="..selected_profile.." session="..attempt.id.." frame="..s.frame.." wp2=("..W.waypoints[2][1]..","..W.waypoints[2][2]..")")
  elseif c=="STOP" then
   if attempt then attempt.exit_reason=attempt.exit_reason or "operator_stop" end
@@ -332,6 +343,7 @@ while true do
   Start.observe(attempt.active,s)
   if attempt.active.complete then flush_start(attempt,s.frame,attempt.active.final_reason) end
   buttons,state,reason=P.step(s,state)
+  RouteV1.observe(attempt.route_v1,s)
   if s.remaining and s.remaining>=1 and s.remaining<=5 then
    local i=6-s.remaining
    local q=attempt.proximity[i]
@@ -412,6 +424,10 @@ while true do
       segment.px,segment.py,segment.bx,segment.by,segment.poss,segment.time,
       segment.remaining,segment.active_frame,segment.valid_start and 1 or 0},16)
     end
+    local travel,elapsed,samples=RouteV1.summary(attempt.route_v1,attempt.flags_seen)
+    local segment_mode=attempt.flags_seen==route_flag and attempt.route_mode or "DIRECT_LINE"
+    write(csv_dir.."/dribble_route_optimization_v1.csv",
+     {attempt.id,attempt.flags_seen,"flag_collected",segment_mode,s.frame,travel,elapsed,samples,s.px,s.py},10)
     attempt.last_flag_frame=s.frame
     local sm=Straight.summary(attempt.straight,attempt.flags_seen)
     write(csv_dir.."/dribble_direct_line_calibration_v2.csv",

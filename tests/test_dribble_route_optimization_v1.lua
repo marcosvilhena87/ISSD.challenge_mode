@@ -1,0 +1,17 @@
+package.path="./lua/?.lua;./lua/?/init.lua;"..package.path
+local M=require("challenge.dribble_route_optimization_v1")
+local W=require("challenge.dribble_waypoints_v022")
+W.set_segment_modes({[2]="DIAGONAL_FIRST"})
+local function s(frame,x,y) return {frame=frame,gs=0,ptr=0x0F00,remaining=4,px=x,py=y,bx=x,by=y,poss=0x0F00} end
+local state=W.new()
+local buttons,_,reason=W.step(s(1,600,280),state)
+assert(reason=="waypoint" and buttons.Right and buttons.Down and not buttons.Y)
+local o=M.new();M.observe(o,s(1,600,280));M.observe(o,s(2,603,284))
+local distance,elapsed,samples=M.summary(o,2)
+assert(math.abs(distance-5)<0.0001 and elapsed==1 and samples==1)
+W.set_segment_modes({[2]="COLLECTION_ENTRY"})
+state=W.new()
+local b=W.step(s(1,600,280),state)
+assert(b.Right and b.Down)
+W.set_segment_modes({})
+print("test_dribble_route_optimization_v1 OK")
