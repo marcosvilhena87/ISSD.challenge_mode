@@ -56,6 +56,11 @@ setup(root.."/dribble_route_benchmark_v035.csv","session,observed_flags,comparab
 setup(root.."/dribble_route_optimization_v035.csv","session,profile,active_route_frames,baseline_delta_frames,complete,goal_classification,eligible,verdict")
 setup(root.."/dribble_profile_audit_v035.csv","frame,event,requested_profile,applied_profile,session,wp1_x,wp1_y")
 setup(root.."/dribble_route_experiments_v035.csv","session,profile,flag_number,segment_frames,baseline_frames,delta_frames,valid_start,player_x,player_y")
+setup(root.."/dribble_approach_proximity_v035.csv","session,route_profile,approach_profile,flag_number,observed_frames,near24_frames,near12_frames,precision_frames,local_search_frames,recover_ball_frames,precision_idle_frames,complete")
+local W=require("challenge.dribble_waypoints_v022")
+local approach_names={CONTROL=true,CONTINUOUS_PRECISION=true}
+local selected_approach="CONTROL"
+local requested_approach=nil
 local selected_profile="CONTROL"
 local requested_profile=nil
 assert(Optimization.apply(selected_profile))
@@ -124,9 +129,20 @@ end
 local function log_goal(a,ss,event)
  write(root.."/dribble_goal_events_v035.csv",{a.id,ss.frame,event,ss.goal,ss.remaining,ss.gs,a.goal.shot_frame,Goal.classify(a.goal)},8)
 end
+local function flush_proximity(a)
+ if not a or a.proximity_written then return end
+ a.proximity_written=true
+ for i=1,5 do
+  local q=a.proximity[i]
+  write(root.."/dribble_approach_proximity_v035.csv",
+   {a.id,a.profile,a.approach_profile,i,q.observed,q.near24,q.near12,
+    q.precision,q.search,q.recover,q.precision_idle,q.collected and 1 or 0},12)
+ end
+end
 local function end_attempt()
  if not attempt or attempt.final then return end
  attempt.final=true;armed=false;pending=false;release()
+ flush_proximity(attempt)
  local gs=attempt.last or snapshot()
  write(root.."/dribble_goal_evidence_v035.csv",{attempt.id,attempt.started,attempt.goal.base,
   attempt.goal.flags_frame,attempt.goal.shot_frame,attempt.goal.increment_frame,attempt.goal.delta,
@@ -164,7 +180,13 @@ local function end_attempt()
 end
 local function command_handle(cmd)
  local c=cmd:upper()
- if c:match("^PROFILE:") then
+ if c:match("^APPROACH:") then
+  local name=c:match("^APPROACH:(.+)$")
+  if approach_names[name] then
+   requested_approach=name
+   print("[ISSD.dribble_bot] approach queued="..name.." next ARM")
+  else print("[ISSD.dribble_bot] invalid approach="..tostring(name)) end
+ elseif c:match("^PROFILE:") then
   local candidate=c:match("^PROFILE:(.+)$")
   local known=false
   for _,name in ipairs(Optimization.names) do if name==candidate then known=true;break end end
@@ -176,12 +198,18 @@ local function command_handle(cmd)
  elseif c=="ARM" then
   if attempt and not attempt.final then end_attempt() end
   if requested_profile then selected_profile=requested_profile;requested_profile=nil end
+  if requested_approach then selected_approach=requested_approach;requested_approach=nil end
   assert(Optimization.apply(selected_profile))
+  W.approach_profile=selected_approach
   state=P.new();armed=true;pending=false;grace_exit=nil
-  local s=snapshot();attempt={id=session.."_"..tostring(s.frame),started=s.frame,profile=selected_profile,time_start=s.time,last=s,last_remaining=s.remaining,last_flag_frame=s.frame,flags_seen=0,active=Start.new(s),route=Benchmark.new(s.frame),goal=Goal.new(s),confirmed=false,score=nil,final=false}
+  local s=snapshot();attempt={id=session.."_"..tostring(s.frame),started=s.frame,profile=selected_profile,time_start=s.time,last=s,last_remaining=s.remaining,last_flag_frame=s.frame,flags_seen=0,active=Start.new(s),route=Benchmark.new(s.frame),goal=Goal.new(s),confirmed=false,score=nil,final=false,approach_profile=selected_approach,
+   proximity={{},{},{},{},{}},proximity_written=false}
+  for i=1,5 do attempt.proximity[i]={observed=0,near24=0,near12=0,
+   precision=0,search=0,recover=0,precision_idle=0,collected=false} end
   write(root.."/dribble_start_state_v035.csv",{attempt.id,s.frame,s.gs,s.ptr,s.remaining,s.poss,s.px,s.py,s.bx,s.by,s.time,s.timefrac,s.bonus,s.bonusfrac},14)
   local W=require("challenge.dribble_waypoints_v022")
   write(root.."/dribble_profile_audit_v035.csv",{s.frame,"arm_applied",selected_profile,selected_profile,attempt.id,W.waypoints[1][1],W.waypoints[1][2]},7)
+  print("[ISSD.dribble_bot] approach applied="..selected_approach)
   print("[ISSD.dribble_bot] v0.3.5 ARMED profile="..selected_profile.." session="..attempt.id.." frame="..s.frame.." wp2=("..W.waypoints[2][1]..","..W.waypoints[2][2]..")")
  elseif c=="STOP" then
   if attempt then attempt.exit_reason=attempt.exit_reason or "operator_stop" end
@@ -206,6 +234,22 @@ while true do
   Start.observe(attempt.active,s)
   if attempt.active.complete then flush_start(attempt,s.frame,attempt.active.final_reason) end
   buttons,state,reason=P.step(s,state)
+  if s.remaining and s.remaining>=1 and s.remaining<=5 then
+   local i=6-s.remaining
+   local q=attempt.proximity[i]
+   local wp=W.waypoints[i]
+   if wp and type(s.px)=="number" and type(s.py)=="number" then
+    local dx,dy=math.abs(wp[1]-s.px),math.abs(wp[2]-s.py)
+    q.observed=q.observed+1
+    if dx<=24 and dy<=24 then q.near24=q.near24+1 end
+    if dx<=12 and dy<=12 then q.near12=q.near12+1 end
+    if reason=="precision_approach" then
+     q.precision=q.precision+1
+     if not(buttons.Left or buttons.Right or buttons.Up or buttons.Down) then q.precision_idle=q.precision_idle+1 end
+    elseif reason=="local_search" then q.search=q.search+1
+    elseif reason=="recover_ball" then q.recover=q.recover+1 end
+   end
+  end
   if state.shot_frame and not attempt.goal_shot_marked then
    Goal.marker(attempt.goal,"SHOT_STARTED",state.shot_frame)
    attempt.goal_shot_marked=true
@@ -221,6 +265,7 @@ while true do
    local drop=attempt.last_remaining-s.remaining
    if drop==1 then
     attempt.flags_seen=attempt.flags_seen+1
+    if attempt.proximity[attempt.flags_seen] then attempt.proximity[attempt.flags_seen].collected=true end
     write(root.."/dribble_flag_timing_v035.csv",{attempt.id,attempt.flags_seen,s.frame,attempt.last_remaining,s.remaining,
       s.frame-attempt.started,s.frame-attempt.last_flag_frame,s.px,s.py,s.bx,s.by,s.time,s.bonus},13)
     write(root.."/dribble_active_flag_timing_v035.csv",{attempt.id,attempt.flags_seen,s.frame,
