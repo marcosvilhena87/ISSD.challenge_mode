@@ -1,0 +1,15 @@
+package.path="lua/?.lua;lua/?/init.lua;"..package.path
+local P=require("challenge.dribble_goal_v03")
+local s={frame=100,gs=0,ptr=0x0F00,remaining=5,px=554,py=262,bx=560,by=260,poss=0x0F00}
+local st=P.new()
+local b,reason;b,st,reason=P.step(s,st);assert(st.phase=="flags")
+s.frame=101;s.remaining=4;b,st,reason=P.step(s,st);assert(st.phase=="flags" and st.events[1]=="flag_collected")
+s.frame=102;s.remaining=3;b,st,reason=P.step(s,st);assert(st.phase=="flags")
+s.frame=103;s.remaining=2;b,st,reason=P.step(s,st);assert(st.phase=="flags")
+s.frame=104;s.remaining=1;b,st,reason=P.step(s,st);assert(st.phase=="flags")
+s.frame=105;s.remaining=0;b,st,reason=P.step(s,st);assert(st.phase=="goal" and st.events[1]=="five_flags_collected" and reason=="goal_approach")
+s.frame=106;s.px=1650;s.py=365;b,st,reason=P.step(s,st);assert(reason=="shot_charge" and b.B==true)
+s.frame=126;b,st,reason=P.step(s,st);assert(reason=="shot_release" and not b.B)
+s.frame=127;b,st,reason=P.step(s,st);assert(reason=="await_goal_observation" and not b.B)
+s.frame=128;s.gs=6;b,st,reason=P.step(s,st);assert(reason=="gameplay_exit_unverified")
+print("test_dribble_goal_v03.lua OK synthetic")
