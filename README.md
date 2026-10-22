@@ -141,3 +141,7 @@ Passive observer `goal_counter_validation_v3.lua` tracks WRAM `0x0DA2` u16 with 
 ## DRIBBLE Goal Evidence v4 — Context-Aware Confirmation
 
 Passive script `goal_evidence_v4.lua` correlates 0x0DA2 increments with a complete five-flag sequence, operator shot marker and GS=5, distinguishing out-of-context increments and negative controls. It does **not** automatically confirm goals or scores. See [protocol](docs/DRIBBLE_GOAL_EVIDENCE_V4.md).
+
+## DRIBBLE Bot v0.3.3 — Integrated Goal Evidence
+
+The single gameplay runner `dribble_bot_v033.lua` samples experimental goal counter `0x0DA2` and combines increment evidence with the fifth flag and its own shot event. Inspect `dribble_goal_evidence_v033.csv` and `dribble_goal_events_v033.csv`. Route and shot commands remain unchanged and point scores are **never automatically confirmed**. [Protocol](docs/DRIBBLE_BOT_V033.md).
