@@ -1,8 +1,16 @@
 -- DRIBBLE Bot v0.3.5: two-phase pilot + conservative outcome evidence.
 -- Only the operator can CONFIRM_GOAL; post-game state is not proof of success.
 local function exists(p) local f=io.open(p,"rb");if f then f:close();return true end return false end
-local root
-for _,p in ipairs({".","..","Lua/SNES/ISSD.challenge_mode","SNES/ISSD.challenge_mode","C:/Minha_Pasta/Jogos/BizHawk-2.11.1-win-x64/Lua/SNES/ISSD.challenge_mode"}) do if exists(p.."/lua/challenge/dribble_goal_v0325.lua") then root=p;break end end
+local root=_G.ISSD_PROJECT_ROOT
+if root then
+ assert(exists(root.."/lua/challenge/dribble_goal_v0325.lua"),
+  "invalid project root provided by main.lua: "..tostring(root))
+else
+ -- Legacy direct launch remains available for historical workflows.
+ for _,p in ipairs({".","..","Lua/SNES/ISSD.challenge_mode","SNES/ISSD.challenge_mode","C:/Minha_Pasta/Jogos/BizHawk-2.11.1-win-x64/Lua/SNES/ISSD.challenge_mode"}) do
+  if exists(p.."/lua/challenge/dribble_goal_v0325.lua") then root=p;break end
+ end
+end
 assert(root,"repository root not found: expected lua/challenge/dribble_goal_v0325.lua. Check working directory and git pull.")
 package.path=root.."/lua/?.lua;"..root.."/lua/?/init.lua;"..package.path
 -- Clear cached challenge modules so the controller and optimizer share one waypoint table.
