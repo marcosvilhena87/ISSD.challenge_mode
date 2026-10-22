@@ -121,3 +121,7 @@ Load `dribble_bot_v0325.lua` alone in BizHawk; ARM/STOP through `dribble_bot_com
 ## DRIBBLE Bot v0.3.2.6 — Flag Timing & Start-State Validation
 
 Run `dribble_bot_v0326.lua` alone in BizHawk and ARM via `dribble_bot_commands_v0326.txt`. Every observed single decrement of the remaining-flags counter is recorded separately in `dribble_flag_timing_v0326.csv`, bypassing deduplication of the old event name. The ARM snapshot is recorded in `dribble_start_state_v0326.csv`. Movement, timer synchronization, and shot policies remain unchanged. [Protocol](docs/DRIBBLE_BOT_V0326.md).
+
+## DRIBBLE Bot v0.3.2.7 — Active Start Detection
+
+Start `dribble_bot_v0327.lua` in BizHawk and ARM via `dribble_bot_commands_v0327.txt`. The independent passive detector records TIME fraction/seconds changes, first ball/player movement, and an active-start **candidate**, continuing beyond 90 frames if needed. See `dribble_active_start_v0327.csv` and `dribble_active_flag_timing_v0327.csv`. The controller is unchanged; this is not a validated game-start flag. [Protocol](docs/DRIBBLE_BOT_V0327.md).
