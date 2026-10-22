@@ -71,16 +71,22 @@ local output_mode=csv_mode()
 local native_setup,native_write=CSV.setup,CSV.write
 local summary_name="dribble_bot_summary_v035.csv"
 local observer_name="dribble_result_observer_v1.csv"
-local diagnostics_name="dribble_diagnostics_v1.csv"
+local diagnostics_name="dribble_diagnostics_v2.csv"
+local attempt -- shared with diagnostics writer; assigned when bot arms
 local schemas={}
 local function basename(path) return path:match("([^/\\]+)$") or path end
 local function quote(v)
  local x=v==nil and "" or tostring(v)
  return '"'..x:gsub('"','""')..'"'
 end
+local function split_header(header)
+ local names={}
+ for value in (header..","):gmatch("(.-),") do names[#names+1]=value end
+ return names
+end
 local function setup(path,header)
  local name=basename(path)
- schemas[name]=header
+ schemas[name]={header=header,fields=split_header(header)}
  if output_mode=="FULL" or name==summary_name or name==observer_name then
   native_setup(path,header)
  end
@@ -90,22 +96,37 @@ local function write(path,values,n)
  if output_mode=="FULL" or name==summary_name or name==observer_name then
   return native_write(path,values,n)
  end
- if name=="dribble_bot_trace_v035.csv" then return end -- high-frequency trace only in FULL
- assert(schemas[name],"Unregistered compact CSV source: "..name)
+ if name=="dribble_bot_trace_v035.csv" then return end
+ local schema=assert(schemas[name],"Unregistered compact CSV source: "..name)
+ assert(#schema.fields==n,"Invalid field count for "..name)
  local serialized={}
- for i=1,n do serialized[i]=values[i]==nil and "" or tostring(values[i]) end
- local source_session=values[1]
- -- Store each original row and its schema as escaped cells, without losing columns.
+ local index={}
+ for i=1,n do
+  local field=schema.fields[i]
+  serialized[i]=values[i]==nil and "" or tostring(values[i])
+  index[field]=values[i]
+ end
+ -- Normalize session and frame independently of the source's column order.
+ -- Profile audit begins with frame, not session.
+ local session_id=index.session or (attempt and attempt.id) or ""
+ local frame=index.frame or index.arm_frame or index.start_frame or
+  index.flag_frame or index.shot_frame or index.fifth_flag_frame or ""
+ if frame=="" then frame=emu.framecount() end
+ local record_type=index.event or index.classification or index.verdict or
+  index.status or name:gsub("%.csv$","")
+ local line={session_id,frame,name,record_type,schema.header,table.concat(serialized,",")}
+ for i,v in ipairs(line) do line[i]=quote(v) end
  local f=assert(io.open(csv_dir.."/"..diagnostics_name,"a"))
- assert(f:write(quote(source_session)..","..quote(name)..","..quote(schemas[name])..","..
-   quote(table.concat(serialized,",")).."\n"))
+ assert(f:write(table.concat(line,",").."\n"))
  assert(f:close())
 end
 if output_mode=="COMPACT" then
- native_setup(csv_dir.."/"..diagnostics_name,"record_key,source_csv,source_columns,source_values")
+ native_setup(csv_dir.."/"..diagnostics_name,
+  "session,frame,source_csv,record_type,source_columns,source_values")
 end
 print("[ISSD.dribble_bot] CSV mode="..output_mode..
- (output_mode=="COMPACT" and " (summary, observer, diagnostics; trace disabled)" or " (legacy full reports)"))
+ (output_mode=="COMPACT" and " (summary, observer, diagnostics v2; trace disabled)" or " (legacy full reports)"))
+
 setup(csv_dir.."/dribble_result_observer_v1.csv","session,detector_trial,frame,event,gameplay,remaining,time_score,bonus_score,total_score,copy_total,start_frame,exit_frame,early_frame,early_verdict,copy_match_frame,final_verdict,finish_reason,status")
 setup(trace,"session,frame,armed,phase,event,reason,gs,ptr,remaining,poss,player_x,player_y,ball_x,ball_y,buttons,time_bcd,bonus_bcd,time_frac_u16,bonus_frac_u16,recovery_diagnostics")
 setup(summary,"session,started_frame,flags_frame,shot_frame,exit_frame,flags_elapsed_frames,goal_elapsed_frames,total_elapsed_frames,flags_remaining,time_start_bcd,time_at_fifth_bcd,bonus_at_fifth_bcd,time_at_exit_bcd,bonus_at_exit_bcd,shot_attempts,exit_reason,outcome,evidence,record_score")
@@ -140,7 +161,7 @@ W.travel_profile=selected_travel
 local command_reader=Commands.new(command,function(msg)
  print("[ISSD.dribble_bot] "..msg.." frame="..emu.framecount())
 end)
-local armed=false;local attempt=nil;local state=P.new();local pending=false;local grace_exit=nil
+local armed=false;attempt=nil;local state=P.new();local pending=false;local grace_exit=nil
 -- Independent read-only observer. Never changes buttons, armed, attempt or outcome.
 local function release() joypad.set({},1) end
 local function read(fn,a) local ok,v=pcall(fn,a,"WRAM");if ok then return v end end
