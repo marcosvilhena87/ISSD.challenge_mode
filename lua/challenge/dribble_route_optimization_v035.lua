@@ -2,10 +2,10 @@
 local W=require("challenge.dribble_waypoints_v022")
 local M={}
 M.BASELINE={176,244,204,172,192}
-M.names={"CONTROL","FLAG1_X_MINUS_4","FLAG2_X_PLUS_4","FLAG3_Y_MINUS_4","FLAG4_X_MINUS_4","FLAG5_X_MINUS_4"}
+M.names={"CONTROL","FLAG1_X_MINUS_4","FLAG2_X_PLUS_4","FLAG2_760_325","FLAG3_Y_MINUS_4","FLAG4_X_MINUS_4","FLAG5_X_MINUS_4"}
 local originals={}
 for i,p in ipairs(W.waypoints) do originals[i]={p[1],p[2]} end
-local changes={FLAG1_X_MINUS_4={1,-4,0},FLAG2_X_PLUS_4={2,4,0},
+local changes={FLAG1_X_MINUS_4={1,-4,0},FLAG2_X_PLUS_4={2,4,0},FLAG2_760_325={2,-12,21},
  FLAG3_Y_MINUS_4={3,0,-4},FLAG4_X_MINUS_4={4,-4,0},FLAG5_X_MINUS_4={5,-4,0}}
 function M.apply(name)
  local change=name=="CONTROL" and nil or changes[name]
