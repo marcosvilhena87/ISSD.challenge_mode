@@ -59,6 +59,7 @@ local Dash=require("challenge.dribble_dash_v3")
 local RouteV1=require("challenge.dribble_route_optimization_v1")
 local ZoneV2=require("challenge.dribble_collection_zone_v2")
 local ZoneV3=require("challenge.dribble_collection_zone_v3")
+local ZoneV4=require("challenge.dribble_collection_zone_v4")
 local Straight=require("challenge.dribble_direct_line_calibration_v2")
 local result_observer=ResultDetector.new()
 -- Compact is the default: two canonical files + one multiplexed diagnostics CSV.
@@ -132,6 +133,7 @@ end
 print("[ISSD.dribble_bot] CSV mode="..output_mode..
  (output_mode=="COMPACT" and " (summary, observer, diagnostics v2; trace disabled)" or " (legacy full reports)"))
 
+setup(csv_dir.."/dribble_collection_zone_v4.csv","session,frame,flag,mode,event,transitions,near_without_transition,post_min_x,post_max_x,post_min_y,post_max_y,near_min_x,near_max_x,near_min_y,near_max_y,min_pre_distance,max_pre_distance,classification")
 setup(csv_dir.."/dribble_collection_zone_v3.csv","session,frame,flag,mode,event,pre_x,pre_y,post_x,post_y,pre_distance,post_distance,entry_direction,travel_distance,elapsed_frames")
 setup(csv_dir.."/dribble_collection_zone_v2.csv","session,frame,flag,event,pre_frame,pre_x,pre_y,post_x,post_y,pre_distance,post_distance,sample_frame,sample_x,sample_y,classification")
 setup(csv_dir.."/dribble_route_optimization_v1.csv","session,flag,event,mode,frame,travel_distance,elapsed_frames,samples,collection_x,collection_y")
@@ -247,6 +249,13 @@ local function end_attempt()
  if not attempt or attempt.final then return end
  attempt.final=true;armed=false;pending=false;release()
  flush_proximity(attempt)
+ for i=1,5 do
+  local row=ZoneV4.row(attempt.zone_v4,i,i==2 and (attempt.zone_mode or "OFF") or "OFF",
+    (attempt.last and attempt.last.frame) or attempt.started)
+  write(csv_dir.."/dribble_collection_zone_v4.csv",
+    {attempt.id,row[1],row[2],row[3],row[4],row[5],row[6],row[7],row[8],
+     row[9],row[10],row[11],row[12],row[13],row[14],row[15],row[16],row[17]},18)
+ end
  local gs=attempt.last or snapshot()
  write(csv_dir.."/dribble_goal_evidence_v035.csv",{attempt.id,attempt.started,attempt.goal.base,
   attempt.goal.flags_frame,attempt.goal.shot_frame,attempt.goal.increment_frame,attempt.goal.delta,
@@ -327,7 +336,7 @@ local function command_handle(cmd)
   W.approach_profile=selected_approach
   W.travel_profile=selected_travel
   state=P.new();armed=true;pending=false;grace_exit=nil
-  local s=snapshot();attempt={dash=Dash.new(),straight=Straight.new(),route_v1=RouteV1.new(),zone_v2=ZoneV2.new(),zone_mode=zone_mode,route_mode=route_mode,id=session.."_"..tostring(s.frame),started=s.frame,profile=selected_profile,time_start=s.time,last=s,last_remaining=s.remaining,last_flag_frame=s.frame,flags_seen=0,active=Start.new(s),route=Benchmark.new(s.frame),goal=Goal.new(s),confirmed=false,score=nil,final=false,approach_profile=selected_approach,travel_profile=selected_travel,
+  local s=snapshot();attempt={dash=Dash.new(),straight=Straight.new(),route_v1=RouteV1.new(),zone_v2=ZoneV2.new(),zone_v4=ZoneV4.new(),zone_mode=zone_mode,route_mode=route_mode,id=session.."_"..tostring(s.frame),started=s.frame,profile=selected_profile,time_start=s.time,last=s,last_remaining=s.remaining,last_flag_frame=s.frame,flags_seen=0,active=Start.new(s),route=Benchmark.new(s.frame),goal=Goal.new(s),confirmed=false,score=nil,final=false,approach_profile=selected_approach,travel_profile=selected_travel,
    proximity={{},{},{},{},{}},proximity_written=false}
   for i=1,5 do attempt.proximity[i]={observed=0,near24=0,near12=0,
    precision=0,search=0,recover=0,precision_idle=0,collected=false} end
@@ -359,6 +368,7 @@ while true do
   -- Passive collection-zone discovery: no button-policy or waypoint changes.
   local zone_events=ZoneV2.observe(attempt.zone_v2,s,W.waypoints)
   for _,ze in ipairs(zone_events) do
+   ZoneV4.observe(attempt.zone_v4,ze)
    if ze.kind=="collection_transition" then
     local c=ze.record
     if c.flag==2 then

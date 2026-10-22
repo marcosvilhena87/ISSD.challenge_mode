@@ -1,0 +1,13 @@
+package.path="./lua/?.lua;./lua/?/init.lua;"..package.path
+local Z=require("challenge.dribble_collection_zone_v4")
+local st=Z.new()
+local a=Z.summary(st,2)
+assert(a.count==0 and a.classification=="insufficient_collection_evidence")
+Z.observe(st,{kind="near_without_transition",flag=2,frame=5,x=732,y=323})
+Z.observe(st,{kind="collection_transition",record={flag=2,frame=12,pre_frame=11,pre_x=742,pre_y=329,post_x=744,post_y=329,pre_distance=18}})
+local q=Z.summary(st,2)
+assert(q.count==1 and q.negative==1 and q.post.minx==744 and q.near.miny==323)
+assert(q.classification=="single_transition_observed")
+local row=Z.row(st,2,"OFF",20)
+assert(#row==17 and row[7]==744 and row[15]==18)
+print("test_dribble_collection_zone_v4 OK")
