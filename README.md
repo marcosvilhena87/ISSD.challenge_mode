@@ -96,11 +96,11 @@ Use `lua/dribble_bot_v031.lua` in BizHawk, `ARM`/`STOP` via `dribble_bot_command
 
 ## DRIBBLE Bot v0.3.2 — Persistent Score Validation
 
-Run `lua/dribble_bot_v032.lua` with `ARM`/`STOP` via `dribble_bot_commands_v032.txt`. Unique attempt session IDs are logged in `dribble_bot_summary_v032.csv`. After the summary is written, confirm a visually verified goal/score with `python confirm_dribble_score_v032.py --session <exact_session> --confirm-goal --score <score>` even if BizHawk is closed. Updates are session-targeted, idempotent and audited in `dribble_bot_score_audit_v032.csv`; all unconfirmed game exits remain `unverified`. [Protocol](docs/DRIBBLE_BOT_V032.md).
+Run `lua/dribble_bot_v032.lua` with `ARM`/`STOP` via `dribble_bot_commands_v032.txt`. Unique attempt session IDs are logged in `dribble_bot_summary_v032.csv`. After the summary is written, confirm a visually verified goal/score with `python python/confirm_dribble_score_v032.py --session <exact_session> --confirm-goal --score <score>` even if BizHawk is closed. Updates are session-targeted, idempotent and audited in `dribble_bot_score_audit_v032.csv`; all unconfirmed game exits remain `unverified`. [Protocol](docs/DRIBBLE_BOT_V032.md).
 
 ## DRIBBLE Bot v0.3.2.1 — Stuck Recovery Fix
 
-Run `lua/dribble_bot_v0321.lua` alone in BizHawk; send `ARM`/`STOP` to `dribble_bot_commands_v0321.txt`. This version preserves flag waypoints and goal control, adds at most two 24-frame directional recovery probes for flag-phase stalls, and records recovery events to `dribble_bot_trace_v0321.csv`. See [docs/DRIBBLE_BOT_V0321.md](docs/DRIBBLE_BOT_V0321.md). Goal and score confirmation remains operator-driven via `confirm_dribble_score_v032.py --summary dribble_bot_summary_v0321.csv`.
+Run `lua/dribble_bot_v0321.lua` alone in BizHawk; send `ARM`/`STOP` to `dribble_bot_commands_v0321.txt`. This version preserves flag waypoints and goal control, adds at most two 24-frame directional recovery probes for flag-phase stalls, and records recovery events to `dribble_bot_trace_v0321.csv`. See [docs/DRIBBLE_BOT_V0321.md](docs/DRIBBLE_BOT_V0321.md). Goal and score confirmation remains operator-driven via `python/confirm_dribble_score_v032.py --summary dribble_bot_summary_v0321.csv`.
 
 ## DRIBBLE Bot v0.3.2.2 — Recovery Diagnostics & Optimization
 
@@ -167,3 +167,7 @@ O arquivo `lua/dribble_bot_v035.lua` continua sendo o ponto de entrada para o bo
 - `lua/challenge/dribble_waypoints_v022.lua`, `dribble_route_optimization_v035.lua` e demais controladores mantêm os perfis existentes, incluindo `FLAG2_760_330_FLAG5_1460_360`, `CONTINUOUS_PRECISION` e `TRAVEL:AXIS`.
 
 Teste sintético dos módulos de infraestrutura: `lua tests/test_dribble_io_v035.lua`. Teste sintético do movimento: `lua tests/test_dribble_approach_v035.lua`. Ambos exigem interpretador Lua instalado e não substituem a regressão no BizHawk. A organização mantém sondas históricas em `lua/` para rastreabilidade, em vez de excluí-las ou incorporá-las prematuramente ao runner.
+
+## Scripts Python
+
+Os scripts Python auxiliares ficam em `python/`; execute-os a partir da raiz do projeto para manter os caminhos padrão dos CSVs. Por exemplo: `python python/confirm_dribble_score_v032.py --help`. Os arquivos de relatório continuam na raiz; `main.lua` não foi movido.
