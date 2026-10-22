@@ -1,154 +1,149 @@
--- SCORE_PROBE v2: cross-validation on independently observed YOUR RECORD screens.
--- Read-only; candidates from v1 are hypotheses and never promoted automatically.
-local root=assert(_G.ISSD_PROJECT_ROOT,"Launch via main.lua / SCORE_PROBE")
-assert(memory and memory.read_u8 and emu and emu.frameadvance and emu.framecount,"BizHawk WRAM API required")
-local command=root.."/score_probe_commands_v2.txt"
-local csv=root.."/csv/"
+-- SCORE_PROBE v3 - temporal cross-validation of DRIBBLE scoreboard hypotheses.
+-- Passive WRAM readings only. All markers are operator supplied, not screen detection.
+local root=assert(_G.ISSD_PROJECT_ROOT,"Run through main.lua / SCORE_PROBE")
+assert(memory and memory.read_u8 and emu and emu.framecount and emu.frameadvance,"BizHawk APIs unavailable")
 local session=os.date("!%Y%m%dT%H%M%SZ")
-local function csvrows(path)
- local f=io.open(path,"rb");if not f then return nil end
- local lines={};for line in f:lines() do lines[#lines+1]=line:gsub("\r$","") end;f:close()
- local header=lines[1];if not header then return {} end
- local names={};for v in (header..","):gmatch("(.-),") do names[#names+1]=v end
- local out={}
- for i=2,#lines do
-  local fields={};for v in (lines[i]..","):gmatch("(.-),") do fields[#fields+1]=v end
-  local row={};for j,key in ipairs(names) do row[key]=fields[j] end
-  if row.address_hex then out[#out+1]=row end
- end
- return out
+local path=root.."/score_probe_commands_v3.txt"
+local out=root.."/csv/"
+local tracked={}
+local seen={}
+local function add(a,kind,target,source)
+ local key=string.format("%05X/%s/%s",a,kind,target)
+ if not seen[key] then seen[key]=true;tracked[#tracked+1]={a=a,kind=kind,target=target,source=source} end
 end
-local candidates=csvrows(csv.."score_candidates_v1.csv")
-assert(candidates and #candidates>0,"Missing csv/score_candidates_v1.csv; run v1 first")
-local unique,items={},{}
-for _,row in ipairs(candidates) do
- local addr=tonumber(row.address_hex);local encoding=row.encoding
- if addr and encoding then
-  local key=string.format("%05X:%s:%s",addr,encoding,row.target or "")
-  if not unique[key] then unique[key]=true;items[#items+1]={address=addr,encoding=encoding,target=row.target or "",match=row.match_type or ""} end
+-- The operator's principal hypotheses are always tracked, even without v1 output.
+add(0x01CF3,"u8","TIME_SCORE","manual")
+add(0x01CF8,"u16le","BONUS_SCORE","manual")
+add(0x01CFA,"u16le","TOTAL_SCORE","manual")
+add(0x0DC06,"u16le","TOTAL_SCORE","manual")
+local f=io.open(out.."score_candidates_v1.csv","rb")
+if f then
+ local head=f:read("*l")
+ for line in f:lines() do
+  local _,a,kind,target=line:match("^([^,]*),([^,]*),([^,]*),([^,]*)")
+  local addr=tonumber(a or "")
+  if addr and kind and (target=="TIME_SCORE" or target=="BONUS_SCORE" or target=="TOTAL_SCORE") then add(addr,kind,target,"v1") end
  end
+ f:close()
 end
--- Operator-supplied unsigned 16-bit WRAM candidates (little-endian).
--- Kept even if absent from SCORE_PROBE v1; hypotheses only.
-local manual={
- {address=0x01CF3,encoding="u8",target="TIME_SCORE",match="manual_byte_candidate"},
- {address=0x01CF8,encoding="u16le",target="BONUS_SCORE",match="manual_word_candidate"},
- {address=0x01CFA,encoding="u16le",target="TOTAL_SCORE",match="manual_word_candidate"},
- {address=0x0DC06,encoding="u16le",target="TOTAL_SCORE",match="manual_word_candidate"}
-}
-for _,c in ipairs(manual) do
- local key=string.format("%05X:%s:%s",c.address,c.encoding,c.target)
- if not unique[key] then
-  unique[key]=true
-  items[#items+1]=c
- else
-  for _,existing in ipairs(items) do
-   if existing.address==c.address and existing.encoding==c.encoding and existing.target==c.target then
-    existing.match=c.match
-    break
-   end
-  end
- end
-end
-local labels={}
-local captures={}
-local cursor=0
-local function decode(addr,kind)
- local b=memory.read_u8(addr,"WRAM")
- if kind=="u8" then return b end
- if kind=="bcd8" then
-  local a,c=math.floor(b/16),b%16
-  return a<=9 and c<=9 and a*10+c or nil
- end
- if addr>=0x1FFFF then return nil end
- local b2=memory.read_u8(addr+1,"WRAM")
- if kind=="u16le" then return b+256*b2 end
- if kind=="u16be" then return 256*b+b2 end
- if kind=="bcd16le" or kind=="bcd16be" then
-  local lo,hi=b,b2
-  if kind=="bcd16be" then lo,hi=b2,b end
-  local a,c,d,e=lo%16,math.floor(lo/16),hi%16,math.floor(hi/16)
-  if a>9 or c>9 or d>9 or e>9 then return nil end
-  return a+10*c+100*d+1000*e
+local function decode(c)
+ local ok,x=pcall(memory.read_u8,c.a,"WRAM")
+ if not ok or type(x)~="number" then return nil end
+ if c.kind=="u8" then return x end
+ if c.kind=="bcd8" then local h,l=math.floor(x/16),x%16;return h<=9 and l<=9 and h*10+l or nil end
+ if c.a>=0x1FFFF then return nil end
+ local pass,y=pcall(memory.read_u8,c.a+1,"WRAM")
+ if not pass or type(y)~="number" then return nil end
+ if c.kind=="u16le" then return x+256*y end
+ if c.kind=="u16be" then return x*256+y end
+ if c.kind=="bcd16le" or c.kind=="bcd16be" then
+  if c.kind=="bcd16be" then x,y=y,x end
+  local a,b,d,e=x%16,math.floor(x/16),y%16,math.floor(y/16)
+  if a>9 or b>9 or d>9 or e>9 then return nil end
+  return a+b*10+d*100+e*1000
  end
  return nil
 end
-local function append(path,head,rows)
- local f=io.open(path,"rb");local empty=true
- if f then empty=(f:seek("end") or 0)==0;f:close() end
- local out=assert(io.open(path,"ab"))
- if empty then out:write(head.."\n") end
- for _,r in ipairs(rows) do out:write(table.concat(r,",").."\n") end
- out:close()
+local function write(name,header,values)
+ local file=io.open(out..name,"rb");local empty=true
+ if file then empty=(file:seek("end")==0);file:close() end
+ file=assert(io.open(out..name,"ab"))
+ if empty then file:write(header.."\n") end
+ file:write(table.concat(values,",").."\n");file:close()
 end
-local function capture(id,t,b)
- if id=="" or id:find("[^%w_-]") then print("[score_probe] invalid id");return end
- if labels[id] then print("[score_probe] duplicate id rejected: "..id);return end
- if #captures>=32 then print("[score_probe] limit: 32 captures");return end
- local values={}
- for i,c in ipairs(items) do values[i]=decode(c.address,c.encoding) end
- labels[id]=true
- captures[#captures+1]={id=id,time=t,bonus=b,frame=emu.framecount(),values=values}
- append(csv.."score_captures_v2.csv","session,id,frame,time_score,bonus_score,total_score,category,candidates",{
- {session,id,emu.framecount(),t,b,t+b,b>0 and "BONUS_POSITIVE" or (t>0 and "TIME_ONLY" or "ZERO"),#items}})
- print("[score_probe] captured "..id.." scores="..t.."/"..b.." frame="..emu.framecount())
+local active=nil
+local function validid(s) return s and s:match("^[%w_-]+$") end
+local function snapshot()
+ local result={}
+ for i,c in ipairs(tracked) do result[i]=decode(c) end
+ return result
 end
-local function report()
- if #captures<3 then print("[score_probe] need at least three captures");return end
- local classes={}
- for _,s in ipairs(captures) do classes[s.bonus>0 and "BOTH" or (s.time>0 and "TIME_ONLY" or "ZERO")]=true end
- local enough=classes.BOTH and classes.TIME_ONLY and classes.ZERO
- local out={}
- for i,c in ipairs(items) do
-  local exact=0;local binary=0;local valid=0;local positives=0;local negatives=0
-  local observed={}
-  for _,s in ipairs(captures) do
-   local v=s.values[i]
-   local expected=c.target=="BONUS_SCORE" and s.bonus or (c.target=="TIME_SCORE" and s.time or s.time+s.bonus)
-   local expectedPos=expected>0
-   if expectedPos then positives=positives+1 else negatives=negatives+1 end
-   if v~=nil then
-    valid=valid+1
-    if v==expected then exact=exact+1 end
-    if (v>0)==expectedPos then binary=binary+1 end
-   end
-   observed[#observed+1]=s.id..":"..tostring(v or "NA")
-  end
-  local status="insufficient_controls"
-  if enough then
-   if valid==#captures and exact==#captures then status="exact_candidate"
-   elseif valid==#captures and binary==#captures then status="binary_candidate"
-   else status="rejected_by_controls" end
-  end
-  out[#out+1]={session,string.format("0x%05X",c.address),c.encoding,c.target,c.match,
-   #captures,positives,negatives,exact,binary,valid,status,'"'..table.concat(observed,";")..'"'}
+local function mark(label)
+ if not active then print("[score_probe] no active capture");return end
+ local frame=emu.framecount()
+ active.markers[label]=frame
+ write("score_markers_v3.csv","session,id,frame,marker",{session,active.id,frame,label})
+ print("[score_probe] marker "..label.." frame="..frame)
+end
+local function finish(t,b)
+ if not active then print("[score_probe] no active capture");return end
+ local frame=emu.framecount()
+ local values=snapshot()
+ local previous=active.previous
+ local endMarker=active.markers.RECORD or active.markers.RESULT or frame
+ local category=b>0 and "BONUS_POSITIVE" or (t>0 and "TIME_ONLY" or "ZERO")
+ for i,c in ipairs(tracked) do
+  local v=values[i]
+  local expected=c.target=="BONUS_SCORE" and b or (c.target=="TIME_SCORE" and t or t+b)
+  local first=active.first_change[i]
+  local last=active.last_change[i]
+  local status=(v==nil and "unreadable") or (v==expected and "exact_candidate") or
+   ((v>0)==(expected>0) and "binary_candidate" or "contradicted")
+  write("score_temporal_summary_v3.csv",
+   "session,id,category,time_score,bonus_score,address_hex,encoding,target,source,start_frame,first_change,last_change,change_count,record_marker_frame,final_frame,final_value,expected,status",
+   {session,active.id,category,t,b,string.format("0x%05X",c.a),c.kind,c.target,c.source,active.start,
+    first or "",last or "",active.changes[i] or 0,endMarker,frame,v or "",expected,status})
  end
- append(csv.."score_validation_v2.csv",
- "session,address_hex,encoding,target,v1_match,captures,expected_positive,expected_zero,exact_matches,binary_matches,valid_reads,status,observations",out)
- print("[score_probe] validation exported; complete category controls="..tostring(not not enough).." candidates="..#items)
- print("[score_probe] Results remain hypotheses until reproduced in another session.")
+ write("score_trials_v3.csv","session,id,start_frame,end_frame,time_score,bonus_score,category,marker_gameplay,marker_transition,marker_record",
+  {session,active.id,active.start,frame,t,b,category,active.markers.GAMEPLAY or "",active.markers.TRANSITION or "",active.markers.RECORD or ""})
+ print("[score_probe] completed "..active.id.." category="..category.." frames="..(frame-active.start))
+ active=nil
 end
-local function action(line)
- local id,t,b=line:match("^CAPTURE:([%w_-]+):(%d+):(%d+)$")
- if id then capture(id,tonumber(t),tonumber(b))
- elseif line=="EXPORT" then report()
- elseif line~="" then print("[score_probe] expected CAPTURE:ID:TIME:BONUS or EXPORT; got "..line) end
+local function command(line)
+ line=line:match("^%s*(.-)%s*$")
+ local id=line:match("^START:([%w_-]+)$")
+ if id then
+  if active then print("[score_probe] finish or ABORT current trial first");return end
+  active={id=id,start=emu.framecount(),previous=snapshot(),changes={},first_change={},last_change={},markers={}}
+  print("[score_probe] tracking "..id.." frame="..active.start)
+  return
+ end
+ local label=line:match("^MARK:(GAMEPLAY|TRANSITION|RECORD)$") -- Lua patterns do not support alternation
+ if not label then label=line:match("^MARK:([%u_]+)$") end
+ if label then
+  if label=="GAMEPLAY" or label=="TRANSITION" or label=="RECORD" then mark(label)
+  else print("[score_probe] invalid marker "..label) end
+  return
+ end
+ local cid,t,b=line:match("^RESULT:([%w_-]+):(%d+):(%d+)$")
+ if cid then
+  if not active or cid~=active.id then print("[score_probe] result ID mismatch");return end
+  finish(tonumber(t),tonumber(b));return
+ end
+ if line=="ABORT" then active=nil;print("[score_probe] trial aborted");return end
+ if line~="" then print("[score_probe] unknown command: "..line) end
 end
-local f=io.open(command,"rb")
-if f then cursor=f:seek("end") or 0;f:close() end
-print("[score_probe] v2 + manually tracked score candidates loaded "..#items.." candidate interpretations; commands="..command)
+local cursor=0
+local function poll()
+ local file=io.open(path,"rb");if not file then return end
+ local size=file:seek("end") or 0
+ if size<cursor then cursor=0 end
+ file:seek("set",cursor)
+ local chunk=file:read("*a") or "";file:close()
+ local complete=chunk:match("^(.*\n)")
+ if complete then
+  cursor=cursor+#complete
+  for line in complete:gmatch("([^\n]*)\n") do command(line:gsub("\r$","")) end
+ end
+end
+local commandfile=io.open(path,"rb")
+if commandfile then cursor=commandfile:seek("end") or 0;commandfile:close() end
+print("[score_probe] v3 ready candidates="..#tracked.." command="..path)
 while true do
- local file=io.open(command,"rb")
- if file then
-  local size=file:seek("end") or 0
-  if size<cursor then cursor=0 end
-  file:seek("set",cursor)
-  local chunk=file:read("*a") or "";file:close()
-  local complete=chunk:match("^(.*\n)")
-  if complete then
-   cursor=cursor+#complete
-   for line in complete:gmatch("([^\n]*)\n") do action(line:gsub("\r$","")) end
+ poll()
+ if active then
+  local now=snapshot();local frame=emu.framecount()
+  for i,c in ipairs(tracked) do
+   local old=active.previous[i];local new=now[i]
+   if old~=new then
+    active.changes[i]=(active.changes[i] or 0)+1
+    active.first_change[i]=active.first_change[i] or frame
+    active.last_change[i]=frame
+    write("score_transitions_v3.csv","session,id,frame,address_hex,encoding,target,source,old_value,new_value",
+     {session,active.id,frame,string.format("0x%05X",c.a),c.kind,c.target,c.source,old or "",new or ""})
+   end
   end
+  active.previous=now
  end
  emu.frameadvance()
 end

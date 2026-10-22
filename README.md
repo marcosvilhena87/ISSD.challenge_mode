@@ -1,3 +1,9 @@
+## SCORE_PROBE v3 — rastreamento temporal (modo SCORE_PROBE)
+
+O `main.lua` executa `lua/score_probe.lua` (v3). A v2 permanece em `lua/score_probe_v2.lua` para recuperacao e nao e executada automaticamente. O v3 acompanha os candidatos v1 e os enderecos manuais `0x01CF3` (u8 Time), `0x01CF8` (u16le Bonus), `0x01CFA` (u16le Total) e `0x0DC06` (u16le Total), apenas lendo WRAM. Comandos em `score_probe_commands_v3.txt`, um por linha: `START:teste01` quando iniciar gameplay; `MARK:GAMEPLAY`, `MARK:TRANSITION` e `MARK:RECORD` para registrar eventos observados; `RESULT:teste01:183:268` na tela de recorde (substituir pelos valores reais); `ABORT` cancela uma tentativa. Os comandos sao consumidos a partir do fim do arquivo na inicializacao. Cada teste recebe ID unico na sessao, sem controle de jogo.
+
+Saidas em `csv/`: `score_transitions_v3.csv` (mudancas por frame/candidato), `score_markers_v3.csv` (marcacoes visuais), `score_temporal_summary_v3.csv` (analise por candidato) e `score_trials_v3.csv` (tentativas). Ainda nao existe reconhecimento automatico de tela ou endereco validado. Repita com BONUS positivo, TIME-only e ambos zero, em partidas independentes. Mudancas fora da tela YOUR RECORD podem indicar um sinal indireto; todas as classificacoes continuam hipoteses.
+
 ## Candidatos adicionados a investigacao (WRAM, unsigned)
 
 - `0x01CF3` (`b`, `u8`): `TIME_SCORE` — `manual_byte_candidate`.
