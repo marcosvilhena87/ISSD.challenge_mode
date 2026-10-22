@@ -78,12 +78,15 @@ setup(root.."/dribble_route_experiments_v035.csv","session,profile,flag_number,s
 setup(root.."/dribble_approach_proximity_v035.csv","session,route_profile,approach_profile,flag_number,observed_frames,near24_frames,near12_frames,precision_frames,local_search_frames,recover_ball_frames,precision_idle_frames,complete")
 local W=require("challenge.dribble_waypoints_v022")
 local approach_names={CONTROL=true,CONTINUOUS_PRECISION=true}
+local selected_travel="AXIS"
+local requested_travel=nil
 local selected_approach="CONTINUOUS_PRECISION"
 local requested_approach=nil
 local selected_profile=Optimization.DEFAULT_PROFILE
 local requested_profile=nil
 assert(Optimization.apply(selected_profile))
 W.approach_profile=selected_approach
+W.travel_profile=selected_travel
 local pos=0
 local initial=io.open(command,"rb")
 if initial then pos=initial:seek("end") or 0;initial:close() end
@@ -200,7 +203,13 @@ local function end_attempt()
 end
 local function command_handle(cmd)
  local c=cmd:upper()
- if c:match("^APPROACH:") then
+ if c:match("^TRAVEL:") then
+  local name=c:match("^TRAVEL:(.+)$")
+  if name=="AXIS" or name=="DIRECT_LINE" then
+   requested_travel=name
+   print("[ISSD.dribble_bot] travel queued="..name.." next ARM")
+  else print("[ISSD.dribble_bot] invalid travel="..tostring(name)) end
+ elseif c:match("^APPROACH:") then
   local name=c:match("^APPROACH:(.+)$")
   if approach_names[name] then
    requested_approach=name
@@ -219,6 +228,7 @@ local function command_handle(cmd)
   if attempt and not attempt.final then end_attempt() end
   if requested_profile then selected_profile=requested_profile;requested_profile=nil end
   if requested_approach then selected_approach=requested_approach;requested_approach=nil end
+  if requested_travel then selected_travel=requested_travel;requested_travel=nil end
   assert(Optimization.apply(selected_profile))
   W.approach_profile=selected_approach
   state=P.new();armed=true;pending=false;grace_exit=nil
@@ -229,7 +239,7 @@ local function command_handle(cmd)
   write(root.."/dribble_start_state_v035.csv",{attempt.id,s.frame,s.gs,s.ptr,s.remaining,s.poss,s.px,s.py,s.bx,s.by,s.time,s.timefrac,s.bonus,s.bonusfrac},14)
   local W=require("challenge.dribble_waypoints_v022")
   write(root.."/dribble_profile_audit_v035.csv",{s.frame,"arm_applied",selected_profile,selected_profile,attempt.id,W.waypoints[1][1],W.waypoints[1][2]},7)
-  print("[ISSD.dribble_bot] approach applied="..selected_approach)
+  print("[ISSD.dribble_bot] approach applied="..selected_approach.." travel applied="..selected_travel)
   print("[ISSD.dribble_bot] v0.3.5 ARMED profile="..selected_profile.." session="..attempt.id.." frame="..s.frame.." wp2=("..W.waypoints[2][1]..","..W.waypoints[2][2]..")")
  elseif c=="STOP" then
   if attempt then attempt.exit_reason=attempt.exit_reason or "operator_stop" end
