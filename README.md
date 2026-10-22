@@ -1,3 +1,11 @@
+## Candidatos adicionados a investigacao (WRAM, unsigned)
+
+- `0x01CF3` (`b`, `u8`): `TIME_SCORE` — `manual_byte_candidate`.
+- `0x01CF8` (`w`, `u16le`): `BONUS_SCORE` — `manual_word_candidate`.
+- `0x01CFA` (`w`, `u16le`): `TOTAL_SCORE` — `manual_word_candidate`.
+
+Todos os tres sao hipoteses, avaliadas independentemente da lista v1; o candidato anterior `0x0DC06` tambem foi preservado. Quando ja existir interpretacao equivalente proveniente da v1, a origem manual tem prioridade sem duplicar a linha. Uma word usa dois bytes consecutivos, em little-endian. Resultados da v2 anteriores nao mudam; faca uma nova captura e `EXPORT` para incluir todos.
+
 ## Candidatos WRAM de 16 bits monitorados manualmente
 
 O SCORE_PROBE v2 inclui permanentemente tres hipoteses fornecidas pelo operador: `0x01CF8` (word sem sinal, WRAM, candidato a Bonus Score), `0x01CFA` (word sem sinal, WRAM, candidato a Total Score) e `0x0DC06` (word sem sinal, WRAM, candidato a Total Score). O algoritmo usa `u16le` e identifica a origem como `manual_word_candidate` na coluna `v1_match` de `csv/score_validation_v2.csv`. Essas hipoteses sao avaliadas mesmo que nao tenham sido incluidas nos resultados de v1; nenhuma e promovida automaticamente a endereco confirmado. Capture novos placares visuais e exporte novamente para testar as tres hipoteses.

@@ -31,6 +31,7 @@ end
 -- Operator-supplied unsigned 16-bit WRAM candidates (little-endian).
 -- Kept even if absent from SCORE_PROBE v1; hypotheses only.
 local manual={
+ {address=0x01CF3,encoding="u8",target="TIME_SCORE",match="manual_byte_candidate"},
  {address=0x01CF8,encoding="u16le",target="BONUS_SCORE",match="manual_word_candidate"},
  {address=0x01CFA,encoding="u16le",target="TOTAL_SCORE",match="manual_word_candidate"},
  {address=0x0DC06,encoding="u16le",target="TOTAL_SCORE",match="manual_word_candidate"}
@@ -43,7 +44,7 @@ for _,c in ipairs(manual) do
  else
   for _,existing in ipairs(items) do
    if existing.address==c.address and existing.encoding==c.encoding and existing.target==c.target then
-    existing.match="manual_word_candidate"
+    existing.match=c.match
     break
    end
   end
@@ -135,7 +136,7 @@ local function action(line)
 end
 local f=io.open(command,"rb")
 if f then cursor=f:seek("end") or 0;f:close() end
-print("[score_probe] v2 + manually tracked word candidates loaded "..#items.." candidate interpretations; commands="..command)
+print("[score_probe] v2 + manually tracked score candidates loaded "..#items.." candidate interpretations; commands="..command)
 while true do
  local file=io.open(command,"rb")
  if file then
