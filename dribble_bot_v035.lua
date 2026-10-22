@@ -50,7 +50,39 @@ setup(root.."/dribble_route_experiments_v035.csv","session,profile,flag_number,s
 local selected_profile="CONTROL"
 local requested_profile=nil
 assert(Optimization.apply(selected_profile))
-local pos=0;local f=io.open(command,"rb");if f then pos=f:seek("end");f:close() end
+local pos=0
+local initial=io.open(command,"rb")
+if initial then pos=initial:seek("end") or 0;initial:close() end
+local command_poll_count=0
+local command_bytes_seen=0
+local function poll_commands(handle)
+ local cf=io.open(command,"rb")
+ if not cf then return end
+ local size=cf:seek("end") or 0
+ if size<pos then
+  print("[ISSD.dribble_bot] command file truncated; cursor reset from "..pos.." to 0")
+  pos=0
+ end
+ cf:seek("set",pos)
+ local chunk=cf:read("*a") or ""
+ cf:close()
+ if #chunk==0 then return end
+ -- Advance only over newline-terminated commands, leaving incomplete writes unread.
+ local last_newline=nil
+ for i=#chunk,1,-1 do if chunk:sub(i,i)=="\n" then last_newline=i;break end end
+ if not last_newline then return end
+ local complete=chunk:sub(1,last_newline)
+ pos=pos+last_newline
+ command_bytes_seen=command_bytes_seen+last_newline
+ for raw in complete:gmatch("([^\n]*)\n") do
+  local line=raw:gsub("^\239\187\191",""):gsub("\r$",""):match("^%s*(.-)%s*$")
+  if line~="" then
+   print("[ISSD.dribble_bot] command received="..line.." frame="..emu.framecount())
+   handle(line)
+  end
+ end
+end
+
 local armed=false;local attempt=nil;local state=P.new();local pending=false;local grace_exit=nil
 local function release() joypad.set({},1) end
 local function read(fn,a) local ok,v=pcall(fn,a,"WRAM");if ok then return v end end
@@ -152,19 +184,13 @@ end
 print("[ISSD.dribble_bot] v0.3.5 DISARMED; commands="..command)
 release()
 while true do
- local cf=io.open(command,"rb")
- if cf then
-  local size=cf:seek("end");if size<pos then pos=0 end;cf:seek("set",pos)
-  while true do
-   local start=cf:seek();local line=cf:read("*l");if not line then break end
-   local after=cf:seek()
-   if after==size and size>0 then
-    local tail=io.open(command,"rb")
-    if tail then tail:seek("set",size-1);local ch=tail:read(1);tail:close();if ch~="\n" then cf:seek("set",start);break end end
-   end
-   pos=after;command_handle(line:gsub("\r$",""):match("^%s*(.-)%s*$"))
-  end
-  cf:close()
+ command_poll_count=command_poll_count+1
+ poll_commands(command_handle)
+ if command_poll_count%600==0 then
+  local z=io.open(command,"rb")
+  local sz=-1
+  if z then sz=z:seek("end") or -1;z:close() end
+  print("[ISSD.dribble_bot] command poll frame="..emu.framecount().." cursor="..pos.." file_bytes="..sz.." consumed="..command_bytes_seen.." pending_profile="..tostring(requested_profile))
  end
  if armed then
   local s=snapshot();local buttons;local reason
