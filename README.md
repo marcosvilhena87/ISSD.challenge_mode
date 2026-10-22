@@ -81,3 +81,7 @@ Load `dribble_timer_discovery_v2.lua` alone in BizHawk; append `ARM` to `dribble
 ## DRIBBLE Timer Validation v1
 
 Run the read-only `dribble_timer_validation_v1.lua` to record per-frame u8/u16/u32 interpretations of WRAM `0x014F0..0x014F7` across TIME, fifth-flag and BONUS phases. Send `ARM`/`STOP` using `dribble_timer_validation_events_v1.txt`; output is `dribble_timer_validation_v1.csv`. [Protocol](docs/DRIBBLE_TIMER_VALIDATION_V1.md). Clock address hypotheses remain unvalidated.
+
+## DRIBBLE Timer Decoder v1
+
+Run `lua decode_dribble_timers_v1.lua` on `dribble_timer_validation_v1.csv` to interpret experimental `0x014F0` (TIME) and `0x014F4` (BONUS TIME) seconds as packed BCD, and export the raw fractional u16 registers without presuming a scale. Produces `dribble_timer_decoded_v1.csv` and `dribble_timer_decoder_summary_v1.csv`. [Protocol](docs/DRIBBLE_TIMER_DECODER_V1.md). These addresses are not canonical until checked against HUD frames.
