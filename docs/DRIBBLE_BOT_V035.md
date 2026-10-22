@@ -98,3 +98,9 @@ Wait for `approach queued=` before each `ARM`; confirm `approach applied=` in th
 The new **`dribble_approach_proximity_v035.csv`** records one row per flag and attempt: `observed_frames`, `near24_frames`, `near12_frames`, `precision_frames`, `local_search_frames`, `recover_ball_frames`, `precision_idle_frames`, and `complete`. Proximity is measured against each selected waypoint with both x/y within +/-24 or +/-12; the counters are observation frames, not necessarily contiguous wall time, and some counters overlap. Rows marked `complete=0` must not be treated as successful flag collections. Compare route/goal eligibility against `dribble_route_optimization_v035.csv` by `session`. The existing CSV schemas are unchanged.
 
 Pure Lua regression test: `lua tests/test_dribble_approach_v035.lua` (requires a local Lua interpreter).
+
+## Combined waypoint experiment: Flag 2 and Flag 5
+
+Route profile `FLAG2_760_330_FLAG5_1460_360` changes two waypoints relative to `CONTROL`: Flag 2 from `(772,304)` to `(760,330)`, and Flag 5 from `(1450,367)` to `(1460,360)`. Other waypoints remain unchanged. The route change is reversible and independent of `APPROACH:CONTROL` vs `APPROACH:CONTINUOUS_PRECISION`.
+
+After `git pull --ff-only origin main`, **restart** the Lua runner. Append `PROFILE:FLAG2_760_330_FLAG5_1460_360`, wait for `profile queued`, then append `ARM`. Restore the historical waypoints with `PROFILE:CONTROL` then `ARM`. Compare route timing and per-flag proximity by session; do not attribute changes to route alone if the approach profile also changes.
