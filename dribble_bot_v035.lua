@@ -22,7 +22,7 @@ local function setup(path,header)
  if f then
   local first=f:read("*l");f:close()
   if first then
-   first=first:gsub("^\\239\\187\\191",""):gsub("\\r$","")
+   first=first:gsub("^\239\187\191",""):gsub("\r$","")
   end
   assert(first==header,"CSV header missing/invalid: "..path..
     " expected="..header.." actual="..tostring(first))
