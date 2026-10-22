@@ -1,10 +1,12 @@
--- v0.3.5 controlled route experiments, default always historical waypoints.
+-- v0.3.5 route experiments: combined route is default, CONTROL restores historical reference.
 local W=require("challenge.dribble_waypoints_v022")
 local M={}
 M.BASELINE={176,244,204,172,192}
+M.DEFAULT_PROFILE="FLAG2_760_330_FLAG5_1460_360"
 M.names={"CONTROL","FLAG1_X_MINUS_4","FLAG2_X_PLUS_4","FLAG2_760_325","FLAG2_760_330_FLAG5_1460_360","FLAG3_Y_MINUS_4","FLAG4_X_MINUS_4","FLAG5_X_MINUS_4"}
 local originals={}
-for i,p in ipairs(W.waypoints) do originals[i]={p[1],p[2]} end
+local historical={{555,261},{772,304},{974,356},{1228,293},{1450,367}}
+for i,p in ipairs(historical) do originals[i]={p[1],p[2]} end
 local changes={FLAG1_X_MINUS_4={1,-4,0},FLAG2_X_PLUS_4={2,4,0},FLAG2_760_325={2,-12,21},
  FLAG2_760_330_FLAG5_1460_360={{2,-12,26},{5,10,-7}},FLAG3_Y_MINUS_4={3,0,-4},FLAG4_X_MINUS_4={4,-4,0},FLAG5_X_MINUS_4={5,-4,0}}
 function M.apply(name)
