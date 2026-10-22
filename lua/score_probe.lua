@@ -1,9 +1,9 @@
--- SCORE_PROBE v3.1 - temporal cross-validation of DRIBBLE scoreboard hypotheses.
+-- SCORE_PROBE v3.2 - temporal cross-validation of DRIBBLE scoreboard hypotheses.
 -- Passive WRAM readings only. All markers are operator supplied, not screen detection.
 local root=assert(_G.ISSD_PROJECT_ROOT,"Run through main.lua / SCORE_PROBE")
 assert(memory and memory.read_u8 and emu and emu.framecount and emu.frameadvance,"BizHawk APIs unavailable")
 local session=os.date("!%Y%m%dT%H%M%SZ")
-local path=root.."/score_probe_commands_v31.txt"
+local path=root.."/score_probe_commands_v32.txt"
 local out=root.."/csv/"
 local tracked={}
 local seen={}
@@ -53,6 +53,8 @@ local function write(name,header,values)
 end
 local active=nil
 local completed={}
+local previous_record=nil
+local principal={["01CF3/u8/TIME_SCORE"]=true,["01CF8/u16le/BONUS_SCORE"]=true,["01CFA/u16le/TOTAL_SCORE"]=true,["0DC06/u16le/TOTAL_SCORE"]=true}
 local used={}
 local phase_order={"GAMEPLAY","TRANSITION","RECORD"}
 local function category(t,b) return b>0 and "BONUS_POSITIVE" or (t>0 and "TIME_ONLY" or "ZERO") end
@@ -75,9 +77,19 @@ local function mark(label)
  active.last_marker_frame=frame
  active.markers[label]=frame
  if label=="RECORD" then active.record_values=snapshot() end
- write("score_markers_v31.csv","session,id,frame,marker",{session,active.id,frame,label})
+ if label=="GAMEPLAY" then
+  active.gameplay_values=snapshot()
+  for i,c in ipairs(tracked) do
+   local v=active.gameplay_values[i]
+   local stale=previous_record and v~=nil and previous_record[i]~=nil and v==previous_record[i]
+   write("score_baseline_v32.csv","session,id,frame,address_hex,encoding,target,value,matches_previous_record",
+    {session,active.id,frame,string.format("0x%05X",c.a),c.kind,c.target,v==nil and "" or v,stale and 1 or 0})
+  end
+ end
+ write("score_markers_v32.csv","session,id,frame,marker",{session,active.id,frame,label})
  print("[score_probe] marker "..label.." frame="..frame)
 end
+local exported_count=0
 local function export_validation()
  local classes={}
  for _,s in ipairs(completed) do classes[s.category]=true end
@@ -102,11 +114,25 @@ local function export_validation()
    elseif valid==#completed and binary==#completed then status="binary_candidate"
    else status="rejected_by_controls" end
   end
-  write("score_validation_v31.csv",
+  write("score_validation_v32.csv",
    "session,address_hex,encoding,target,source,trials,positive_controls,zero_controls,exact_matches,binary_matches,valid_reads,status,record_values",
    {session,string.format("0x%05X",c.a),c.kind,c.target,c.source,#completed,positives,zeros,exact,binary,valid,status,'"'..table.concat(observations,";")..'"'})
  end
  print("[score_probe] validation written; complete_controls="..tostring(not not complete).." trials="..#completed)
+ -- Append compact evidence for independent-session comparison (only completed trials).
+ for j=exported_count+1,#completed do
+  local trial=completed[j]
+  for i,c in ipairs(tracked) do
+   local key=string.format("%05X/%s/%s",c.a,c.kind,c.target)
+   if principal[key] then
+    local expected=c.target=="BONUS_SCORE" and trial.bonus or (c.target=="TIME_SCORE" and trial.time or trial.time+trial.bonus)
+    local v=trial.values[i]
+    write("score_cross_session_v32.csv","session,id,category,address_hex,encoding,target,expected,record_value,exact",
+     {session,trial.id,trial.category,string.format("0x%05X",c.a),c.kind,c.target,expected,v==nil and "" or v,v==expected and 1 or 0})
+   end
+  end
+ end
+ exported_count=#completed
 end
 local function finish(t,b)
  if not active then print("[score_probe] no active trial");return end
@@ -122,16 +148,35 @@ local function finish(t,b)
   local expected=c.target=="BONUS_SCORE" and b or (c.target=="TIME_SCORE" and t or t+b)
   local status=v==nil and "unreadable" or (v==expected and "exact_candidate" or
    ((v>0)==(expected>0) and "binary_candidate" or "contradicted"))
-  write("score_temporal_summary_v31.csv",
+  write("score_temporal_summary_v32.csv",
    "session,id,category,time_score,bonus_score,address_hex,encoding,target,source,start_frame,first_change,last_change,change_count,record_marker_frame,final_frame,record_value,expected,status",
    {session,active.id,kind,t,b,string.format("0x%05X",c.a),c.kind,c.target,c.source,active.start,
     active.first_change[i] or "",active.last_change[i] or "",active.changes[i] or 0,active.markers.RECORD,frame,
     v==nil and "" or v,expected,status})
  end
- write("score_trials_v31.csv",
+ write("score_trials_v32.csv",
   "session,id,start_frame,end_frame,time_score,bonus_score,category,marker_gameplay,marker_transition,marker_record",
   {session,active.id,active.start,frame,t,b,kind,active.markers.GAMEPLAY,active.markers.TRANSITION,active.markers.RECORD})
+ local prior=previous_record
  completed[#completed+1]={id=active.id,time=t,bonus=b,category=kind,values=values}
+ for i,c in ipairs(tracked) do
+  local key=string.format("%05X/%s/%s",c.a,c.kind,c.target)
+  if principal[key] then
+   local base=active.gameplay_values and active.gameplay_values[i]
+   local rec=values[i]
+   local expected=c.target=="BONUS_SCORE" and b or (c.target=="TIME_SCORE" and t or t+b)
+   local residual=prior and base~=nil and prior[i]~=nil and base==prior[i]
+   local first=active.first_change[i]
+   local early=first and first<active.markers.TRANSITION
+   local phase=first and (first<active.markers.GAMEPLAY and "PRE_GAMEPLAY" or (early and "GAMEPLAY_OR_EARLY" or (first<active.markers.RECORD and "TRANSITION" or "RECORD_OR_AFTER"))) or "NO_CHANGE"
+   write("score_early_evidence_v32.csv",
+    "session,id,address_hex,encoding,target,gameplay_value,record_value,previous_record_value,expected,first_change,change_phase,early_before_transition,residual_at_gameplay,exact_at_record,status",
+    {session,active.id,string.format("0x%05X",c.a),c.kind,c.target,base==nil and "" or base,rec==nil and "" or rec,
+      prior and (prior[i]==nil and "" or prior[i]) or "",expected,first or "",phase,early and 1 or 0,residual and 1 or 0,
+      rec==expected and 1 or 0,rec==expected and "hypothesis_exact" or "unverified"})
+  end
+ end
+ previous_record=values
  print("[score_probe] completed "..active.id.." category="..kind)
  active=nil
 end
@@ -176,7 +221,7 @@ local function poll()
 end
 local commandfile=io.open(path,"rb")
 if commandfile then cursor=commandfile:seek("end") or 0;commandfile:close() end
-print("[score_probe] v3.1 ready candidates="..#tracked.." command="..path)
+print("[score_probe] v3.2 ready candidates="..#tracked.." command="..path)
 while true do
  poll()
  if active then
@@ -187,7 +232,7 @@ while true do
     active.changes[i]=(active.changes[i] or 0)+1
     active.first_change[i]=active.first_change[i] or frame
     active.last_change[i]=frame
-    write("score_transitions_v31.csv","session,id,frame,address_hex,encoding,target,source,old_value,new_value",
+    write("score_transitions_v32.csv","session,id,frame,address_hex,encoding,target,source,old_value,new_value",
      {session,active.id,frame,string.format("0x%05X",c.a),c.kind,c.target,c.source,old or "",new or ""})
    end
   end
