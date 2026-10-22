@@ -135,3 +135,7 @@ dribble_active_start_v0328.csv
 dribble_active_flag_timing_v0328.csv
 dribble_route_segments_v0328.csv
 dribble_route_benchmark_v0328.csv
+
+goal_counter_events_v2.txt
+goal_counter_validation_v2.csv
+goal_counter_sessions_v2.csv
