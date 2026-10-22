@@ -35,15 +35,46 @@ local function key(s)
  if not s.valid then return "unreadable" end
  return table.concat({s.time,s.bonus,s.total},":")
 end
-local function csv(name,header,v)
- local path=dir..name
+-- SCORE_PROBE output control: COMPACT (2 files) by default; FULL preserves v3.4.
+-- Independent from DRIBBLE's dribble_csv_mode.txt.
+local function csv_mode()
+ local f=io.open(root.."/score_csv_mode.txt","rb")
+ if not f then return "COMPACT" end
+ local raw=f:read("*a") or "";f:close()
+ if raw:sub(1,3)=="\239\187\191" then raw=raw:sub(4) end
+ local mode=raw:match("^%s*([%a]+)") or ""
+ mode=mode:upper()
+ assert(mode=="COMPACT" or mode=="FULL","score_csv_mode.txt: use COMPACT or FULL")
+ return mode
+end
+local output_mode=csv_mode()
+local function quote(v)
+ local x=v==nil and "" or tostring(v)
+ return '"'..x:gsub('"','""')..'"'
+end
+local function append(path,header,fields)
  local f=io.open(path,"rb");local empty=true
  if f then empty=(f:seek("end") or 0)==0;f:close() end
  f=assert(io.open(path,"ab"))
- if empty then f:write(header.."\n") end
- for i,x in ipairs(v) do if x==nil then v[i]="" end end
- f:write(table.concat(v,",").."\n");f:close()
+ if empty then assert(f:write(header.."\n")) end
+ assert(f:write(table.concat(fields,",").."\n"))
+ assert(f:close())
 end
+local function csv(name,header,values)
+ local n=select(2,header:gsub(",",""))+1
+ local data={}
+ for i=1,n do data[i]=values[i]==nil and "" or tostring(values[i]) end
+ if output_mode=="FULL" or name=="score_auto_trials_v34.csv" then
+  append(dir..name,header,data)
+  return
+ end
+ -- Detailed source rows remain reversible. CSV escaping protects embedded commas.
+ append(dir.."score_diagnostics_v1.csv",
+  "session,source_csv,source_columns,source_values",
+  {quote(session),quote(name),quote(header),quote(table.concat(data,","))})
+end
+print("[score_probe] CSV mode="..output_mode..
+ (output_mode=="COMPACT" and " (trials + diagnostics)" or " (five legacy reports)"))
 local function event(id,s,kind,note)
  csv("score_events_v34.csv","session,id,frame,event,gs,ptr,remaining,time_score,bonus_score,total_score,copy_total,coherent,note",
   {session,id or "",s.frame,kind,s.gs or "",s.ptr or "",s.remaining or "",
