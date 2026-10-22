@@ -145,3 +145,7 @@ Passive script `goal_evidence_v4.lua` correlates 0x0DA2 increments with a comple
 ## DRIBBLE Bot v0.3.3 — Integrated Goal Evidence
 
 The single gameplay runner `dribble_bot_v033.lua` samples experimental goal counter `0x0DA2` and combines increment evidence with the fifth flag and its own shot event. Inspect `dribble_goal_evidence_v033.csv` and `dribble_goal_events_v033.csv`. Route and shot commands remain unchanged and point scores are **never automatically confirmed**. [Protocol](docs/DRIBBLE_BOT_V033.md).
+
+## DRIBBLE Bot v0.3.4 — Goal Evidence & Performance Benchmark
+
+Run `dribble_bot_v034.lua` for contextual goal counter evidence, integrated `dribble_summary_integrated_v034.csv` and per-phase timings in `dribble_performance_v034.csv`. Control strategy is unchanged; scores still require independent operator verification. [Usage and metrics](docs/DRIBBLE_BOT_V034.md).
