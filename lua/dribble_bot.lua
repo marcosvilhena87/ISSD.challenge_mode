@@ -55,6 +55,7 @@ local summary=csv_dir.."/dribble_bot_summary_v035.csv"
 local CSV=require("challenge.dribble_csv_v035")
 local Commands=require("challenge.dribble_commands_v035")
 local ResultDetector=require("challenge.dribble_result_detector")
+local Dash=require("challenge.dribble_dash_v1")
 local result_observer=ResultDetector.new()
 -- Compact is the default: two canonical files + one multiplexed diagnostics CSV.
 -- FULL preserves every historical output for research/compatibility.
@@ -345,7 +346,9 @@ while true do
   end
   local ge=Goal.step(attempt.goal,s)
   if ge then log_goal(attempt,s,ge) end
-  local names={};for _,k in ipairs({"Left","Right","Up","Down","B"}) do if buttons[k] then names[#names+1]=k end end
+  -- Dash only during safe far-field waypoint travel; never in shot/recovery.
+  buttons=Dash.apply(buttons,s,reason,W.waypoints)
+  local names={};for _,k in ipairs({"Left","Right","Up","Down","B","Y"}) do if buttons[k] then names[#names+1]=k end end
   local keys=table.concat(names,"+")
   local allowed={waypoint=true,recover_ball=true,precision_approach=true,local_search=true,goal_approach=true,shot_charge=true,shot_release=true,await_goal_observation=true,stuck_recovery=true,recovery_completed=true,recovery_retry=true,delayed_observation=true,movement_detected=true,movement_observed_ball_only=true}
   if allowed[reason] then joypad.set(buttons,1) else release();armed=false;pending=true;grace_exit=s.frame+300;attempt.exit_reason=reason end
