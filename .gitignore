@@ -170,3 +170,7 @@ dribble_*_v035.csv
 
 /csv/*
 !/csv/.gitkeep
+
+# Runtime-created command files (do not commit operator commands)
+txt/*.txt
+!txt/.gitkeep

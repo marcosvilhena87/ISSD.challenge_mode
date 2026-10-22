@@ -40,7 +40,16 @@ assert(csv_probe,"CSV directory unavailable: "..tostring(csv_error))
 csv_probe:close()
 os.remove(csv_dir.."/.write_probe")
 local session=os.date("!%Y%m%dT%H%M%SZ")
-local command=root.."/dribble_bot_commands_v035.txt"
+-- Keep operator-created TXT commands under txt/; legacy root commands remain readable.
+local txt_dir=root.."/txt"
+os.execute('mkdir "'..txt_dir..'" >nul 2>&1')
+local command=txt_dir.."/dribble_bot_commands_v035.txt"
+local legacy_command=root.."/dribble_bot_commands_v035.txt"
+local modern=io.open(command,"rb")
+if modern then modern:close() else
+ local old=io.open(legacy_command,"rb")
+ if old then old:close();command=legacy_command end
+end
 local trace=csv_dir.."/dribble_bot_trace_v035.csv"
 local summary=csv_dir.."/dribble_bot_summary_v035.csv"
 local CSV=require("challenge.dribble_csv_v035")
