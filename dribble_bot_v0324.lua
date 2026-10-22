@@ -28,9 +28,11 @@ local function fields(s)
  s.timefrac=read(memory.read_u16_le,0x014F2);s.bonusfrac=read(memory.read_u16_le,0x014F6)
 end
 local function textval(v) return v==nil and "" or tostring(v) end
-local function write(path,columns)
- for i,v in ipairs(columns) do columns[i]=textval(v) end
- local f=assert(io.open(path,"a"));f:write(table.concat(columns,",").."\n");f:close()
+local function write(path,columns,n)
+ -- Use explicit column counts: ipairs stops at the first nil value.
+ local values={}
+ for i=1,n do values[i]=textval(columns[i]) end
+ local f=assert(io.open(path,"a"));f:write(table.concat(values,",").."\n");f:close()
 end
 local function snapshot()
  local s={frame=emu.framecount(),gs=read(memory.read_u16_le,0x00BA),ptr=read(memory.read_u16_le,0x1ACC),remaining=read(memory.read_u8,0x006B4),poss=read(memory.read_u16_le,0x00A6),px=read(memory.read_s16_le,0x0F2A),py=read(memory.read_s16_le,0x0F2C),bx=read(memory.read_s16_le,0x042A),by=read(memory.read_s16_le,0x042C)}
@@ -42,7 +44,7 @@ local function end_attempt()
  local s=attempt.last or snapshot()
  local ff=state.flags_frame;local xf=state.exit_frame
  local n=attempt.started
- write(summary,{attempt.id,n,ff,state.shot_frame,xf,ff and ff-n,nil ~= xf and ff and xf-ff or nil,xf and xf-n,s.remaining,attempt.time_start,attempt.time_fifth,attempt.bonus_fifth,attempt.time_exit,attempt.bonus_exit,state.base.base.base.base.shot_attempts,attempt.exit_reason,attempt.confirmed and "goal_confirmed_operator" or "unverified",attempt.confirmed and "operator_visual_confirmation" or "no_verified_goal_flag",attempt.score})
+ write(summary,{attempt.id,n,ff,state.shot_frame,xf,ff and ff-n,nil ~= xf and ff and xf-ff or nil,xf and xf-n,s.remaining,attempt.time_start,attempt.time_fifth,attempt.bonus_fifth,attempt.time_exit,attempt.bonus_exit,state.base.base.base.base.shot_attempts,attempt.exit_reason,attempt.confirmed and "goal_confirmed_operator" or "unverified",attempt.confirmed and "operator_visual_confirmation" or "no_verified_goal_flag",attempt.score},19)
  print("[ISSD.dribble_bot] v0.3.2.4 summary saved session="..attempt.id.." outcome=unverified. Confirm with Python.")
 end
 local function command_handle(cmd)
@@ -87,12 +89,12 @@ while true do
   if state.flags_frame==s.frame then attempt.time_fifth=s.time;attempt.bonus_fifth=s.bonus end
   if state.exit_frame==s.frame then attempt.time_exit=s.time;attempt.bonus_exit=s.bonus end
   if s.frame%5==0 or state.event~="" or state.calibration or reason=="stuck_recovery" or reason=="delayed_observation" or not allowed[reason] then
-   write(trace,{attempt.id,s.frame,armed and 1 or 0,state.phase,state.event,reason,s.gs,s.ptr,s.remaining,s.poss,s.px,s.py,s.bx,s.by,keys,s.time,s.bonus,s.timefrac,s.bonusfrac,state.diag})
+   write(trace,{attempt.id,s.frame,armed and 1 or 0,state.phase,state.event,reason,s.gs,s.ptr,s.remaining,s.poss,s.px,s.py,s.bx,s.by,keys,s.time,s.bonus,s.timefrac,s.bonusfrac,state.diag},20)
   end
   if state.calibration_result and not attempt.calibration_written then
    local c=state.calibration_result
    write(root.."/dribble_initial_calibration_v0324.csv",{attempt.id,c.start,c.finish,
-     c.first_player,c.first_ball,c.first_possession_change,c.classification,c.outcome})
+     c.first_player,c.first_ball,c.first_possession_change,c.classification,c.outcome},8)
    attempt.calibration_written=true
   end
   if state.event~="" then print("[ISSD.dribble_bot] "..state.event.." frame="..s.frame) end
