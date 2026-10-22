@@ -78,11 +78,12 @@ setup(root.."/dribble_route_experiments_v035.csv","session,profile,flag_number,s
 setup(root.."/dribble_approach_proximity_v035.csv","session,route_profile,approach_profile,flag_number,observed_frames,near24_frames,near12_frames,precision_frames,local_search_frames,recover_ball_frames,precision_idle_frames,complete")
 local W=require("challenge.dribble_waypoints_v022")
 local approach_names={CONTROL=true,CONTINUOUS_PRECISION=true}
-local selected_approach="CONTROL"
+local selected_approach="CONTINUOUS_PRECISION"
 local requested_approach=nil
-local selected_profile="CONTROL"
+local selected_profile=Optimization.DEFAULT_PROFILE
 local requested_profile=nil
 assert(Optimization.apply(selected_profile))
+W.approach_profile=selected_approach
 local pos=0
 local initial=io.open(command,"rb")
 if initial then pos=initial:seek("end") or 0;initial:close() end
