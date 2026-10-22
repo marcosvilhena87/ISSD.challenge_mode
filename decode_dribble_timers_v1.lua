@@ -1,10 +1,17 @@
 -- Offline DRIBBLE timer candidate decoder. Run with Lua in repository root:
 -- lua decode_dribble_timers_v1.lua [input.csv] [decoded.csv] [summary.csv]
-package.path="./lua/?.lua;./lua/?/init.lua;"..package.path
+-- Works with standalone Lua and BizHawk NLua (where arg may be nil).
+local args=type(arg)=="table" and arg or {}
+local function exists(p) local h=io.open(p,"rb");if h then h:close();return true end return false end
+local root="."
+for _,p in ipairs({".","..","Lua/SNES/ISSD.challenge_mode","SNES/ISSD.challenge_mode"}) do
+ if exists(p.."/lua/challenge/timer_decoder_v1.lua") then root=p;break end
+end
+package.path=root.."/lua/?.lua;"..root.."/lua/?/init.lua;"..package.path
+local input=args[1] or root.."/dribble_timer_validation_v1.csv"
+local decoded=args[2] or root.."/dribble_timer_decoded_v1.csv"
+local summary=args[3] or root.."/dribble_timer_decoder_summary_v1.csv"
 local D=require("challenge.timer_decoder_v1")
-local input=arg[1] or "dribble_timer_validation_v1.csv"
-local decoded=arg[2] or "dribble_timer_decoded_v1.csv"
-local summary=arg[3] or "dribble_timer_decoder_summary_v1.csv"
 local f=assert(io.open(input,"r"),"Input CSV missing: "..input)
 local header=assert(f:read("*l")):gsub("\r$","")
 local keys={};for field in (header..","):gmatch("(.-),") do keys[#keys+1]=field end
