@@ -1,3 +1,7 @@
+## Candidatos WRAM de 16 bits monitorados manualmente
+
+O SCORE_PROBE v2 inclui permanentemente tres hipoteses fornecidas pelo operador: `0x01CF8` (word sem sinal, WRAM, candidato a Bonus Score), `0x01CFA` (word sem sinal, WRAM, candidato a Total Score) e `0x0DC06` (word sem sinal, WRAM, candidato a Total Score). O algoritmo usa `u16le` e identifica a origem como `manual_word_candidate` na coluna `v1_match` de `csv/score_validation_v2.csv`. Essas hipoteses sao avaliadas mesmo que nao tenham sido incluidas nos resultados de v1; nenhuma e promovida automaticamente a endereco confirmado. Capture novos placares visuais e exporte novamente para testar as tres hipoteses.
+
 ## SCORE_PROBE v2 — validacao cruzada (ativo)
 
 Selecione `SCORE_PROBE` em `challenge_mode.txt`; `main.lua` executa `lua/score_probe.lua`. Usa os candidatos de `csv/score_candidates_v1.csv` (nao remove nem altera o arquivo). Em tres ou mais partidas independentes, na tela YOUR RECORD, anote o Time Score e Bonus Score efetivamente exibidos e envie uma linha por captura no arquivo raiz `score_probe_commands_v2.txt`: `CAPTURE:tentativa01:183:268`, `CAPTURE:tentativa02:213:0`, `CAPTURE:tentativa03:0:0` (exemplos, substitua pelos valores reais). Capture ao menos um caso BONUS>0, um TIME>0/BONUS=0 e um ZERO/ZERO. Use `Add-Content .\\score_probe_commands_v2.txt "CAPTURE:tentativa01:183:268" -Encoding ASCII`. Ao fim acrescente `EXPORT`.

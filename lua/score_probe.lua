@@ -28,6 +28,27 @@ for _,row in ipairs(candidates) do
   if not unique[key] then unique[key]=true;items[#items+1]={address=addr,encoding=encoding,target=row.target or "",match=row.match_type or ""} end
  end
 end
+-- Operator-supplied unsigned 16-bit WRAM candidates (little-endian).
+-- Kept even if absent from SCORE_PROBE v1; hypotheses only.
+local manual={
+ {address=0x01CF8,encoding="u16le",target="BONUS_SCORE",match="manual_word_candidate"},
+ {address=0x01CFA,encoding="u16le",target="TOTAL_SCORE",match="manual_word_candidate"},
+ {address=0x0DC06,encoding="u16le",target="TOTAL_SCORE",match="manual_word_candidate"}
+}
+for _,c in ipairs(manual) do
+ local key=string.format("%05X:%s:%s",c.address,c.encoding,c.target)
+ if not unique[key] then
+  unique[key]=true
+  items[#items+1]=c
+ else
+  for _,existing in ipairs(items) do
+   if existing.address==c.address and existing.encoding==c.encoding and existing.target==c.target then
+    existing.match="manual_word_candidate"
+    break
+   end
+  end
+ end
+end
 local labels={}
 local captures={}
 local cursor=0
@@ -114,7 +135,7 @@ local function action(line)
 end
 local f=io.open(command,"rb")
 if f then cursor=f:seek("end") or 0;f:close() end
-print("[score_probe] v2 loaded "..#items.." candidate interpretations; commands="..command)
+print("[score_probe] v2 + manually tracked word candidates loaded "..#items.." candidate interpretations; commands="..command)
 while true do
  local file=io.open(command,"rb")
  if file then
