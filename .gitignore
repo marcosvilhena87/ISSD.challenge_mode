@@ -67,3 +67,6 @@ dribble_timer_timeline_v2.csv
 
 dribble_timer_validation_events_v1.txt
 dribble_timer_validation_v1.csv
+
+dribble_timer_decoded_v1.csv
+dribble_timer_decoder_summary_v1.csv
