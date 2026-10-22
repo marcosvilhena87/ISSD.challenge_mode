@@ -55,7 +55,7 @@ local summary=csv_dir.."/dribble_bot_summary_v035.csv"
 local CSV=require("challenge.dribble_csv_v035")
 local Commands=require("challenge.dribble_commands_v035")
 local ResultDetector=require("challenge.dribble_result_detector")
-local Dash=require("challenge.dribble_dash_v2")
+local Dash=require("challenge.dribble_dash_v3")
 local result_observer=ResultDetector.new()
 -- Compact is the default: two canonical files + one multiplexed diagnostics CSV.
 -- FULL preserves every historical output for research/compatibility.
@@ -128,7 +128,7 @@ end
 print("[ISSD.dribble_bot] CSV mode="..output_mode..
  (output_mode=="COMPACT" and " (summary, observer, diagnostics v2; trace disabled)" or " (legacy full reports)"))
 
-setup(csv_dir.."/dribble_dash_calibration_v2.csv","session,frame,flag,event,distance_to_waypoint,brake_distance,closing_speed,reason,dash_frames,starts,stops")
+setup(csv_dir.."/dribble_dash_calibration_v3.csv","session,frame,flag,event,distance_to_waypoint,brake_distance,closing_speed,reason,dash_frames,starts,stops,off_cause,ball_gap,minimum_distance,frames_since_last_off")
 setup(csv_dir.."/dribble_result_observer_v1.csv","session,detector_trial,frame,event,gameplay,remaining,time_score,bonus_score,total_score,copy_total,start_frame,exit_frame,early_frame,early_verdict,copy_match_frame,final_verdict,finish_reason,status")
 setup(trace,"session,frame,armed,phase,event,reason,gs,ptr,remaining,poss,player_x,player_y,ball_x,ball_y,buttons,time_bcd,bonus_bcd,time_frac_u16,bonus_frac_u16,recovery_diagnostics")
 setup(summary,"session,started_frame,flags_frame,shot_frame,exit_frame,flags_elapsed_frames,goal_elapsed_frames,total_elapsed_frames,flags_remaining,time_start_bcd,time_at_fifth_bcd,bonus_at_fifth_bcd,time_at_exit_bcd,bonus_at_exit_bcd,shot_attempts,exit_reason,outcome,evidence,record_score")
@@ -220,9 +220,11 @@ local function flush_proximity(a)
  a.proximity_written=true
  for i=1,5 do
   local q=a.proximity[i]
-  write(csv_dir.."/dribble_dash_calibration_v2.csv",
+  local fs=Dash.flag_summary(a.dash,i,(a.last and a.last.frame) or a.started)
+  write(csv_dir.."/dribble_dash_calibration_v3.csv",
    {a.id,(a.last and a.last.frame) or a.started,i,"flag_summary",nil,nil,nil,
-    "end_attempt",a.dash.frames[i] or 0,a.dash.starts[i] or 0,a.dash.stops[i] or 0},11)
+    "end_attempt",a.dash.frames[i] or 0,a.dash.starts[i] or 0,a.dash.stops[i] or 0,
+    fs.off_cause,nil,fs.minimum,fs.frames_since_off},15)
   write(csv_dir.."/dribble_approach_proximity_v035.csv",
    {a.id,a.profile,a.approach_profile,i,q.observed,q.near24,q.near12,
     q.precision,q.search,q.recover,q.precision_idle,q.collected and 1 or 0},12)
@@ -355,10 +357,10 @@ while true do
   buttons,_,dash_events=Dash.step(attempt.dash,buttons,s,reason,W.waypoints)
   for _,de in ipairs(dash_events) do
    local flag=de.flag
-   write(csv_dir.."/dribble_dash_calibration_v2.csv",
+   write(csv_dir.."/dribble_dash_calibration_v3.csv",
     {attempt.id,de.frame,flag,de.kind,de.distance,de.brake,de.closing,de.reason,
      attempt.dash.frames[flag] or 0,attempt.dash.starts[flag] or 0,
-     attempt.dash.stops[flag] or 0},11)
+     attempt.dash.stops[flag] or 0,de.cause,de.gap,attempt.dash.minimum[flag],nil},15)
   end
   local names={};for _,k in ipairs({"Left","Right","Up","Down","B","Y"}) do if buttons[k] then names[#names+1]=k end end
   local keys=table.concat(names,"+")
@@ -383,6 +385,12 @@ while true do
       segment.remaining,segment.active_frame,segment.valid_start and 1 or 0},16)
     end
     attempt.last_flag_frame=s.frame
+    local metrics=Dash.flag_summary(attempt.dash,attempt.flags_seen,s.frame)
+    write(csv_dir.."/dribble_dash_calibration_v3.csv",
+     {attempt.id,s.frame,attempt.flags_seen,"flag_collected",nil,nil,nil,
+      "flag_counter",attempt.dash.frames[attempt.flags_seen] or 0,
+      attempt.dash.starts[attempt.flags_seen] or 0,attempt.dash.stops[attempt.flags_seen] or 0,
+      metrics.off_cause,nil,metrics.minimum,metrics.frames_since_off},15)
     print("[ISSD.dribble_bot] flag_collected number="..attempt.flags_seen.." frame="..s.frame)
    else print("[ISSD.dribble_bot] counter discontinuity: flag timing not inferred") end
   end
