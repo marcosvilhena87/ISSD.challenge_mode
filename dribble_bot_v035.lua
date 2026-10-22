@@ -21,7 +21,11 @@ local function setup(path,header)
  local f=io.open(path,"rb")
  if f then
   local first=f:read("*l");f:close()
-  assert(first==header,"CSV header missing/invalid: "..path.."; stop Lua and repair existing CSV (preserve data) before restarting")
+  if first then
+   first=first:gsub("^\\239\\187\\191",""):gsub("\\r$","")
+  end
+  assert(first==header,"CSV header missing/invalid: "..path..
+    " expected="..header.." actual="..tostring(first))
  else
   local created=assert(io.open(path,"wb"));created:write(header.."\n");created:close()
  end
