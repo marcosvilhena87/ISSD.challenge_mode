@@ -46,7 +46,7 @@ local function setup(path,header)
  -- Only repair a headerless file if the first row looks structurally like data.
  -- Never overwrite the original without a complete backup.
  assert(first=="" or
-  (csv_columns(first)==csv_columns(header) and first:match("^%d%d%d%d%d%d%d%dT%d%d%d%d%d%dZ_")),
+  (csv_columns(first)==csv_columns(header) and ((header:match("^session,") and first:match("^%d%d%d%d%d%d%d%dT%d%d%d%d%d%dZ_")) or (header:match("^frame,") and first:match("^%d+,")))),
   "CSV needs manual review: "..path.." expected="..header.." actual="..first)
  local backup=path..".bak."..os.date("!%Y%m%dT%H%M%SZ")
  local n=0
