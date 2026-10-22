@@ -117,3 +117,7 @@ Use `dribble_bot_v0324.lua` alone in BizHawk with `dribble_bot_commands_v0324.tx
 ## DRIBBLE Bot v0.3.2.5 — Start Synchronization
 
 Load `dribble_bot_v0325.lua` alone in BizHawk; ARM/STOP through `dribble_bot_commands_v0325.txt`. Logs first player and ball motion versus ARM and first observed BCD TIME transition to `dribble_start_sync_v0325.csv`. This measures start latency without assuming BCD-second transitions are exact clock-start evidence; steering and shooting are unchanged. See [docs/DRIBBLE_BOT_V0325.md](docs/DRIBBLE_BOT_V0325.md).
+
+## DRIBBLE Bot v0.3.2.6 — Flag Timing & Start-State Validation
+
+Run `dribble_bot_v0326.lua` alone in BizHawk and ARM via `dribble_bot_commands_v0326.txt`. Every observed single decrement of the remaining-flags counter is recorded separately in `dribble_flag_timing_v0326.csv`, bypassing deduplication of the old event name. The ARM snapshot is recorded in `dribble_start_state_v0326.csv`. Movement, timer synchronization, and shot policies remain unchanged. [Protocol](docs/DRIBBLE_BOT_V0326.md).
