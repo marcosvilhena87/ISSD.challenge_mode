@@ -14,6 +14,10 @@ local function run(profile,frame,px,py,poss,bx,by)
  local b,_,reason=W.step(s(frame,px,py,poss,bx,by),st)
  return b,reason
 end
+assert(O.DEFAULT_PROFILE=="FLAG2_760_330_FLAG5_1460_360")
+assert(W.waypoints[2][1]==760 and W.waypoints[2][2]==330)
+assert(W.waypoints[5][1]==1460 and W.waypoints[5][2]==360)
+assert(W.approach_profile=="CONTINUOUS_PRECISION")
 assert(O.apply("CONTROL"))
 assert(W.waypoints[2][1]==772 and W.waypoints[2][2]==304)
 local b0,r0=run("CONTROL",101,755,300)
@@ -26,9 +30,16 @@ local br1,rr1=run("CONTINUOUS_PRECISION",101,700,250,0,750,280)
 assert(rr0=="recover_ball" and rr1=="recover_ball")
 assert(br0.Right==br1.Right and br0.Down==br1.Down,
  "ball recovery must be unchanged")
+assert(O.apply(O.DEFAULT_PROFILE))
+assert(W.waypoints[2][1]==760 and W.waypoints[2][2]==330)
+assert(W.waypoints[5][1]==1460 and W.waypoints[5][2]==360)
 assert(O.apply("FLAG2_760_325"))
 assert(W.waypoints[2][1]==760 and W.waypoints[2][2]==325)
 assert(O.apply("CONTROL"))
 assert(W.waypoints[2][1]==772 and W.waypoints[2][2]==304)
-W.approach_profile="CONTROL"
+assert(W.waypoints[5][1]==1450 and W.waypoints[5][2]==367)
+assert(O.apply(O.DEFAULT_PROFILE))
+assert(W.waypoints[2][1]==760 and W.waypoints[2][2]==330)
+assert(W.waypoints[5][1]==1460 and W.waypoints[5][2]==360)
+W.approach_profile="CONTINUOUS_PRECISION"
 print("PASS: reversible approach, recovery invariant, waypoint restore")
