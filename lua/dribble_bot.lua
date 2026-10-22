@@ -55,7 +55,7 @@ local summary=csv_dir.."/dribble_bot_summary_v035.csv"
 local CSV=require("challenge.dribble_csv_v035")
 local Commands=require("challenge.dribble_commands_v035")
 local ResultDetector=require("challenge.dribble_result_detector")
-local Dash=require("challenge.dribble_dash_v1")
+local Dash=require("challenge.dribble_dash_v2")
 local result_observer=ResultDetector.new()
 -- Compact is the default: two canonical files + one multiplexed diagnostics CSV.
 -- FULL preserves every historical output for research/compatibility.
@@ -128,6 +128,7 @@ end
 print("[ISSD.dribble_bot] CSV mode="..output_mode..
  (output_mode=="COMPACT" and " (summary, observer, diagnostics v2; trace disabled)" or " (legacy full reports)"))
 
+setup(csv_dir.."/dribble_dash_calibration_v2.csv","session,frame,flag,event,distance_to_waypoint,brake_distance,closing_speed,reason,dash_frames,starts,stops")
 setup(csv_dir.."/dribble_result_observer_v1.csv","session,detector_trial,frame,event,gameplay,remaining,time_score,bonus_score,total_score,copy_total,start_frame,exit_frame,early_frame,early_verdict,copy_match_frame,final_verdict,finish_reason,status")
 setup(trace,"session,frame,armed,phase,event,reason,gs,ptr,remaining,poss,player_x,player_y,ball_x,ball_y,buttons,time_bcd,bonus_bcd,time_frac_u16,bonus_frac_u16,recovery_diagnostics")
 setup(summary,"session,started_frame,flags_frame,shot_frame,exit_frame,flags_elapsed_frames,goal_elapsed_frames,total_elapsed_frames,flags_remaining,time_start_bcd,time_at_fifth_bcd,bonus_at_fifth_bcd,time_at_exit_bcd,bonus_at_exit_bcd,shot_attempts,exit_reason,outcome,evidence,record_score")
@@ -219,6 +220,9 @@ local function flush_proximity(a)
  a.proximity_written=true
  for i=1,5 do
   local q=a.proximity[i]
+  write(csv_dir.."/dribble_dash_calibration_v2.csv",
+   {a.id,(a.last and a.last.frame) or a.started,i,"flag_summary",nil,nil,nil,
+    "end_attempt",a.dash.frames[i] or 0,a.dash.starts[i] or 0,a.dash.stops[i] or 0},11)
   write(csv_dir.."/dribble_approach_proximity_v035.csv",
    {a.id,a.profile,a.approach_profile,i,q.observed,q.near24,q.near12,
     q.precision,q.search,q.recover,q.precision_idle,q.collected and 1 or 0},12)
@@ -295,7 +299,7 @@ local function command_handle(cmd)
   assert(Optimization.apply(selected_profile))
   W.approach_profile=selected_approach
   state=P.new();armed=true;pending=false;grace_exit=nil
-  local s=snapshot();attempt={id=session.."_"..tostring(s.frame),started=s.frame,profile=selected_profile,time_start=s.time,last=s,last_remaining=s.remaining,last_flag_frame=s.frame,flags_seen=0,active=Start.new(s),route=Benchmark.new(s.frame),goal=Goal.new(s),confirmed=false,score=nil,final=false,approach_profile=selected_approach,travel_profile=selected_travel,
+  local s=snapshot();attempt={dash=Dash.new(),id=session.."_"..tostring(s.frame),started=s.frame,profile=selected_profile,time_start=s.time,last=s,last_remaining=s.remaining,last_flag_frame=s.frame,flags_seen=0,active=Start.new(s),route=Benchmark.new(s.frame),goal=Goal.new(s),confirmed=false,score=nil,final=false,approach_profile=selected_approach,travel_profile=selected_travel,
    proximity={{},{},{},{},{}},proximity_written=false}
   for i=1,5 do attempt.proximity[i]={observed=0,near24=0,near12=0,
    precision=0,search=0,recover=0,precision_idle=0,collected=false} end
@@ -347,7 +351,15 @@ while true do
   local ge=Goal.step(attempt.goal,s)
   if ge then log_goal(attempt,s,ge) end
   -- Dash only during safe far-field waypoint travel; never in shot/recovery.
-  buttons=Dash.apply(buttons,s,reason,W.waypoints)
+  local dash_events
+  buttons,_,dash_events=Dash.step(attempt.dash,buttons,s,reason,W.waypoints)
+  for _,de in ipairs(dash_events) do
+   local flag=de.flag
+   write(csv_dir.."/dribble_dash_calibration_v2.csv",
+    {attempt.id,de.frame,flag,de.kind,de.distance,de.brake,de.closing,de.reason,
+     attempt.dash.frames[flag] or 0,attempt.dash.starts[flag] or 0,
+     attempt.dash.stops[flag] or 0},11)
+  end
   local names={};for _,k in ipairs({"Left","Right","Up","Down","B","Y"}) do if buttons[k] then names[#names+1]=k end end
   local keys=table.concat(names,"+")
   local allowed={waypoint=true,recover_ball=true,precision_approach=true,local_search=true,goal_approach=true,shot_charge=true,shot_release=true,await_goal_observation=true,stuck_recovery=true,recovery_completed=true,recovery_retry=true,delayed_observation=true,movement_detected=true,movement_observed_ball_only=true}
