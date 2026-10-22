@@ -33,33 +33,39 @@ end
 assert(profile_known("FLAG2_760_325"),
  "outdated route optimization module: expected FLAG2_760_325 at "..root.."/lua/challenge/dribble_route_optimization_v035.lua")
 assert(memory and memory.read_u8 and memory.read_u16_le and memory.read_s16_le and emu and emu.frameadvance and emu.framecount and joypad and joypad.set,"BizHawk API missing")
+local csv_dir=root.."/csv"
+os.execute('mkdir "'..csv_dir..'" >nul 2>&1')
+local csv_probe,csv_error=io.open(csv_dir.."/.write_probe","wb")
+assert(csv_probe,"CSV directory unavailable: "..tostring(csv_error))
+csv_probe:close()
+os.remove(csv_dir.."/.write_probe")
 local session=os.date("!%Y%m%dT%H%M%SZ")
 local command=root.."/dribble_bot_commands_v035.txt"
-local trace=root.."/dribble_bot_trace_v035.csv"
-local summary=root.."/dribble_bot_summary_v035.csv"
+local trace=csv_dir.."/dribble_bot_trace_v035.csv"
+local summary=csv_dir.."/dribble_bot_summary_v035.csv"
 local CSV=require("challenge.dribble_csv_v035")
 local Commands=require("challenge.dribble_commands_v035")
 local setup=CSV.setup
 local write=CSV.write
 setup(trace,"session,frame,armed,phase,event,reason,gs,ptr,remaining,poss,player_x,player_y,ball_x,ball_y,buttons,time_bcd,bonus_bcd,time_frac_u16,bonus_frac_u16,recovery_diagnostics")
 setup(summary,"session,started_frame,flags_frame,shot_frame,exit_frame,flags_elapsed_frames,goal_elapsed_frames,total_elapsed_frames,flags_remaining,time_start_bcd,time_at_fifth_bcd,bonus_at_fifth_bcd,time_at_exit_bcd,bonus_at_exit_bcd,shot_attempts,exit_reason,outcome,evidence,record_score")
-setup(root.."/dribble_initial_calibration_v035.csv","session,start_frame,end_frame,first_player_frame,first_ball_frame,first_possession_change_frame,classification,finish_reason")
-setup(root.."/dribble_flag_timing_v035.csv","session,flag_number,frame,remaining_before,remaining_after,elapsed_since_arm,frames_since_previous,player_x,player_y,ball_x,ball_y,time_bcd,bonus_bcd")
-setup(root.."/dribble_start_state_v035.csv","session,arm_frame,gs,ptr,remaining,poss,player_x,player_y,ball_x,ball_y,time_bcd,time_frac_u16,bonus_bcd,bonus_frac_u16")
-setup(root.."/dribble_start_sync_v035.csv","session,arm_frame,first_ball_frame,first_player_frame,first_timer_transition_frame,initial_time_bcd,last_time_bcd,end_frame,clock_status")
-setup(root.."/dribble_active_start_v035.csv","session,arm_frame,first_timer_fraction_frame,first_timer_second_frame,first_ball_frame,first_player_frame,active_candidate_frame,active_candidate_evidence,wait_frames,finish_frame,finish_reason,valid_start_state")
-setup(root.."/dribble_active_flag_timing_v035.csv","session,flag_number,flag_frame,active_candidate_frame,frames_since_active_candidate,frames_since_previous_flag")
-setup(root.."/dribble_route_segments_v035.csv","session,flag_number,frame,segment_frames,baseline_frames,delta_frames,start_basis,player_x,player_y,ball_x,ball_y,poss,time_bcd,remaining,active_candidate_frame,valid_start_state")
-setup(root.."/dribble_goal_evidence_v035.csv","session,arm_frame,initial_goal,fifth_flag_frame,shot_frame,increment_frame,increment_delta,gs_at_increment,remaining_at_increment,increment_count,reset_count,byte_mismatch,final_goal,classification,record_score")
-setup(root.."/dribble_goal_events_v035.csv","session,frame,event,goal_u16,remaining,gs,shot_frame,classification")
-setup(root.."/dribble_performance_v035.csv","session,arm_frame,active_frame,fifth_flag_frame,shot_frame,increment_frame,arm_to_active_frames,active_to_fifth_frames,arm_to_fifth_frames,fifth_to_shot_frames,shot_to_increment_frames,fifth_to_increment_frames,arm_to_increment_frames,route_comparable,route_delta_frames,goal_classification,record_score")
-setup(root.."/dribble_summary_integrated_v035.csv","session,arm_frame,fifth_flag_frame,shot_frame,increment_frame,goal_initial,goal_final,goal_classification,goal_evidence,visual_confirmation,record_score,flags_elapsed_frames,preparation_frames,shot_to_increment_frames,total_to_increment_frames,route_comparable,route_delta_frames")
-setup(root.."/dribble_route_benchmark_v035.csv","session,observed_flags,comparable,delta_total_frames,status,arm_frame,active_candidate_frame,fifth_flag_frame,exit_frame")
-setup(root.."/dribble_route_optimization_v035.csv","session,profile,active_route_frames,baseline_delta_frames,complete,goal_classification,eligible,verdict")
-setup(root.."/dribble_profile_audit_v035.csv","frame,event,requested_profile,applied_profile,session,wp1_x,wp1_y")
-setup(root.."/dribble_route_experiments_v035.csv","session,profile,flag_number,segment_frames,baseline_frames,delta_frames,valid_start,player_x,player_y")
-setup(root.."/dribble_travel_profile_v035.csv","session,route_profile,approach_profile,travel_profile,arm_frame,complete,eligible,active_route_frames,goal_classification")
-setup(root.."/dribble_approach_proximity_v035.csv","session,route_profile,approach_profile,flag_number,observed_frames,near24_frames,near12_frames,precision_frames,local_search_frames,recover_ball_frames,precision_idle_frames,complete")
+setup(csv_dir.."/dribble_initial_calibration_v035.csv","session,start_frame,end_frame,first_player_frame,first_ball_frame,first_possession_change_frame,classification,finish_reason")
+setup(csv_dir.."/dribble_flag_timing_v035.csv","session,flag_number,frame,remaining_before,remaining_after,elapsed_since_arm,frames_since_previous,player_x,player_y,ball_x,ball_y,time_bcd,bonus_bcd")
+setup(csv_dir.."/dribble_start_state_v035.csv","session,arm_frame,gs,ptr,remaining,poss,player_x,player_y,ball_x,ball_y,time_bcd,time_frac_u16,bonus_bcd,bonus_frac_u16")
+setup(csv_dir.."/dribble_start_sync_v035.csv","session,arm_frame,first_ball_frame,first_player_frame,first_timer_transition_frame,initial_time_bcd,last_time_bcd,end_frame,clock_status")
+setup(csv_dir.."/dribble_active_start_v035.csv","session,arm_frame,first_timer_fraction_frame,first_timer_second_frame,first_ball_frame,first_player_frame,active_candidate_frame,active_candidate_evidence,wait_frames,finish_frame,finish_reason,valid_start_state")
+setup(csv_dir.."/dribble_active_flag_timing_v035.csv","session,flag_number,flag_frame,active_candidate_frame,frames_since_active_candidate,frames_since_previous_flag")
+setup(csv_dir.."/dribble_route_segments_v035.csv","session,flag_number,frame,segment_frames,baseline_frames,delta_frames,start_basis,player_x,player_y,ball_x,ball_y,poss,time_bcd,remaining,active_candidate_frame,valid_start_state")
+setup(csv_dir.."/dribble_goal_evidence_v035.csv","session,arm_frame,initial_goal,fifth_flag_frame,shot_frame,increment_frame,increment_delta,gs_at_increment,remaining_at_increment,increment_count,reset_count,byte_mismatch,final_goal,classification,record_score")
+setup(csv_dir.."/dribble_goal_events_v035.csv","session,frame,event,goal_u16,remaining,gs,shot_frame,classification")
+setup(csv_dir.."/dribble_performance_v035.csv","session,arm_frame,active_frame,fifth_flag_frame,shot_frame,increment_frame,arm_to_active_frames,active_to_fifth_frames,arm_to_fifth_frames,fifth_to_shot_frames,shot_to_increment_frames,fifth_to_increment_frames,arm_to_increment_frames,route_comparable,route_delta_frames,goal_classification,record_score")
+setup(csv_dir.."/dribble_summary_integrated_v035.csv","session,arm_frame,fifth_flag_frame,shot_frame,increment_frame,goal_initial,goal_final,goal_classification,goal_evidence,visual_confirmation,record_score,flags_elapsed_frames,preparation_frames,shot_to_increment_frames,total_to_increment_frames,route_comparable,route_delta_frames")
+setup(csv_dir.."/dribble_route_benchmark_v035.csv","session,observed_flags,comparable,delta_total_frames,status,arm_frame,active_candidate_frame,fifth_flag_frame,exit_frame")
+setup(csv_dir.."/dribble_route_optimization_v035.csv","session,profile,active_route_frames,baseline_delta_frames,complete,goal_classification,eligible,verdict")
+setup(csv_dir.."/dribble_profile_audit_v035.csv","frame,event,requested_profile,applied_profile,session,wp1_x,wp1_y")
+setup(csv_dir.."/dribble_route_experiments_v035.csv","session,profile,flag_number,segment_frames,baseline_frames,delta_frames,valid_start,player_x,player_y")
+setup(csv_dir.."/dribble_travel_profile_v035.csv","session,route_profile,approach_profile,travel_profile,arm_frame,complete,eligible,active_route_frames,goal_classification")
+setup(csv_dir.."/dribble_approach_proximity_v035.csv","session,route_profile,approach_profile,flag_number,observed_frames,near24_frames,near12_frames,precision_frames,local_search_frames,recover_ball_frames,precision_idle_frames,complete")
 local W=require("challenge.dribble_waypoints_v022")
 local approach_names={CONTROL=true,CONTINUOUS_PRECISION=true}
 local selected_travel="AXIS"
@@ -90,21 +96,21 @@ local function flush_start(a,frame,reason)
  if not a or a.active_written then return end
  local q=a.active
  if not q.complete then Start.finish(q,frame,reason) end
- write(root.."/dribble_active_start_v035.csv",{a.id,q.arm_frame,q.first_time_fraction,
+ write(csv_dir.."/dribble_active_start_v035.csv",{a.id,q.arm_frame,q.first_time_fraction,
   q.first_time_bcd,q.first_ball,q.first_player,q.active_frame,q.active_evidence,
   q.active_frame and q.active_frame-q.arm_frame or nil,q.finish_frame,q.final_reason,
   q.valid_start and 1 or 0},12)
  a.active_written=true
 end
 local function log_goal(a,ss,event)
- write(root.."/dribble_goal_events_v035.csv",{a.id,ss.frame,event,ss.goal,ss.remaining,ss.gs,a.goal.shot_frame,Goal.classify(a.goal)},8)
+ write(csv_dir.."/dribble_goal_events_v035.csv",{a.id,ss.frame,event,ss.goal,ss.remaining,ss.gs,a.goal.shot_frame,Goal.classify(a.goal)},8)
 end
 local function flush_proximity(a)
  if not a or a.proximity_written then return end
  a.proximity_written=true
  for i=1,5 do
   local q=a.proximity[i]
-  write(root.."/dribble_approach_proximity_v035.csv",
+  write(csv_dir.."/dribble_approach_proximity_v035.csv",
    {a.id,a.profile,a.approach_profile,i,q.observed,q.near24,q.near12,
     q.precision,q.search,q.recover,q.precision_idle,q.collected and 1 or 0},12)
  end
@@ -114,34 +120,34 @@ local function end_attempt()
  attempt.final=true;armed=false;pending=false;release()
  flush_proximity(attempt)
  local gs=attempt.last or snapshot()
- write(root.."/dribble_goal_evidence_v035.csv",{attempt.id,attempt.started,attempt.goal.base,
+ write(csv_dir.."/dribble_goal_evidence_v035.csv",{attempt.id,attempt.started,attempt.goal.base,
   attempt.goal.flags_frame,attempt.goal.shot_frame,attempt.goal.increment_frame,attempt.goal.delta,
   attempt.goal.increment_gs,attempt.goal.increment_remaining,attempt.goal.increment_count,
   attempt.goal.reset_count,attempt.goal.byte_mismatch,gs.goal,Goal.classify(attempt.goal),attempt.score},15)
  local verdict=Benchmark.result(attempt.route)
  local opt=Optimization.result(attempt.route,attempt.profile,{classification=Goal.classify(attempt.goal)})
- write(root.."/dribble_route_optimization_v035.csv",{attempt.id,attempt.profile,opt.active_frames,opt.baseline_delta,
+ write(csv_dir.."/dribble_route_optimization_v035.csv",{attempt.id,attempt.profile,opt.active_frames,opt.baseline_delta,
   opt.complete,opt.goal_classification,opt.eligible,opt.verdict},8)
- write(root.."/dribble_travel_profile_v035.csv",{attempt.id,attempt.profile,attempt.approach_profile,attempt.travel_profile,attempt.started,opt.complete,opt.eligible,opt.active_frames,opt.goal_classification},9)
+ write(csv_dir.."/dribble_travel_profile_v035.csv",{attempt.id,attempt.profile,attempt.approach_profile,attempt.travel_profile,attempt.started,opt.complete,opt.eligible,opt.active_frames,opt.goal_classification},9)
  for _,seg in ipairs(Optimization.rows(attempt.route,attempt.profile)) do
-  write(root.."/dribble_route_experiments_v035.csv",{attempt.id,seg.profile,seg.flag,seg.frames,
+  write(csv_dir.."/dribble_route_experiments_v035.csv",{attempt.id,seg.profile,seg.flag,seg.frames,
    seg.reference,seg.delta,seg.valid and 1 or 0,seg.px,seg.py},9)
  end
  local perf=Performance.calculate(attempt,attempt.goal,attempt.active,verdict)
  local cls=Goal.classify(attempt.goal)
- write(root.."/dribble_performance_v035.csv",{attempt.id,attempt.started,attempt.active.active_frame,
+ write(csv_dir.."/dribble_performance_v035.csv",{attempt.id,attempt.started,attempt.active.active_frame,
   attempt.goal.flags_frame,attempt.goal.shot_frame,attempt.goal.increment_frame,
   perf.arm_to_active,perf.active_to_fifth,perf.arm_to_fifth,perf.fifth_to_shot,
   perf.shot_to_increment,perf.fifth_to_increment,perf.arm_to_increment,
   perf.route_comparable,perf.route_delta,cls,attempt.score},17)
- write(root.."/dribble_summary_integrated_v035.csv",{attempt.id,attempt.started,
+ write(csv_dir.."/dribble_summary_integrated_v035.csv",{attempt.id,attempt.started,
   attempt.goal.flags_frame,attempt.goal.shot_frame,attempt.goal.increment_frame,
   attempt.goal.base,gs.goal,cls,
   cls=="contextual_goal_candidate" and "memory_context_only" or "not_contextually_supported",
   attempt.confirmed and 1 or 0,attempt.score,
   perf.arm_to_fifth,perf.fifth_to_shot,perf.shot_to_increment,
   perf.arm_to_increment,perf.route_comparable,perf.route_delta},17)
- write(root.."/dribble_route_benchmark_v035.csv",{attempt.id,verdict.observed,verdict.comparable and 1 or 0,verdict.delta_total,verdict.status,attempt.started,attempt.active.active_frame,state.flags_frame,state.exit_frame},9)
+ write(csv_dir.."/dribble_route_benchmark_v035.csv",{attempt.id,verdict.observed,verdict.comparable and 1 or 0,verdict.delta_total,verdict.status,attempt.started,attempt.active.active_frame,state.flags_frame,state.exit_frame},9)
  flush_start(attempt,(attempt.last and attempt.last.frame) or emu.framecount(),"attempt_finalized")
  local s=attempt.last or snapshot()
  local ff=state.flags_frame;local xf=state.exit_frame
@@ -170,7 +176,7 @@ local function command_handle(cmd)
   if known then
    requested_profile=candidate
    print("[ISSD.dribble_bot] profile queued="..candidate.." next ARM")
-   write(root.."/dribble_profile_audit_v035.csv",{emu.framecount(),"profile_queued",candidate,selected_profile,attempt and attempt.id or "",nil,nil},7)
+   write(csv_dir.."/dribble_profile_audit_v035.csv",{emu.framecount(),"profile_queued",candidate,selected_profile,attempt and attempt.id or "",nil,nil},7)
   else print("[ISSD.dribble_bot] invalid profile="..tostring(candidate)) end
  elseif c=="ARM" then
   if attempt and not attempt.final then end_attempt() end
@@ -184,9 +190,9 @@ local function command_handle(cmd)
    proximity={{},{},{},{},{}},proximity_written=false}
   for i=1,5 do attempt.proximity[i]={observed=0,near24=0,near12=0,
    precision=0,search=0,recover=0,precision_idle=0,collected=false} end
-  write(root.."/dribble_start_state_v035.csv",{attempt.id,s.frame,s.gs,s.ptr,s.remaining,s.poss,s.px,s.py,s.bx,s.by,s.time,s.timefrac,s.bonus,s.bonusfrac},14)
+  write(csv_dir.."/dribble_start_state_v035.csv",{attempt.id,s.frame,s.gs,s.ptr,s.remaining,s.poss,s.px,s.py,s.bx,s.by,s.time,s.timefrac,s.bonus,s.bonusfrac},14)
   local W=require("challenge.dribble_waypoints_v022")
-  write(root.."/dribble_profile_audit_v035.csv",{s.frame,"arm_applied",selected_profile,selected_profile,attempt.id,W.waypoints[1][1],W.waypoints[1][2]},7)
+  write(csv_dir.."/dribble_profile_audit_v035.csv",{s.frame,"arm_applied",selected_profile,selected_profile,attempt.id,W.waypoints[1][1],W.waypoints[1][2]},7)
   print("[ISSD.dribble_bot] approach applied="..selected_approach.." travel applied="..selected_travel)
   print("[ISSD.dribble_bot] v0.3.5 ARMED profile="..selected_profile.." session="..attempt.id.." frame="..s.frame.." wp2=("..W.waypoints[2][1]..","..W.waypoints[2][2]..")")
  elseif c=="STOP" then
@@ -240,15 +246,15 @@ while true do
    if drop==1 then
     attempt.flags_seen=attempt.flags_seen+1
     if attempt.proximity[attempt.flags_seen] then attempt.proximity[attempt.flags_seen].collected=true end
-    write(root.."/dribble_flag_timing_v035.csv",{attempt.id,attempt.flags_seen,s.frame,attempt.last_remaining,s.remaining,
+    write(csv_dir.."/dribble_flag_timing_v035.csv",{attempt.id,attempt.flags_seen,s.frame,attempt.last_remaining,s.remaining,
       s.frame-attempt.started,s.frame-attempt.last_flag_frame,s.px,s.py,s.bx,s.by,s.time,s.bonus},13)
-    write(root.."/dribble_active_flag_timing_v035.csv",{attempt.id,attempt.flags_seen,s.frame,
+    write(csv_dir.."/dribble_active_flag_timing_v035.csv",{attempt.id,attempt.flags_seen,s.frame,
       attempt.active.active_frame,
       attempt.active.active_frame and s.frame-attempt.active.active_frame or nil,
       s.frame-attempt.last_flag_frame},6)
     local segment=Benchmark.flag(attempt.route,attempt.flags_seen,s,attempt.active)
     if segment then
-     write(root.."/dribble_route_segments_v035.csv",{attempt.id,segment.number,segment.frame,
+     write(csv_dir.."/dribble_route_segments_v035.csv",{attempt.id,segment.number,segment.frame,
       segment.segment_frames,segment.baseline_frames,segment.delta_frames,segment.start_basis,
       segment.px,segment.py,segment.bx,segment.by,segment.poss,segment.time,
       segment.remaining,segment.active_frame,segment.valid_start and 1 or 0},16)
@@ -266,13 +272,13 @@ while true do
   end
   if state.calibration_result and not attempt.calibration_written then
    local c=state.calibration_result
-   write(root.."/dribble_initial_calibration_v035.csv",{attempt.id,c.start,c.finish,
+   write(csv_dir.."/dribble_initial_calibration_v035.csv",{attempt.id,c.start,c.finish,
      c.first_player,c.first_ball,c.first_possession_change,c.classification,c.outcome},8)
    attempt.calibration_written=true
   end
   if state.sync_result and not attempt.sync_written then
    local q=state.sync_result
-   write(root.."/dribble_start_sync_v035.csv",{attempt.id,q.arm,q.first_ball,
+   write(csv_dir.."/dribble_start_sync_v035.csv",{attempt.id,q.arm,q.first_ball,
     q.first_player,q.timer_change,q.initial_time,q.final_time,q.finish,q.clock_status},9)
    attempt.sync_written=true
   end

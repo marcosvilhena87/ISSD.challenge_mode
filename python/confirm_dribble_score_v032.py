@@ -61,7 +61,7 @@ def update(summary, session, goal=False, score=None):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--summary", default="dribble_bot_summary_v032.csv")
+    p.add_argument("--summary", default=str(Path(__file__).resolve().parent.parent / "csv" / "dribble_bot_summary_v035.csv"))
     p.add_argument("--session", required=True, help="Exact session from summary CSV")
     p.add_argument("--confirm-goal", action="store_true", help="Only after verifying the record screen for this attempt")
     p.add_argument("--score", type=int)

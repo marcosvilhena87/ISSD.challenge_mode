@@ -8,9 +8,10 @@ import pathlib
 import re
 import shutil
 
-ROOT = pathlib.Path(__file__).resolve().parent
-RUNNER = (ROOT / "dribble_bot_v035.lua").read_text(encoding="utf-8")
-PATTERN = re.compile(r'setup\(root\.\."/([^"]+)"\s*,\s*"([^"]+)"\)')
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+CSV_DIR = ROOT / "csv"
+RUNNER = (ROOT / "lua" / "dribble_bot_v035.lua").read_text(encoding="utf-8")
+PATTERN = re.compile(r'setup\(csv_dir\.\."/([^"]+)"\s*,\s*"([^"]+)"\)')
 # Include standalone local variables trace / summary.
 HEADERS = {name: header for name, header in PATTERN.findall(RUNNER)}
 HEADERS["dribble_bot_trace_v035.csv"] = (
@@ -25,7 +26,7 @@ HEADERS["dribble_bot_summary_v035.csv"] = (
 )
 def main():
     for name, header in sorted(HEADERS.items()):
-        path = ROOT / name
+        path = CSV_DIR / name
         if not path.exists():
             continue  # New runner will create it with the correct header.
         raw = path.read_bytes()

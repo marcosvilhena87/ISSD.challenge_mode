@@ -1,3 +1,9 @@
+## Saidas CSV (modos ativos)
+
+Os modos MONITOR e DRIBBLE v0.3.5 gravam CSVs em `csv/`. Arquivos `.txt` de comandos continuam na raiz. Relatorios antigos na raiz nao sao movidos automaticamente; scripts Lua historicos independentes mantem seus comportamentos.
+
+Exemplo: `Import-Csv .\csv\dribble_bot_summary_v035.csv`.
+
 ## Inicialização centralizada em main.lua
 
 Carregue **somente `main.lua`** no Lua Console do BizHawk para iniciar o modo desejado. A seleção acontece na inicialização, lendo o arquivo `challenge_mode.txt` na raiz do repositório:
@@ -17,7 +23,7 @@ Reinicie `main.lua` no BizHawk, depois envie `ARM` em `dribble_bot_commands_v035
 Set-Content .\challenge_mode.txt 'MONITOR'
 ```
 
-Reinicie `main.lua` novamente: a escolha de modo **não muda durante uma execução**. Arquivos com valores desconhecidos geram erro explícito, em vez de iniciar um bot inesperado. A carga direta do bot antigo continua suportada apenas por compatibilidade. Os caminhos e formatos dos CSVs permanecem na raiz, sem mudanças. A prova de não-regressão do bot continua exigindo teste no BizHawk (5 bandeiras e rota de referência de 667 frames).
+Reinicie `main.lua` novamente: a escolha de modo **não muda durante uma execução**. Arquivos com valores desconhecidos geram erro explícito, em vez de iniciar um bot inesperado. A carga direta do bot antigo continua suportada apenas por compatibilidade. Os novos CSVs dos modos ativos ficam em `csv/`; os arquivos existentes nao sao movidos automaticamente. A prova de não-regressão do bot continua exigindo teste no BizHawk (5 bandeiras e rota de referência de 667 frames).
 
 # ISSD.challenge_mode
 

@@ -16,6 +16,11 @@ for _,candidate in ipairs(roots) do
 end
 assert(root,"Raiz do projeto nao encontrada. Configure o diretorio de trabalho na raiz do repositorio.")
 local function file(name) return root.."/"..name end
+os.execute('mkdir "'..file("csv")..'" >nul 2>&1')
+local csv_probe,csv_error=io.open(file("csv/.write_probe"),"wb")
+assert(csv_probe,"Nao foi possivel acessar csv/: "..tostring(csv_error))
+csv_probe:close()
+os.remove(file("csv/.write_probe"))
 -- Prioriza modulos desta copia do repositorio (BizHawk pode ter outro Lua no path).
 package.path=file("lua/?.lua")..";"..file("lua/?/init.lua")..";"..package.path
 -- Modo de execução escolhido antes de iniciar o Lua, sem mudar durante a sessão.
@@ -74,8 +79,8 @@ local context=require("challenge.context")
 assert(memory and memory.read_u8 and emu and emu.frameadvance and emu.framecount,
   "BizHawk exige memory.read_u8, emu.framecount e emu.frameadvance")
 local session=os.date("!%Y%m%dT%H%M%SZ")
-local context_csv=file("challenge_context_v04.csv")
-local transition_csv=file("challenge_transitions_v03.csv")
+local context_csv=file("csv/challenge_context_v04.csv")
+local transition_csv=file("csv/challenge_transitions_v03.csv")
 local operator_file=file("operator_events_v03.txt")
 print("[ISSD.challenge_mode] v0.4.4 project_root="..root)
 print("[ISSD.challenge_mode] transition_csv="..transition_csv)
