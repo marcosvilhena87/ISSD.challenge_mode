@@ -47,8 +47,56 @@ local CSV=require("challenge.dribble_csv_v035")
 local Commands=require("challenge.dribble_commands_v035")
 local ResultDetector=require("challenge.dribble_result_detector")
 local result_observer=ResultDetector.new()
-local setup=CSV.setup
-local write=CSV.write
+-- Compact is the default: two canonical files + one multiplexed diagnostics CSV.
+-- FULL preserves every historical output for research/compatibility.
+-- Set root/dribble_csv_mode.txt to FULL before starting main.lua if required.
+local function csv_mode()
+ local f=io.open(root.."/dribble_csv_mode.txt","rb")
+ if not f then return "COMPACT" end
+ local value=(f:read("*a") or ""):match("^%s*(%u+)") or ""
+ f:close()
+ if value=="FULL" or value=="COMPACT" then return value end
+ error("dribble_csv_mode.txt: expected COMPACT or FULL, got "..value)
+end
+local output_mode=csv_mode()
+local native_setup,native_write=CSV.setup,CSV.write
+local summary_name="dribble_bot_summary_v035.csv"
+local observer_name="dribble_result_observer_v1.csv"
+local diagnostics_name="dribble_diagnostics_v1.csv"
+local schemas={}
+local function basename(path) return path:match("([^/\\]+)$") or path end
+local function quote(v)
+ local x=v==nil and "" or tostring(v)
+ return '"'..x:gsub('"','""')..'"'
+end
+local function setup(path,header)
+ local name=basename(path)
+ schemas[name]=header
+ if output_mode=="FULL" or name==summary_name or name==observer_name then
+  native_setup(path,header)
+ end
+end
+local function write(path,values,n)
+ local name=basename(path)
+ if output_mode=="FULL" or name==summary_name or name==observer_name then
+  return native_write(path,values,n)
+ end
+ if name=="dribble_bot_trace_v035.csv" then return end -- high-frequency trace only in FULL
+ assert(schemas[name],"Unregistered compact CSV source: "..name)
+ local serialized={}
+ for i=1,n do serialized[i]=values[i]==nil and "" or tostring(values[i]) end
+ local source_session=values[1]
+ -- Store each original row and its schema as escaped cells, without losing columns.
+ local f=assert(io.open(csv_dir.."/"..diagnostics_name,"a"))
+ assert(f:write(quote(source_session)..","..quote(name)..","..quote(schemas[name])..","..
+   quote(table.concat(serialized,",")).."\n"))
+ assert(f:close())
+end
+if output_mode=="COMPACT" then
+ native_setup(csv_dir.."/"..diagnostics_name,"record_key,source_csv,source_columns,source_values")
+end
+print("[ISSD.dribble_bot] CSV mode="..output_mode..
+ (output_mode=="COMPACT" and " (summary, observer, diagnostics; trace disabled)" or " (legacy full reports)"))
 setup(csv_dir.."/dribble_result_observer_v1.csv","session,detector_trial,frame,event,gameplay,remaining,time_score,bonus_score,total_score,copy_total,start_frame,exit_frame,early_frame,early_verdict,copy_match_frame,final_verdict,finish_reason,status")
 setup(trace,"session,frame,armed,phase,event,reason,gs,ptr,remaining,poss,player_x,player_y,ball_x,ball_y,buttons,time_bcd,bonus_bcd,time_frac_u16,bonus_frac_u16,recovery_diagnostics")
 setup(summary,"session,started_frame,flags_frame,shot_frame,exit_frame,flags_elapsed_frames,goal_elapsed_frames,total_elapsed_frames,flags_remaining,time_start_bcd,time_at_fifth_bcd,bonus_at_fifth_bcd,time_at_exit_bcd,bonus_at_exit_bcd,shot_attempts,exit_reason,outcome,evidence,record_score")
