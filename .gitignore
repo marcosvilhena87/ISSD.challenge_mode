@@ -70,3 +70,6 @@ dribble_timer_validation_v1.csv
 
 dribble_timer_decoded_v1.csv
 dribble_timer_decoder_summary_v1.csv
+
+dribble_bot_commands_v03.txt
+dribble_bot_trace_v03.csv
