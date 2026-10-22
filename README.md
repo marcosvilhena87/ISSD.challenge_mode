@@ -1,3 +1,9 @@
+## SCORE_PROBE v2 — validacao cruzada (ativo)
+
+Selecione `SCORE_PROBE` em `challenge_mode.txt`; `main.lua` executa `lua/score_probe.lua`. Usa os candidatos de `csv/score_candidates_v1.csv` (nao remove nem altera o arquivo). Em tres ou mais partidas independentes, na tela YOUR RECORD, anote o Time Score e Bonus Score efetivamente exibidos e envie uma linha por captura no arquivo raiz `score_probe_commands_v2.txt`: `CAPTURE:tentativa01:183:268`, `CAPTURE:tentativa02:213:0`, `CAPTURE:tentativa03:0:0` (exemplos, substitua pelos valores reais). Capture ao menos um caso BONUS>0, um TIME>0/BONUS=0 e um ZERO/ZERO. Use `Add-Content .\\score_probe_commands_v2.txt "CAPTURE:tentativa01:183:268" -Encoding ASCII`. Ao fim acrescente `EXPORT`.
+
+Saidas: `csv/score_captures_v2.csv` e `csv/score_validation_v2.csv`. Comparacao byte, BCD e u16 sobre candidatos v1; `exact_candidate` significa igualdade com todos os placares anotados, `binary_candidate` apenas distingue positivo/zero, `rejected_by_controls` falha nos controles, `insufficient_controls` indica que faltam categorias. Todos permanecem HIPOTESES: reproduza em outra sessao e controle telas nao relacionadas antes de promover endereco canonico. Os dados sao de leitura apenas, nenhuma classificacao e integrada ao bot controlador.
+
 ## DRIBBLE — runtime canonico
 
 O ponto de entrada unico do BizHawk e `main.lua`, que seleciona `MONITOR`, `DRIBBLE` ou `SCORE_PROBE` usando `challenge_mode.txt`. O modo DRIBBLE executa exclusivamente `lua/dribble_bot.lua`, consolidado a partir do ultimo runner v0.3.5. As versoes historicas `dribble_bot_v*.lua` foram retiradas da arvore ativa; continuam recuperaveis no historico Git. Os modulos reutilizaveis em `lua/challenge/` permanecem separados e versionados quando pertinente. Nao execute mais de um controlador no BizHawk. Os relatórios CSV vao para `csv/` e os arquivos de comando continuam na raiz.

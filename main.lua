@@ -1,4 +1,4 @@
--- ISSD.challenge_mode v0.4.6 - entrypoint na raiz; BizHawk NLua carrega como [string "main"].
+-- ISSD.challenge_mode v0.4.7 - entrypoint na raiz; BizHawk NLua carrega como [string "main"].
 -- A raiz e resolvida por arquivos conhecidos, sem depender de debug.getinfo.
 local function exists(path)
   local f=io.open(path,"rb")
@@ -65,7 +65,7 @@ local mode=selected_mode()
 print("[ISSD.challenge_mode] boot mode="..mode.." root="..root)
 if mode=="SCORE_PROBE" then
  _G.ISSD_PROJECT_ROOT=root
- dofile(file("lua/score_probe_v1.lua"))
+ dofile(file("lua/score_probe.lua"))
  return
 end
 if mode=="DRIBBLE" then
@@ -87,7 +87,7 @@ local session=os.date("!%Y%m%dT%H%M%SZ")
 local context_csv=file("csv/challenge_context_v04.csv")
 local transition_csv=file("csv/challenge_transitions_v03.csv")
 local operator_file=file("operator_events_v03.txt")
-print("[ISSD.challenge_mode] v0.4.6 project_root="..root)
+print("[ISSD.challenge_mode] v0.4.7 project_root="..root)
 print("[ISSD.challenge_mode] transition_csv="..transition_csv)
 print("[ISSD.challenge_mode] context_csv="..context_csv)
 print("[ISSD.challenge_mode] operator_events="..operator_file)
@@ -104,7 +104,7 @@ local m=monitor.new({
 assert(m.context, "Monitor loaded without context support; loaded from "..tostring(package.searchpath and package.searchpath("challenge.monitor",package.path) or "unknown path"))
 assert(type(m.context.step)=="function","Context object has no step method")
 m:step()
-print("[ISSD.challenge_mode] v0.4.6 first contextual step completed (no screen flag validated)")
+print("[ISSD.challenge_mode] v0.4.7 first contextual step completed (no screen flag validated)")
 while true do
   emu.frameadvance()
   m:step()
