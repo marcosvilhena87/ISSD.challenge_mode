@@ -58,6 +58,7 @@ local ResultDetector=require("challenge.dribble_result_detector")
 local Dash=require("challenge.dribble_dash_v3")
 local RouteV1=require("challenge.dribble_route_optimization_v1")
 local ZoneV2=require("challenge.dribble_collection_zone_v2")
+local ZoneV3=require("challenge.dribble_collection_zone_v3")
 local Straight=require("challenge.dribble_direct_line_calibration_v2")
 local result_observer=ResultDetector.new()
 -- Compact is the default: two canonical files + one multiplexed diagnostics CSV.
@@ -131,6 +132,7 @@ end
 print("[ISSD.dribble_bot] CSV mode="..output_mode..
  (output_mode=="COMPACT" and " (summary, observer, diagnostics v2; trace disabled)" or " (legacy full reports)"))
 
+setup(csv_dir.."/dribble_collection_zone_v3.csv","session,frame,flag,mode,event,pre_x,pre_y,post_x,post_y,pre_distance,post_distance,entry_direction,travel_distance,elapsed_frames")
 setup(csv_dir.."/dribble_collection_zone_v2.csv","session,frame,flag,event,pre_frame,pre_x,pre_y,post_x,post_y,pre_distance,post_distance,sample_frame,sample_x,sample_y,classification")
 setup(csv_dir.."/dribble_route_optimization_v1.csv","session,flag,event,mode,frame,travel_distance,elapsed_frames,samples,collection_x,collection_y")
 setup(csv_dir.."/dribble_direct_line_calibration_v2.csv","session,frame,flag,event,cross_track_error,signed_error,progress,diagonal,correcting,frames,max_error,avg_error,corrections,diagonal_frames,axis_frames,outside_segment_frames,closest_error")
@@ -161,6 +163,8 @@ local selected_travel="DIRECT_LINE"
 local route_mode="DIRECT_LINE"
 local requested_route=nil
 local route_flag=2
+local zone_mode=nil
+local requested_zone=nil
 local requested_travel=nil
 local selected_approach="CONTINUOUS_PRECISION"
 local requested_approach=nil
@@ -281,7 +285,11 @@ local function end_attempt()
 end
 local function command_handle(cmd)
  local c=cmd:upper()
- if c:match("^ROUTE:") then
+ if c:match("^ZONE:") then
+  local mode=c:match("^ZONE:(.+)$")
+  if mode=="OFF" or ZoneV3.NAMES[mode] then requested_zone=mode;print("[ISSD.dribble_bot] zone queued="..mode.." next ARM")
+  else print("[ISSD.dribble_bot] invalid zone mode="..tostring(mode)) end
+ elseif c:match("^ROUTE:") then
   local mode=c:match("^ROUTE:(.+)$")
   if RouteV1.NAMES[mode] then requested_route=mode;print("[ISSD.dribble_bot] route queued="..mode.." next ARM")
   else print("[ISSD.dribble_bot] invalid route="..tostring(mode)) end
@@ -313,18 +321,20 @@ local function command_handle(cmd)
   if requested_travel then selected_travel=requested_travel;requested_travel=nil end
   if requested_route then route_mode=requested_route;requested_route=nil end
   W.set_segment_modes({[route_flag]=route_mode})
+  if requested_zone then zone_mode=requested_zone=="OFF" and nil or requested_zone;requested_zone=nil end
+  W.set_zone_approach(zone_mode)
   assert(Optimization.apply(selected_profile))
   W.approach_profile=selected_approach
   W.travel_profile=selected_travel
   state=P.new();armed=true;pending=false;grace_exit=nil
-  local s=snapshot();attempt={dash=Dash.new(),straight=Straight.new(),route_v1=RouteV1.new(),zone_v2=ZoneV2.new(),route_mode=route_mode,id=session.."_"..tostring(s.frame),started=s.frame,profile=selected_profile,time_start=s.time,last=s,last_remaining=s.remaining,last_flag_frame=s.frame,flags_seen=0,active=Start.new(s),route=Benchmark.new(s.frame),goal=Goal.new(s),confirmed=false,score=nil,final=false,approach_profile=selected_approach,travel_profile=selected_travel,
+  local s=snapshot();attempt={dash=Dash.new(),straight=Straight.new(),route_v1=RouteV1.new(),zone_v2=ZoneV2.new(),zone_mode=zone_mode,route_mode=route_mode,id=session.."_"..tostring(s.frame),started=s.frame,profile=selected_profile,time_start=s.time,last=s,last_remaining=s.remaining,last_flag_frame=s.frame,flags_seen=0,active=Start.new(s),route=Benchmark.new(s.frame),goal=Goal.new(s),confirmed=false,score=nil,final=false,approach_profile=selected_approach,travel_profile=selected_travel,
    proximity={{},{},{},{},{}},proximity_written=false}
   for i=1,5 do attempt.proximity[i]={observed=0,near24=0,near12=0,
    precision=0,search=0,recover=0,precision_idle=0,collected=false} end
   write(csv_dir.."/dribble_start_state_v035.csv",{attempt.id,s.frame,s.gs,s.ptr,s.remaining,s.poss,s.px,s.py,s.bx,s.by,s.time,s.timefrac,s.bonus,s.bonusfrac},14)
   local W=require("challenge.dribble_waypoints_v022")
   write(csv_dir.."/dribble_profile_audit_v035.csv",{s.frame,"arm_applied",selected_profile,selected_profile,attempt.id,W.waypoints[1][1],W.waypoints[1][2]},7)
-  print("[ISSD.dribble_bot] approach applied="..selected_approach.." travel applied="..selected_travel.." route flag2="..route_mode)
+  print("[ISSD.dribble_bot] approach applied="..selected_approach.." travel applied="..selected_travel.." route flag2="..route_mode.." zone="..(zone_mode or "OFF"))
   print("[ISSD.dribble_bot] v0.3.5 ARMED profile="..selected_profile.." session="..attempt.id.." frame="..s.frame.." wp2=("..W.waypoints[2][1]..","..W.waypoints[2][2]..")")
  elseif c=="STOP" then
   if attempt then attempt.exit_reason=attempt.exit_reason or "operator_stop" end
@@ -351,6 +361,13 @@ while true do
   for _,ze in ipairs(zone_events) do
    if ze.kind=="collection_transition" then
     local c=ze.record
+    if c.flag==2 then
+     local metric=attempt.route_v1.segments[2]
+     write(csv_dir.."/dribble_collection_zone_v3.csv",
+      {attempt.id,c.frame,2,attempt.zone_mode or "OFF","collection_transition",
+       c.pre_x,c.pre_y,c.post_x,c.post_y,c.pre_distance,c.post_distance,
+       ZoneV3.direction(c),metric and metric.distance,metric and metric.frames},14)
+    end
     write(csv_dir.."/dribble_collection_zone_v2.csv",
      {attempt.id,c.frame,c.flag,"collection_transition",c.pre_frame,c.pre_x,c.pre_y,
       c.post_x,c.post_y,c.pre_distance,c.post_distance,nil,nil,nil,"observed_transition"},15)

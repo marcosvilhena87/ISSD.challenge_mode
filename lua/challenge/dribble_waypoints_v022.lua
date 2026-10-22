@@ -1,14 +1,17 @@
 -- DRIBBLE v0.2.2 waypoint transition fix: pure policy, no BizHawk APIs.
 local M={}
 local Route=require("challenge.dribble_route_optimization_v1")
+local Zone3=require("challenge.dribble_collection_zone_v3")
 M.segment_modes={}
+M.zone_approach=nil
+function M.set_zone_approach(mode) M.zone_approach=mode end
 function M.set_segment_modes(modes) M.segment_modes=modes or {} end
 M.waypoints={{555,261},{760,330},{974,356},{1228,293},{1460,360}}
 M.TIME_LIMIT=1800
 M.travel_profile="DIRECT_LINE" -- experimental straight path; AXIS remains available
 M.approach_profile="CONTINUOUS_PRECISION" -- default; reversible via APPROACH:CONTROL
 local function int(x) return type(x)=="number" and x==x and x%1==0 end
-function M.new() return {started=nil,last_remaining=nil,target=1,near_since=nil,search_step=0,search_since=nil,motion_frame=nil,motion_x=nil,motion_y=nil,moving_frames=0,grace_until=nil,event=nil,line=nil} end
+function M.new() return {started=nil,last_remaining=nil,target=1,near_since=nil,search_step=0,search_since=nil,motion_frame=nil,motion_x=nil,motion_y=nil,moving_frames=0,grace_until=nil,event=nil,line=nil,zone_stage={done=false}} end
 local function steer(dx,dy,frame,fine,continuous)
  local b={}
  local dead=fine and 2 or 6
@@ -32,13 +35,14 @@ function M.step(s,st)
   st.near_since=nil;st.search_since=nil;st.search_step=0
   st.motion_frame=s.frame;st.motion_x=s.px;st.motion_y=s.py;st.moving_frames=0;st.grace_until=s.frame+60
   st.line=nil
+  st.zone_stage={done=false}
   st.event='flag_collected'
  else
   st.event=nil
  end
  st.last_remaining=s.remaining
  local target=6-s.remaining
- if st.target~=target then st.line=nil end
+ if st.target~=target then st.line=nil;st.zone_stage={done=false} end
  st.target=target
  if s.remaining==0 then return {},st,"five_collected" end
  local wp=M.waypoints[st.target]
@@ -70,8 +74,14 @@ function M.step(s,st)
   elseif math.abs(dx)<=24 and math.abs(dy)<=24 then reason="precision_approach" end
  end
  local fine=reason=="precision_approach" or reason=="local_search"
+ local zone_x,zone_y,zone_phase
+ if reason=="waypoint" and st.target==2 and M.zone_approach then
+  zone_x,zone_y,zone_phase=Zone3.target(M.zone_approach,wp,s,st.zone_stage)
+ end
  local buttons
- if reason=="waypoint" and (M.segment_modes[st.target]=="DIAGONAL_FIRST" or M.segment_modes[st.target]=="COLLECTION_ENTRY") then
+ if reason=="waypoint" and zone_phase=="staging" then
+  buttons=steer(zone_x-s.px,zone_y-s.py,s.frame,false,false)
+ elseif reason=="waypoint" and (M.segment_modes[st.target]=="DIAGONAL_FIRST" or M.segment_modes[st.target]=="COLLECTION_ENTRY") then
   buttons=Route.steer(M.segment_modes[st.target],s,wp,st.line)
  elseif reason=="waypoint" and M.travel_profile=="DIRECT_LINE" then
   -- Stay near the straight segment from the initial position to the waypoint.
