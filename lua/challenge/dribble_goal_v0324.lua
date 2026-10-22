@@ -48,6 +48,11 @@ function M.step(s,st)
    st.event="initial_calibration_completed"
   end
  end
+  -- Apply startup grace before the base watchdog evaluates this frame.
+  if c and st.base.base and st.base.base.base and st.base.base.base.base and st.base.base.base.base.flag then
+   local flag=st.base.base.base.base.flag
+   flag.grace_until=math.max(flag.grace_until or 0,c.start+M.CALIBRATION_FRAMES)
+  end
  local buttons,base,why=Base.step(s,st.base);st.base=base;sync(st)
  -- Initial movement can be delayed: postpone first watchdog expiry without changing
  -- the chosen input. Calibration is passive observation, never a new movement command.
