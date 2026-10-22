@@ -1,4 +1,4 @@
--- ISSD.challenge_mode v0.4.3 - entrypoint na raiz; BizHawk NLua carrega como [string "main"].
+-- ISSD.challenge_mode v0.4.4 - entrypoint na raiz; BizHawk NLua carrega como [string "main"].
 -- A raiz e resolvida por arquivos conhecidos, sem depender de debug.getinfo.
 local function exists(path)
   local f=io.open(path,"rb")
@@ -22,14 +22,40 @@ package.path=file("lua/?.lua")..";"..file("lua/?/init.lua")..";"..package.path
 -- Sem arquivo de configuração, preserva o monitor contextual original.
 local mode_file=file("challenge_mode.txt")
 local function selected_mode()
- local h=io.open(mode_file,"rb")
- if not h then return "MONITOR" end
- local raw=h:read("*a") or ""
+ local h,open_error=io.open(mode_file,"rb")
+ if not h then
+  -- Apenas ausencia do arquivo permite o modo padrao; outros erros devem ser visiveis.
+  local exists_check=io.open(mode_file,"rb")
+  if exists_check then exists_check:close() end
+  -- io.open nao diferencia falta de arquivo em todos os ambientes: informe a
+  -- falha se houver erro de acesso diferente de "not found"/"No such file".
+  local message=tostring(open_error or "")
+  if message~="" and not message:find("No such file",1,true)
+     and not message:find("not found",1,true)
+     and not message:find("nao foi possivel encontrar",1,true) then
+   error("Nao foi possivel ler "..mode_file..": "..message,0)
+  end
+  return "MONITOR"
+ end
+ local raw=h:read("*a")
  h:close()
+ if not raw then error("Falha ao ler "..mode_file,0) end
+ if raw:sub(1,3)=="\239\187\191" then raw=raw:sub(4) end -- BOM UTF-8
+ if raw:sub(1,2)=="\255\254" or raw:sub(1,2)=="\254\255" then
+  error("Codificacao UTF-16 nao suportada em "..mode_file..
+   ". Salve como UTF-8 ou UTF-8 com BOM (PowerShell: Set-Content -Encoding utf8).",0)
+ end
+ if raw:find("\0",1,true) then
+  error("Arquivo "..mode_file..
+   " contem bytes NUL (possivel UTF-16). Use UTF-8 ou ASCII.",0)
+ end
  local value=raw:match("^%s*([%a_]+)") or ""
  value=value:upper()
- assert(value=="MONITOR" or value=="DRIBBLE",
-  "challenge_mode.txt invalido: use MONITOR ou DRIBBLE")
+ if value~="MONITOR" and value~="DRIBBLE" then
+  local shown=raw:gsub("[\r\n\t]"," "):sub(1,70)
+  error("Modo invalido em "..mode_file..": '"..shown..
+   "'. Valores permitidos: MONITOR ou DRIBBLE. Verifique a codificacao (UTF-8/ASCII).",0)
+ end
  return value
 end
 local mode=selected_mode()
@@ -53,7 +79,7 @@ local session=os.date("!%Y%m%dT%H%M%SZ")
 local context_csv=file("challenge_context_v04.csv")
 local transition_csv=file("challenge_transitions_v03.csv")
 local operator_file=file("operator_events_v03.txt")
-print("[ISSD.challenge_mode] v0.4.3 project_root="..root)
+print("[ISSD.challenge_mode] v0.4.4 project_root="..root)
 print("[ISSD.challenge_mode] transition_csv="..transition_csv)
 print("[ISSD.challenge_mode] context_csv="..context_csv)
 print("[ISSD.challenge_mode] operator_events="..operator_file)
@@ -70,7 +96,7 @@ local m=monitor.new({
 assert(m.context, "Monitor loaded without context support; loaded from "..tostring(package.searchpath and package.searchpath("challenge.monitor",package.path) or "unknown path"))
 assert(type(m.context.step)=="function","Context object has no step method")
 m:step()
-print("[ISSD.challenge_mode] v0.4.3 first contextual step completed (no screen flag validated)")
+print("[ISSD.challenge_mode] v0.4.4 first contextual step completed (no screen flag validated)")
 while true do
   emu.frameadvance()
   m:step()
