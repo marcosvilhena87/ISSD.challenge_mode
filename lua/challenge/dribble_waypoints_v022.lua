@@ -76,23 +76,18 @@ function M.step(s,st)
   if not st.line then st.line={x=s.px,y=s.py,tx=wp[1],ty=wp[2]} end
   local line=st.line
   local vx,vy=line.tx-line.x,line.ty-line.y
-  local major_x=math.abs(vx)>=math.abs(vy)
-  local minor_error
-  if major_x then
-   local expected_y=math.abs(vx)>0 and line.y+vy*(s.px-line.x)/vx or line.ty
-   minor_error=expected_y-s.py
-   buttons=steer(dx,0,s.frame,false,false)
-   if math.abs(minor_error)>3 then
-    if minor_error>0 then buttons.Down=true else buttons.Up=true end
-   end
-  else
-   local expected_x=math.abs(vy)>0 and line.x+vx*(s.py-line.y)/vy or line.tx
-   minor_error=expected_x-s.px
-   buttons=steer(0,dy,s.frame,false,false)
-   if math.abs(minor_error)>3 then
-    if minor_error>0 then buttons.Right=true else buttons.Left=true end
-   end
+  -- Follow the segment with simultaneous directional inputs (diagonal allowed).
+  -- Correct toward the nearest point on the line, with bounded lookahead.
+  local len2=vx*vx+vy*vy
+  local aimx,aimy=wp[1],wp[2]
+  if len2>0 then
+   local t=((s.px-line.x)*vx+(s.py-line.y)*vy)/len2
+   local look=math.min(1,math.max(0,t)+35/math.sqrt(len2))
+   local cx,cy=line.x+vx*look,line.y+vy*look
+   local cross=math.abs(vx*(s.py-line.y)-vy*(s.px-line.x))/math.sqrt(len2)
+   if cross>3 then aimx,aimy=cx,cy end
   end
+  buttons=steer(aimx-s.px,aimy-s.py,s.frame,false,false)
  else
   buttons=steer(dx,dy,s.frame,fine,reason=="precision_approach" and M.approach_profile=="CONTINUOUS_PRECISION")
  end

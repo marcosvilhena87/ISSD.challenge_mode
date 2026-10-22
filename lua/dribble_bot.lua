@@ -56,6 +56,7 @@ local CSV=require("challenge.dribble_csv_v035")
 local Commands=require("challenge.dribble_commands_v035")
 local ResultDetector=require("challenge.dribble_result_detector")
 local Dash=require("challenge.dribble_dash_v3")
+local Straight=require("challenge.dribble_direct_line_calibration_v2")
 local result_observer=ResultDetector.new()
 -- Compact is the default: two canonical files + one multiplexed diagnostics CSV.
 -- FULL preserves every historical output for research/compatibility.
@@ -128,6 +129,7 @@ end
 print("[ISSD.dribble_bot] CSV mode="..output_mode..
  (output_mode=="COMPACT" and " (summary, observer, diagnostics v2; trace disabled)" or " (legacy full reports)"))
 
+setup(csv_dir.."/dribble_direct_line_calibration_v2.csv","session,frame,flag,event,cross_track_error,signed_error,progress,diagonal,correcting,frames,max_error,avg_error,corrections,diagonal_frames,axis_frames,outside_segment_frames,closest_error")
 setup(csv_dir.."/dribble_dash_calibration_v3.csv","session,frame,flag,event,distance_to_waypoint,brake_distance,closing_speed,reason,dash_frames,starts,stops,off_cause,ball_gap,minimum_distance,frames_since_last_off")
 setup(csv_dir.."/dribble_result_observer_v1.csv","session,detector_trial,frame,event,gameplay,remaining,time_score,bonus_score,total_score,copy_total,start_frame,exit_frame,early_frame,early_verdict,copy_match_frame,final_verdict,finish_reason,status")
 setup(trace,"session,frame,armed,phase,event,reason,gs,ptr,remaining,poss,player_x,player_y,ball_x,ball_y,buttons,time_bcd,bonus_bcd,time_frac_u16,bonus_frac_u16,recovery_diagnostics")
@@ -302,7 +304,7 @@ local function command_handle(cmd)
   W.approach_profile=selected_approach
   W.travel_profile=selected_travel
   state=P.new();armed=true;pending=false;grace_exit=nil
-  local s=snapshot();attempt={dash=Dash.new(),id=session.."_"..tostring(s.frame),started=s.frame,profile=selected_profile,time_start=s.time,last=s,last_remaining=s.remaining,last_flag_frame=s.frame,flags_seen=0,active=Start.new(s),route=Benchmark.new(s.frame),goal=Goal.new(s),confirmed=false,score=nil,final=false,approach_profile=selected_approach,travel_profile=selected_travel,
+  local s=snapshot();attempt={dash=Dash.new(),straight=Straight.new(),id=session.."_"..tostring(s.frame),started=s.frame,profile=selected_profile,time_start=s.time,last=s,last_remaining=s.remaining,last_flag_frame=s.frame,flags_seen=0,active=Start.new(s),route=Benchmark.new(s.frame),goal=Goal.new(s),confirmed=false,score=nil,final=false,approach_profile=selected_approach,travel_profile=selected_travel,
    proximity={{},{},{},{},{}},proximity_written=false}
   for i=1,5 do attempt.proximity[i]={observed=0,near24=0,near12=0,
    precision=0,search=0,recover=0,precision_idle=0,collected=false} end
@@ -359,6 +361,16 @@ while true do
   -- Keep Y explicitly absent regardless of previous output.
   buttons.Y=nil
   dash_events={}
+  local line_state=state
+  -- Base-controller wrappers keep their state under nested 'base' fields.
+  while line_state and line_state.base do line_state=line_state.base end
+  local actual_line=line_state and line_state.line
+  local sl=Straight.observe(attempt.straight,s,reason,buttons,actual_line)
+  if sl and s.frame%15==0 then
+   write(csv_dir.."/dribble_direct_line_calibration_v2.csv",
+    {attempt.id,s.frame,sl.flag,"sample",sl.error,sl.cross,sl.progress,
+     sl.diagonal,sl.correcting,nil,nil,nil,nil,nil,nil,nil,nil},17)
+  end
   for _,de in ipairs(dash_events) do
    local flag=de.flag
    write(csv_dir.."/dribble_dash_calibration_v3.csv",
@@ -389,6 +401,10 @@ while true do
       segment.remaining,segment.active_frame,segment.valid_start and 1 or 0},16)
     end
     attempt.last_flag_frame=s.frame
+    local sm=Straight.summary(attempt.straight,attempt.flags_seen)
+    write(csv_dir.."/dribble_direct_line_calibration_v2.csv",
+     {attempt.id,s.frame,attempt.flags_seen,"flag_collected",nil,nil,nil,nil,nil,
+      sm.frames,sm.maximum,sm.average,sm.corrections,sm.diagonal,sm.axis,sm.overshoot,sm.closest},17)
     local metrics=Dash.flag_summary(attempt.dash,attempt.flags_seen,s.frame)
     write(csv_dir.."/dribble_dash_calibration_v3.csv",
      {attempt.id,s.frame,attempt.flags_seen,"flag_collected",nil,nil,nil,
