@@ -66,3 +66,35 @@ python .\repair_dribble_csv_v035.py
 ```
 
 The repair script checks all v035 CSVs, preserves originals as `.bak`, and restores missing headers only if the original first row has the expected number of columns. Files with mismatched column counts are left untouched for manual inspection. It also removes a UTF-8 BOM from an otherwise correct header if present. To select the new waypoint (760,325), append `PROFILE:FLAG2_760_325` **after starting** the runner, wait for `profile_queued`, then append `ARM` and confirm `arm_applied`. A `git pull` alone does not reload the script in BizHawk.
+
+## Reversible proximity approach experiment (v0.3.5)
+
+Movement policy is independent of the route profile. Default `APPROACH:CONTROL` retains the existing precision behavior (movement pulses on frames divisible by four near waypoints). Experimental `APPROACH:CONTINUOUS_PRECISION` uses continuous direction input when `reason=precision_approach`, with the same coordinate deadzone. The `local_search` timing/pulses, `recover_ball` steering, stuck handling, flag counter and shot/goal phases are **not modified**. No speedup is assumed until recorded.
+
+Stop Lua, `git pull --ff-only origin main`, restart the Lua runner, and only then append the commands, one at a time:
+
+```powershell
+Add-Content .\dribble_bot_commands_v035.txt 'PROFILE:CONTROL'
+Add-Content .\dribble_bot_commands_v035.txt 'APPROACH:CONTROL'
+Add-Content .\dribble_bot_commands_v035.txt 'ARM'
+```
+
+For the experimental arm:
+
+```powershell
+Add-Content .\dribble_bot_commands_v035.txt 'APPROACH:CONTINUOUS_PRECISION'
+Add-Content .\dribble_bot_commands_v035.txt 'ARM'
+```
+
+For the rollback:
+
+```powershell
+Add-Content .\dribble_bot_commands_v035.txt 'APPROACH:CONTROL'
+Add-Content .\dribble_bot_commands_v035.txt 'ARM'
+```
+
+Wait for `approach queued=` before each `ARM`; confirm `approach applied=` in the Lua Console. The second profile stays selected until changed. Keep `PROFILE:CONTROL` fixed while comparing approaches so waypoint geometry is identical.
+
+The new **`dribble_approach_proximity_v035.csv`** records one row per flag and attempt: `observed_frames`, `near24_frames`, `near12_frames`, `precision_frames`, `local_search_frames`, `recover_ball_frames`, `precision_idle_frames`, and `complete`. Proximity is measured against each selected waypoint with both x/y within +/-24 or +/-12; the counters are observation frames, not necessarily contiguous wall time, and some counters overlap. Rows marked `complete=0` must not be treated as successful flag collections. Compare route/goal eligibility against `dribble_route_optimization_v035.csv` by `session`. The existing CSV schemas are unchanged.
+
+Pure Lua regression test: `lua tests/test_dribble_approach_v035.lua` (requires a local Lua interpreter).
