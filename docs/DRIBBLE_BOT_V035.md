@@ -54,3 +54,15 @@ Add-Content .\dribble_bot_commands_v035.txt 'ARM'
 ```
 
 The Lua Console ARMED line now prints `wp2=(760,325)` when the profile is applied. Confirm `arm_applied` reports `FLAG2_760_325`. Then consult `dribble_route_experiments_v035.csv` and `dribble_route_optimization_v035.csv` to compare the second segment with its historical 244-frame reference. Changes are experimental, no efficiency claim yet.
+
+## CSV header repair after BizHawk restart
+
+Some older v035 CSVs were created without their header because the old append-mode `seek("end")` check was not reliable. Symptoms in PowerShell include `Import-Csv: O membro "1" já está presente`. New runner startup now **refuses malformed files**, rather than adding data to ambiguous CSVs. Before loading the updated runner, close/stop the Lua script and run:
+
+```powershell
+git pull --ff-only origin main
+python .\repair_dribble_csv_v035.py
+# Reopen dribble_bot_v035.lua in BizHawk AFTER repairing.
+```
+
+The repair script checks all v035 CSVs, preserves originals as `.bak`, and restores missing headers only if the original first row has the expected number of columns. Files with mismatched column counts are left untouched for manual inspection. It also removes a UTF-8 BOM from an otherwise correct header if present. To select the new waypoint (760,325), append `PROFILE:FLAG2_760_325` **after starting** the runner, wait for `profile_queued`, then append `ARM` and confirm `arm_applied`. A `git pull` alone does not reload the script in BizHawk.
