@@ -362,9 +362,16 @@ while true do
   buttons.Y=nil
   dash_events={}
   local line_state=state
-  -- Base-controller wrappers keep their state under nested 'base' fields.
-  while line_state and line_state.base do line_state=line_state.base end
-  local actual_line=line_state and line_state.line
+  -- The waypoint controller's state contains .line; a deeper .base belongs
+  -- to another controller. Stop at the first valid active segment.
+  local actual_line=nil
+  while type(line_state)=="table" do
+   if type(line_state.line)=="table" and line_state.line.tx and line_state.line.ty then
+    actual_line=line_state.line
+    break
+   end
+   line_state=line_state.base
+  end
   local sl=Straight.observe(attempt.straight,s,reason,buttons,actual_line)
   if sl and s.frame%15==0 then
    write(csv_dir.."/dribble_direct_line_calibration_v2.csv",
