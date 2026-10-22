@@ -60,6 +60,8 @@ end
 local function end_attempt()
  if not attempt or attempt.final then return end
  attempt.final=true;armed=false;pending=false;release()
+ local verdict=Benchmark.result(attempt.route)
+ write(root.."/dribble_route_benchmark_v0328.csv",{attempt.id,verdict.observed,verdict.comparable and 1 or 0,verdict.delta_total,verdict.status,attempt.started,attempt.active.active_frame,state.flags_frame,state.exit_frame},9)
  flush_start(attempt,(attempt.last and attempt.last.frame) or emu.framecount(),"attempt_finalized")
  local s=attempt.last or snapshot()
  local ff=state.flags_frame;local xf=state.exit_frame
