@@ -2,19 +2,23 @@
 local W=require("challenge.dribble_waypoints_v022")
 local M={}
 M.BASELINE={176,244,204,172,192}
-M.names={"CONTROL","FLAG1_X_MINUS_4","FLAG2_X_PLUS_4","FLAG2_760_325","FLAG3_Y_MINUS_4","FLAG4_X_MINUS_4","FLAG5_X_MINUS_4"}
+M.names={"CONTROL","FLAG1_X_MINUS_4","FLAG2_X_PLUS_4","FLAG2_760_325","FLAG2_760_330_FLAG5_1460_360","FLAG3_Y_MINUS_4","FLAG4_X_MINUS_4","FLAG5_X_MINUS_4"}
 local originals={}
 for i,p in ipairs(W.waypoints) do originals[i]={p[1],p[2]} end
 local changes={FLAG1_X_MINUS_4={1,-4,0},FLAG2_X_PLUS_4={2,4,0},FLAG2_760_325={2,-12,21},
- FLAG3_Y_MINUS_4={3,0,-4},FLAG4_X_MINUS_4={4,-4,0},FLAG5_X_MINUS_4={5,-4,0}}
+ FLAG2_760_330_FLAG5_1460_360={{2,-12,26},{5,10,-7}},FLAG3_Y_MINUS_4={3,0,-4},FLAG4_X_MINUS_4={4,-4,0},FLAG5_X_MINUS_4={5,-4,0}}
 function M.apply(name)
  local change=name=="CONTROL" and nil or changes[name]
  if name~="CONTROL" and not change then return false,"unknown_profile" end
  for i,p in ipairs(originals) do
   W.waypoints[i][1]=p[1];W.waypoints[i][2]=p[2]
  end
- if change then local p=W.waypoints[change[1]]
-  p[1]=p[1]+change[2];p[2]=p[2]+change[3]
+ if change then
+  local edits=type(change[1])=="table" and change or {change}
+  for _,edit in ipairs(edits) do
+   local p=W.waypoints[edit[1]]
+   p[1]=p[1]+edit[2];p[2]=p[2]+edit[3]
+  end
  end
  return true
 end
