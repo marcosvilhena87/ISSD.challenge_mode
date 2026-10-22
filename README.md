@@ -89,3 +89,7 @@ Run `lua decode_dribble_timers_v1.lua` on `dribble_timer_validation_v1.csv` to i
 ## DRIBBLE Bot v0.3 — Goal Completion (experimental)
 
 Run `dribble_bot_v03.lua` alone in BizHawk, using `dribble_bot_commands_v03.txt` for ARM/STOP. Preserves v0.2.2 five-flag policy and transitions to an experimental goal approach and B charge/release instead of stopping at five flags. Logs `dribble_bot_trace_v03.csv` with phases and frames. **Goal target / shooting behavior uncalibrated; gameplay exit is NOT verified success.** [Protocol](docs/DRIBBLE_BOT_V03.md).
+
+## DRIBBLE Bot v0.3.1 — Goal & Score Validation
+
+Use `dribble_bot_v031.lua` in BizHawk, `ARM`/`STOP` via `dribble_bot_commands_v031.txt`. The v0.3 control logic is preserved; trace includes timer BCD candidates and deduplicated events. An attempt summary is written once into `dribble_bot_summary_v031.csv`. Use `CONFIRM_GOAL` and optionally `SCORE:<number>` **only after visually verifying that same attempt**. Otherwise the outcome stays `unverified`. See [docs/DRIBBLE_BOT_V031.md](docs/DRIBBLE_BOT_V031.md).
