@@ -97,3 +97,7 @@ Use `dribble_bot_v031.lua` in BizHawk, `ARM`/`STOP` via `dribble_bot_commands_v0
 ## DRIBBLE Bot v0.3.2 — Persistent Score Validation
 
 Run `dribble_bot_v032.lua` with `ARM`/`STOP` via `dribble_bot_commands_v032.txt`. Unique attempt session IDs are logged in `dribble_bot_summary_v032.csv`. After the summary is written, confirm a visually verified goal/score with `python confirm_dribble_score_v032.py --session <exact_session> --confirm-goal --score <score>` even if BizHawk is closed. Updates are session-targeted, idempotent and audited in `dribble_bot_score_audit_v032.csv`; all unconfirmed game exits remain `unverified`. [Protocol](docs/DRIBBLE_BOT_V032.md).
+
+## DRIBBLE Bot v0.3.2.1 — Stuck Recovery Fix
+
+Run `dribble_bot_v0321.lua` alone in BizHawk; send `ARM`/`STOP` to `dribble_bot_commands_v0321.txt`. This version preserves flag waypoints and goal control, adds at most two 24-frame directional recovery probes for flag-phase stalls, and records recovery events to `dribble_bot_trace_v0321.csv`. See [docs/DRIBBLE_BOT_V0321.md](docs/DRIBBLE_BOT_V0321.md). Goal and score confirmation remains operator-driven via `confirm_dribble_score_v032.py --summary dribble_bot_summary_v0321.csv`.
