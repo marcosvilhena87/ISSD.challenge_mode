@@ -5,9 +5,11 @@ local root
 for _,p in ipairs({".","..","Lua/SNES/ISSD.challenge_mode","SNES/ISSD.challenge_mode","C:/Minha_Pasta/Jogos/BizHawk-2.11.1-win-x64/Lua/SNES/ISSD.challenge_mode"}) do if exists(p.."/lua/challenge/dribble_goal_v0325.lua") then root=p;break end end
 assert(root,"repository root not found: expected lua/challenge/dribble_goal_v0325.lua. Check working directory and git pull.")
 package.path=root.."/lua/?.lua;"..root.."/lua/?/init.lua;"..package.path
-package.loaded["challenge.dribble_waypoints_v022"]=nil
-package.loaded["challenge.dribble_route_optimization_v035"]=nil
-package.loaded["challenge.dribble_goal_v0325"]=nil
+-- Reload the whole controller dependency chain before loading the waypoint singleton.
+for _,name in ipairs({"challenge.dribble_goal_v031","challenge.dribble_goal_v0322",
+ "challenge.dribble_goal_v0323","challenge.dribble_goal_v0324",
+ "challenge.dribble_goal_v0325","challenge.dribble_waypoints_v022",
+ "challenge.dribble_route_optimization_v035"}) do package.loaded[name]=nil end
 local P=require("challenge.dribble_goal_v0325")
 local Start=require("challenge.dribble_start_detection_v0327")
 local Benchmark=require("challenge.dribble_route_benchmark_v0328")
