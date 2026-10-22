@@ -25,8 +25,6 @@ local function selected_mode()
  local h,open_error=io.open(mode_file,"rb")
  if not h then
   -- Apenas ausencia do arquivo permite o modo padrao; outros erros devem ser visiveis.
-  local exists_check=io.open(mode_file,"rb")
-  if exists_check then exists_check:close() end
   -- io.open nao diferencia falta de arquivo em todos os ambientes: informe a
   -- falha se houver erro de acesso diferente de "not found"/"No such file".
   local message=tostring(open_error or "")
