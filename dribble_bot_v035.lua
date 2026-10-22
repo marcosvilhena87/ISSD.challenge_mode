@@ -5,6 +5,8 @@ local root
 for _,p in ipairs({".","..","Lua/SNES/ISSD.challenge_mode","SNES/ISSD.challenge_mode","C:/Minha_Pasta/Jogos/BizHawk-2.11.1-win-x64/Lua/SNES/ISSD.challenge_mode"}) do if exists(p.."/lua/challenge/dribble_goal_v0325.lua") then root=p;break end end
 assert(root,"repository root not found: expected lua/challenge/dribble_goal_v0325.lua. Check working directory and git pull.")
 package.path=root.."/lua/?.lua;"..root.."/lua/?/init.lua;"..package.path
+package.loaded["challenge.dribble_waypoints_v022"]=nil
+package.loaded["challenge.dribble_route_optimization_v035"]=nil
 package.loaded["challenge.dribble_goal_v0325"]=nil
 local P=require("challenge.dribble_goal_v0325")
 local Start=require("challenge.dribble_start_detection_v0327")
@@ -12,8 +14,6 @@ local Benchmark=require("challenge.dribble_route_benchmark_v0328")
 local Goal=require("challenge.dribble_goal_evidence_v4")
 local Performance=require("challenge.dribble_performance_v034")
 -- Reload mutable route modules on each runner start; BizHawk may retain package.loaded.
-package.loaded["challenge.dribble_waypoints_v022"]=nil
-package.loaded["challenge.dribble_route_optimization_v035"]=nil
 local Optimization=require("challenge.dribble_route_optimization_v035")
 local function profile_known(name)
  for _,v in ipairs(Optimization.names) do if v==name then return true end end
