@@ -18,7 +18,13 @@ local command=root.."/dribble_bot_commands_v035.txt"
 local trace=root.."/dribble_bot_trace_v035.csv"
 local summary=root.."/dribble_bot_summary_v035.csv"
 local function setup(path,header)
- local f=assert(io.open(path,"a+"));if f:seek("end")==0 then f:write(header.."\n") end;f:close()
+ local f=io.open(path,"rb")
+ if f then
+  local first=f:read("*l");f:close()
+  assert(first==header,"CSV header missing/invalid: "..path.."; stop Lua and repair existing CSV (preserve data) before restarting")
+ else
+  local created=assert(io.open(path,"wb"));created:write(header.."\n");created:close()
+ end
 end
 setup(trace,"session,frame,armed,phase,event,reason,gs,ptr,remaining,poss,player_x,player_y,ball_x,ball_y,buttons,time_bcd,bonus_bcd,time_frac_u16,bonus_frac_u16,recovery_diagnostics")
 setup(summary,"session,started_frame,flags_frame,shot_frame,exit_frame,flags_elapsed_frames,goal_elapsed_frames,total_elapsed_frames,flags_remaining,time_start_bcd,time_at_fifth_bcd,bonus_at_fifth_bcd,time_at_exit_bcd,bonus_at_exit_bcd,shot_attempts,exit_reason,outcome,evidence,record_score")
