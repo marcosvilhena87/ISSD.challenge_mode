@@ -137,3 +137,7 @@ Passive BizHawk observer `goal_counter_validation_v2.lua` tests the experimental
 ## DRIBBLE Goal Counter Validation v3 — Negative Controls & Goal Evidence
 
 Passive observer `goal_counter_validation_v3.lua` tracks WRAM `0x0DA2` u16 with per-session START/STOP baselines, explicit negative controls, byte consistency, resets, and correlated positive evidence. This **does not automatically verify goals or scores**. See [validation protocol](docs/GOAL_COUNTER_VALIDATION_V3.md).
+
+## DRIBBLE Goal Evidence v4 — Context-Aware Confirmation
+
+Passive script `goal_evidence_v4.lua` correlates 0x0DA2 increments with a complete five-flag sequence, operator shot marker and GS=5, distinguishing out-of-context increments and negative controls. It does **not** automatically confirm goals or scores. See [protocol](docs/DRIBBLE_GOAL_EVIDENCE_V4.md).
