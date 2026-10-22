@@ -131,7 +131,7 @@ local function command_handle(cmd)
   write(root.."/dribble_start_state_v035.csv",{attempt.id,s.frame,s.gs,s.ptr,s.remaining,s.poss,s.px,s.py,s.bx,s.by,s.time,s.timefrac,s.bonus,s.bonusfrac},14)
   local W=require("challenge.dribble_waypoints_v022")
   write(root.."/dribble_profile_audit_v035.csv",{s.frame,"arm_applied",selected_profile,selected_profile,attempt.id,W.waypoints[1][1],W.waypoints[1][2]},7)
-  print("[ISSD.dribble_bot] v0.3.5 ARMED profile="..selected_profile.." session="..attempt.id.." frame="..s.frame)
+  print("[ISSD.dribble_bot] v0.3.5 ARMED profile="..selected_profile.." session="..attempt.id.." frame="..s.frame.." wp2=("..W.waypoints[2][1]..","..W.waypoints[2][2]..")")
  elseif c=="STOP" then
   if attempt then attempt.exit_reason=attempt.exit_reason or "operator_stop" end
   end_attempt()
