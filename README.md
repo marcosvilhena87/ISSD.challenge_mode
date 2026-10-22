@@ -1,3 +1,9 @@
+## SCORE_PROBE v3.3 — estabilizacao do placar (ativo)
+
+O modo `SCORE_PROBE` executa `lua/score_probe.lua` v3.3, com comandos em `score_probe_commands_v33.txt`: `START:teste01`, `MARK:GAMEPLAY`, `MARK:TRANSITION`, `MARK:RECORD`, `RESULT:teste01:151:199`, `EXPORT`. Substitua as pontuacoes pelos valores visuais reais. O processo monitora WRAM read-only e preserva os CSVs anteriores.
+
+A v3.3 exige consistencia aritmetica `total=time+bonus`, mudança em relação ao valor marcado em GAMEPLAY, e 90 frames sem alteração da tripla de pontuação **apos** marcador TRANSITION para emitir um evento provisório em `csv/score_stable_events_v33.csv`. Na finalizacao grava `csv/score_stability_v33.csv`, comparando snapshot capturado no RECORD com score visual e ultima tupla estabilizada. `consistent_candidate` **não** prova gol, apenas compatibilidade dos dados; `possible_residual`, `not_stable_at_record`, `arithmetic_mismatch` e `visual_mismatch` ajudam a distinguir falhas. O espelho `0x0DC06` e registrado, mas nao exigido para estabilidade devido ao atraso observado. Continua comparacao entre sessoes via `score_cross_session_v33.csv` (usando EXPORT); investigacao so se confirma com sessoes independentes e controles positivo/negativo. Nenhum controle do jogador foi alterado.
+
 ## SCORE_PROBE v3.2 — evidencias antecipadas e independentes
 
 Atualize com `git pull --ff-only origin main`, selecione `SCORE_PROBE` e reinicie `main.lua`. Comandos em `score_probe_commands_v32.txt`: `START:teste01`, `MARK:GAMEPLAY`, `MARK:TRANSITION`, `MARK:RECORD`, `RESULT:teste01:122:206`, `EXPORT` (troque scores pelos valores reais). Registre cada comando na tela correta e execute novas partidas para os casos Bonus positivo, Time-only e Zero. Repita em uma segunda execucao independente do BizHawk (novo session ID). `ABORT` descarta tentativa corrente.

@@ -1,9 +1,9 @@
--- SCORE_PROBE v3.2 - temporal cross-validation of DRIBBLE scoreboard hypotheses.
+-- SCORE_PROBE v3.3 - temporal cross-validation of DRIBBLE scoreboard hypotheses.
 -- Passive WRAM readings only. All markers are operator supplied, not screen detection.
 local root=assert(_G.ISSD_PROJECT_ROOT,"Run through main.lua / SCORE_PROBE")
 assert(memory and memory.read_u8 and emu and emu.framecount and emu.frameadvance,"BizHawk APIs unavailable")
 local session=os.date("!%Y%m%dT%H%M%SZ")
-local path=root.."/score_probe_commands_v32.txt"
+local path=root.."/score_probe_commands_v33.txt"
 local out=root.."/csv/"
 local tracked={}
 local seen={}
@@ -56,6 +56,24 @@ local completed={}
 local previous_record=nil
 local principal={["01CF3/u8/TIME_SCORE"]=true,["01CF8/u16le/BONUS_SCORE"]=true,["01CFA/u16le/TOTAL_SCORE"]=true,["0DC06/u16le/TOTAL_SCORE"]=true}
 local used={}
+local STABLE_FRAMES=90
+local primary={time=0x01CF3,bonus=0x01CF8,total=0x01CFA,copy=0x0DC06}
+local function rawbyte(a)
+ local ok,v=pcall(memory.read_u8,a,"WRAM")
+ return ok and v or nil
+end
+local function scoretuple()
+ local t=rawbyte(primary.time)
+ local bl,bh=rawbyte(primary.bonus),rawbyte(primary.bonus+1)
+ local tl,th=rawbyte(primary.total),rawbyte(primary.total+1)
+ local cl,ch=rawbyte(primary.copy),rawbyte(primary.copy+1)
+ if not (t and bl and bh and tl and th and cl and ch) then return nil end
+ return {time=t,bonus=bl+256*bh,total=tl+256*th,copy=cl+256*ch}
+end
+local function tuplekey(q)
+ if not q then return "NA" end
+ return table.concat({q.time,q.bonus,q.total},":")
+end
 local phase_order={"GAMEPLAY","TRANSITION","RECORD"}
 local function category(t,b) return b>0 and "BONUS_POSITIVE" or (t>0 and "TIME_ONLY" or "ZERO") end
 local function validid(s) return s and s:match("^[%w_-]+$") end
@@ -76,17 +94,21 @@ local function mark(label)
  active.phase=active.phase+1
  active.last_marker_frame=frame
  active.markers[label]=frame
- if label=="RECORD" then active.record_values=snapshot() end
+ if label=="RECORD" then
+  active.record_values=snapshot()
+  active.record_tuple=scoretuple()
+ end
  if label=="GAMEPLAY" then
+  active.gameplay_tuple=scoretuple()
   active.gameplay_values=snapshot()
   for i,c in ipairs(tracked) do
    local v=active.gameplay_values[i]
    local stale=previous_record and v~=nil and previous_record[i]~=nil and v==previous_record[i]
-   write("score_baseline_v32.csv","session,id,frame,address_hex,encoding,target,value,matches_previous_record",
+   write("score_baseline_v33.csv","session,id,frame,address_hex,encoding,target,value,matches_previous_record",
     {session,active.id,frame,string.format("0x%05X",c.a),c.kind,c.target,v==nil and "" or v,stale and 1 or 0})
   end
  end
- write("score_markers_v32.csv","session,id,frame,marker",{session,active.id,frame,label})
+ write("score_markers_v33.csv","session,id,frame,marker",{session,active.id,frame,label})
  print("[score_probe] marker "..label.." frame="..frame)
 end
 local exported_count=0
@@ -114,7 +136,7 @@ local function export_validation()
    elseif valid==#completed and binary==#completed then status="binary_candidate"
    else status="rejected_by_controls" end
   end
-  write("score_validation_v32.csv",
+  write("score_validation_v33.csv",
    "session,address_hex,encoding,target,source,trials,positive_controls,zero_controls,exact_matches,binary_matches,valid_reads,status,record_values",
    {session,string.format("0x%05X",c.a),c.kind,c.target,c.source,#completed,positives,zeros,exact,binary,valid,status,'"'..table.concat(observations,";")..'"'})
  end
@@ -127,7 +149,7 @@ local function export_validation()
    if principal[key] then
     local expected=c.target=="BONUS_SCORE" and trial.bonus or (c.target=="TIME_SCORE" and trial.time or trial.time+trial.bonus)
     local v=trial.values[i]
-    write("score_cross_session_v32.csv","session,id,category,address_hex,encoding,target,expected,record_value,exact",
+    write("score_cross_session_v33.csv","session,id,category,address_hex,encoding,target,expected,record_value,exact",
      {session,trial.id,trial.category,string.format("0x%05X",c.a),c.kind,c.target,expected,v==nil and "" or v,v==expected and 1 or 0})
    end
   end
@@ -148,16 +170,33 @@ local function finish(t,b)
   local expected=c.target=="BONUS_SCORE" and b or (c.target=="TIME_SCORE" and t or t+b)
   local status=v==nil and "unreadable" or (v==expected and "exact_candidate" or
    ((v>0)==(expected>0) and "binary_candidate" or "contradicted"))
-  write("score_temporal_summary_v32.csv",
+  write("score_temporal_summary_v33.csv",
    "session,id,category,time_score,bonus_score,address_hex,encoding,target,source,start_frame,first_change,last_change,change_count,record_marker_frame,final_frame,record_value,expected,status",
    {session,active.id,kind,t,b,string.format("0x%05X",c.a),c.kind,c.target,c.source,active.start,
     active.first_change[i] or "",active.last_change[i] or "",active.changes[i] or 0,active.markers.RECORD,frame,
     v==nil and "" or v,expected,status})
  end
- write("score_trials_v32.csv",
+ write("score_trials_v33.csv",
   "session,id,start_frame,end_frame,time_score,bonus_score,category,marker_gameplay,marker_transition,marker_record",
   {session,active.id,active.start,frame,t,b,kind,active.markers.GAMEPLAY,active.markers.TRANSITION,active.markers.RECORD})
  local prior=previous_record
+ local q=active.record_tuple
+ local coherent=q and q.total==q.time+q.bonus
+ local visual_match=q and q.time==t and q.bonus==b and q.total==t+b
+ local stable_match=active.last_stable and active.last_stable.key==tuplekey(q)
+ local fresh=active.gameplay_tuple and tuplekey(active.gameplay_tuple)~=tuplekey(q)
+ local verdict=not q and "unreadable" or (not coherent and "arithmetic_mismatch"
+  or (not visual_match and "visual_mismatch"
+  or (not stable_match and "not_stable_at_record"
+  or (not fresh and "possible_residual"
+  or "consistent_candidate"))))
+ write("score_stability_v33.csv",
+  "session,id,start_frame,record_frame,result_frame,time,bonus,total,copy_total,visual_time,visual_bonus,arith_ok,visual_ok,stable_ok,fresh_since_gameplay,stable_since,verdict",
+  {session,active.id,active.start,active.markers.RECORD,frame,q and q.time or "",
+   q and q.bonus or "",q and q.total or "",q and q.copy or "",t,b,
+   coherent and 1 or 0,visual_match and 1 or 0,stable_match and 1 or 0,
+   fresh and 1 or 0,active.last_stable and active.last_stable.since or "",verdict})
+ print("[score_probe] v3.3 evidence "..active.id.." verdict="..verdict)
  completed[#completed+1]={id=active.id,time=t,bonus=b,category=kind,values=values}
  for i,c in ipairs(tracked) do
   local key=string.format("%05X/%s/%s",c.a,c.kind,c.target)
@@ -169,7 +208,7 @@ local function finish(t,b)
    local first=active.first_change[i]
    local early=first and first<active.markers.TRANSITION
    local phase=first and (first<active.markers.GAMEPLAY and "PRE_GAMEPLAY" or (early and "GAMEPLAY_OR_EARLY" or (first<active.markers.RECORD and "TRANSITION" or "RECORD_OR_AFTER"))) or "NO_CHANGE"
-   write("score_early_evidence_v32.csv",
+   write("score_early_evidence_v33.csv",
     "session,id,address_hex,encoding,target,gameplay_value,record_value,previous_record_value,expected,first_change,change_phase,early_before_transition,residual_at_gameplay,exact_at_record,status",
     {session,active.id,string.format("0x%05X",c.a),c.kind,c.target,base==nil and "" or base,rec==nil and "" or rec,
       prior and (prior[i]==nil and "" or prior[i]) or "",expected,first or "",phase,early and 1 or 0,residual and 1 or 0,
@@ -187,7 +226,7 @@ local function command(line)
   if active then print("[score_probe] finish or ABORT current trial first");return end
   if used[id] then print("[score_probe] trial ID already used: "..id);return end
   used[id]=true
-  active={id=id,start=emu.framecount(),previous=snapshot(),changes={},first_change={},last_change={},markers={},phase=0,last_marker_frame=emu.framecount()}
+  active={id=id,start=emu.framecount(),previous=snapshot(),changes={},first_change={},last_change={},markers={},phase=0,last_marker_frame=emu.framecount(),tuple_previous=scoretuple(),tuple_since=emu.framecount(),last_stable=nil,emitted={}}
   print("[score_probe] tracking "..id.." frame="..active.start)
   return
  end
@@ -221,18 +260,38 @@ local function poll()
 end
 local commandfile=io.open(path,"rb")
 if commandfile then cursor=commandfile:seek("end") or 0;commandfile:close() end
-print("[score_probe] v3.2 ready candidates="..#tracked.." command="..path)
+print("[score_probe] v3.3 ready candidates="..#tracked.." command="..path)
 while true do
  poll()
  if active then
-  local now=snapshot();local frame=emu.framecount()
+  local frame=emu.framecount()
+  local q=scoretuple()
+  local key=tuplekey(q)
+  if key~=tuplekey(active.tuple_previous) then
+   active.tuple_previous=q
+   active.tuple_since=frame
+  end
+  local arith=q and q.total==q.time+q.bonus
+  local changed=active.gameplay_tuple and key~=tuplekey(active.gameplay_tuple)
+  local stable=q and frame-active.tuple_since>=STABLE_FRAMES
+  local after_transition=active.markers.TRANSITION and frame>=active.markers.TRANSITION
+  if stable and arith and changed and after_transition and not active.emitted[key] then
+   active.emitted[key]=true
+   active.last_stable={key=key,since=active.tuple_since}
+   write("score_stable_events_v33.csv",
+     "session,id,frame,stable_since,stable_frames,time,bonus,total,copy_total,arithmetic_ok,changed_from_gameplay,phase,status",
+     {session,active.id,frame,active.tuple_since,frame-active.tuple_since,q.time,q.bonus,q.total,q.copy,1,1,
+      active.phase==3 and "RECORD" or "TRANSITION","provisional_candidate"})
+   print("[score_probe] stable coherent candidate "..key.." frame="..frame)
+  end
+  local now=snapshot()
   for i,c in ipairs(tracked) do
    local old=active.previous[i];local new=now[i]
    if old~=new then
     active.changes[i]=(active.changes[i] or 0)+1
     active.first_change[i]=active.first_change[i] or frame
     active.last_change[i]=frame
-    write("score_transitions_v32.csv","session,id,frame,address_hex,encoding,target,source,old_value,new_value",
+    write("score_transitions_v33.csv","session,id,frame,address_hex,encoding,target,source,old_value,new_value",
      {session,active.id,frame,string.format("0x%05X",c.a),c.kind,c.target,c.source,old or "",new or ""})
    end
   end
