@@ -75,6 +75,7 @@ setup(root.."/dribble_route_benchmark_v035.csv","session,observed_flags,comparab
 setup(root.."/dribble_route_optimization_v035.csv","session,profile,active_route_frames,baseline_delta_frames,complete,goal_classification,eligible,verdict")
 setup(root.."/dribble_profile_audit_v035.csv","frame,event,requested_profile,applied_profile,session,wp1_x,wp1_y")
 setup(root.."/dribble_route_experiments_v035.csv","session,profile,flag_number,segment_frames,baseline_frames,delta_frames,valid_start,player_x,player_y")
+setup(root.."/dribble_travel_profile_v035.csv","session,route_profile,approach_profile,travel_profile,arm_frame,complete,eligible,active_route_frames,goal_classification")
 setup(root.."/dribble_approach_proximity_v035.csv","session,route_profile,approach_profile,flag_number,observed_frames,near24_frames,near12_frames,precision_frames,local_search_frames,recover_ball_frames,precision_idle_frames,complete")
 local W=require("challenge.dribble_waypoints_v022")
 local approach_names={CONTROL=true,CONTINUOUS_PRECISION=true}
@@ -175,6 +176,7 @@ local function end_attempt()
  local opt=Optimization.result(attempt.route,attempt.profile,{classification=Goal.classify(attempt.goal)})
  write(root.."/dribble_route_optimization_v035.csv",{attempt.id,attempt.profile,opt.active_frames,opt.baseline_delta,
   opt.complete,opt.goal_classification,opt.eligible,opt.verdict},8)
+ write(root.."/dribble_travel_profile_v035.csv",{attempt.id,attempt.profile,attempt.approach_profile,attempt.travel_profile,attempt.started,opt.complete,opt.eligible,opt.active_frames,opt.goal_classification},9)
  for _,seg in ipairs(Optimization.rows(attempt.route,attempt.profile)) do
   write(root.."/dribble_route_experiments_v035.csv",{attempt.id,seg.profile,seg.flag,seg.frames,
    seg.reference,seg.delta,seg.valid and 1 or 0,seg.px,seg.py},9)
@@ -232,7 +234,7 @@ local function command_handle(cmd)
   assert(Optimization.apply(selected_profile))
   W.approach_profile=selected_approach
   state=P.new();armed=true;pending=false;grace_exit=nil
-  local s=snapshot();attempt={id=session.."_"..tostring(s.frame),started=s.frame,profile=selected_profile,time_start=s.time,last=s,last_remaining=s.remaining,last_flag_frame=s.frame,flags_seen=0,active=Start.new(s),route=Benchmark.new(s.frame),goal=Goal.new(s),confirmed=false,score=nil,final=false,approach_profile=selected_approach,
+  local s=snapshot();attempt={id=session.."_"..tostring(s.frame),started=s.frame,profile=selected_profile,time_start=s.time,last=s,last_remaining=s.remaining,last_flag_frame=s.frame,flags_seen=0,active=Start.new(s),route=Benchmark.new(s.frame),goal=Goal.new(s),confirmed=false,score=nil,final=false,approach_profile=selected_approach,travel_profile=selected_travel,
    proximity={{},{},{},{},{}},proximity_written=false}
   for i=1,5 do attempt.proximity[i]={observed=0,near24=0,near12=0,
    precision=0,search=0,recover=0,precision_idle=0,collected=false} end
