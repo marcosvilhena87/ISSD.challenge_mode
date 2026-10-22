@@ -105,3 +105,7 @@ Run `dribble_bot_v0321.lua` alone in BizHawk; send `ARM`/`STOP` to `dribble_bot_
 ## DRIBBLE Bot v0.3.2.2 — Recovery Diagnostics & Optimization
 
 Run `dribble_bot_v0322.lua` in BizHawk, arm via `dribble_bot_commands_v0322.txt`. Adaptive bounded recovery uses at most two 12-frame probes with per-frame diagnostics in `dribble_bot_trace_v0322.csv`, preserving the existing five waypoints and goal policy. [Protocol and score confirmation](docs/DRIBBLE_BOT_V0322.md). Experimental until ROM validation.
+
+## DRIBBLE Bot v0.3.2.3 — Delayed Movement Detection
+
+Run `dribble_bot_v0323.lua` in BizHawk. After failed escape probes, the bot observes player and ball movements separately for up to 18 frames before retrying or stopping. Trace has a corrected 20-column header and records delayed-response diagnostics. See [docs/DRIBBLE_BOT_V0323.md](docs/DRIBBLE_BOT_V0323.md). Confirmation remains operator-driven.
