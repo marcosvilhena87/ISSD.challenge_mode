@@ -18,6 +18,28 @@ assert(root,"Raiz do projeto nao encontrada. Configure o diretorio de trabalho n
 local function file(name) return root.."/"..name end
 -- Prioriza modulos desta copia do repositorio (BizHawk pode ter outro Lua no path).
 package.path=file("lua/?.lua")..";"..file("lua/?/init.lua")..";"..package.path
+-- Modo de execução escolhido antes de iniciar o Lua, sem mudar durante a sessão.
+-- Sem arquivo de configuração, preserva o monitor contextual original.
+local mode_file=file("challenge_mode.txt")
+local function selected_mode()
+ local h=io.open(mode_file,"rb")
+ if not h then return "MONITOR" end
+ local raw=h:read("*a") or ""
+ h:close()
+ local value=raw:match("^%s*([%a_]+)") or ""
+ value=value:upper()
+ assert(value=="MONITOR" or value=="DRIBBLE",
+  "challenge_mode.txt invalido: use MONITOR ou DRIBBLE")
+ return value
+end
+local mode=selected_mode()
+print("[ISSD.challenge_mode] boot mode="..mode.." root="..root)
+if mode=="DRIBBLE" then
+ -- All runners receive the same root and package path from main.
+ _G.ISSD_PROJECT_ROOT=root
+ dofile(file("lua/dribble_bot_v035.lua"))
+ return
+end
 -- Descarta modulos de execucoes anteriores no mesmo estado Lua.
 for _,name in ipairs({"challenge.mapping","challenge.probe","challenge.monitor","challenge.context"}) do
   package.loaded[name]=nil
