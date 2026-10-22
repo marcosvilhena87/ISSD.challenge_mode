@@ -157,3 +157,13 @@ Run `lua/dribble_bot_v034.lua` for contextual goal counter evidence, integrated 
 ## Organizacao dos scripts Lua
 
 `main.lua` continua na raiz e e o ponto de entrada do monitor de Challenge Mode. Os antigos scripts Lua da raiz foram movidos para `lua/`, preservando seus nomes e conteudo. Os modulos do jogo permanecem em `lua/challenge/` e os testes em `tests/`. Para executar o bot de drible pelo Lua Console use `lua/dribble_bot_v035.lua`; execute outros probes diretamente de `lua/`. O diretorio de trabalho do BizHawk deve continuar na raiz do repositorio, onde comandos e CSVs sao lidos/gerados.
+
+## Modularizacao incremental do DRIBBLE v0.3.5
+
+O arquivo `lua/dribble_bot_v035.lua` continua sendo o ponto de entrada para o bot de drible. Infraestrutura reutilizável foi extraída sem alterar as regras de controle:
+
+- `lua/challenge/dribble_csv_v035.lua`: inicializacao de cabeçalhos, backups seguros e escrita de linhas, preservando os mesmos formatos CSV.
+- `lua/challenge/dribble_commands_v035.lua`: leitura incremental do arquivo `dribble_bot_commands_v035.txt`, ignorando linhas antigas no inicio e aguardando novas linhas completas.
+- `lua/challenge/dribble_waypoints_v022.lua`, `dribble_route_optimization_v035.lua` e demais controladores mantêm os perfis existentes, incluindo `FLAG2_760_330_FLAG5_1460_360`, `CONTINUOUS_PRECISION` e `TRAVEL:AXIS`.
+
+Teste sintético dos módulos de infraestrutura: `lua tests/test_dribble_io_v035.lua`. Teste sintético do movimento: `lua tests/test_dribble_approach_v035.lua`. Ambos exigem interpretador Lua instalado e não substituem a regressão no BizHawk. A organização mantém sondas históricas em `lua/` para rastreabilidade, em vez de excluí-las ou incorporá-las prematuramente ao runner.
