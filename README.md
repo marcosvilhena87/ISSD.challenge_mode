@@ -133,3 +133,7 @@ Run `dribble_bot_v0328.lua` alone in BizHawk. Records five per-flag segment dura
 ## DRIBBLE Goal Counter Validation v2
 
 Passive BizHawk observer `goal_counter_validation_v2.lua` tests the experimental goal count at `WRAM 0x0DA2` with explicit START/STOP sessions, visual operator markers and negative controls. **Correlation is not yet an automatic goal confirmation**. See [protocol](docs/GOAL_COUNTER_VALIDATION_V2.md).
+
+## DRIBBLE Goal Counter Validation v3 — Negative Controls & Goal Evidence
+
+Passive observer `goal_counter_validation_v3.lua` tracks WRAM `0x0DA2` u16 with per-session START/STOP baselines, explicit negative controls, byte consistency, resets, and correlated positive evidence. This **does not automatically verify goals or scores**. See [validation protocol](docs/GOAL_COUNTER_VALIDATION_V3.md).
