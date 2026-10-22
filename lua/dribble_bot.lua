@@ -370,7 +370,12 @@ while true do
     actual_line=line_state.line
     break
    end
-   line_state=line_state.base
+   -- dribble_goal_v03 keeps the waypoint state in .flag, not .base.
+   if type(line_state.flag)=="table" then
+    line_state=line_state.flag
+   else
+    line_state=line_state.base
+   end
   end
   local sl=Straight.observe(attempt.straight,s,reason,buttons,actual_line)
   if sl and s.frame%15==0 then
