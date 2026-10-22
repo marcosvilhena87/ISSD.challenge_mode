@@ -2,11 +2,11 @@
 -- Only the operator can CONFIRM_GOAL; post-game state is not proof of success.
 local function exists(p) local f=io.open(p,"rb");if f then f:close();return true end return false end
 local root
-for _,p in ipairs({".","..","Lua/SNES/ISSD.challenge_mode","SNES/ISSD.challenge_mode","C:/Minha_Pasta/Jogos/BizHawk-2.11.1-win-x64/Lua/SNES/ISSD.challenge_mode"}) do if exists(p.."/lua/challenge/dribble_goal_v0326.lua") then root=p;break end end
-assert(root,"repository root not found: expected lua/challenge/dribble_goal_v0326.lua. Check working directory and git pull.")
+for _,p in ipairs({".","..","Lua/SNES/ISSD.challenge_mode","SNES/ISSD.challenge_mode","C:/Minha_Pasta/Jogos/BizHawk-2.11.1-win-x64/Lua/SNES/ISSD.challenge_mode"}) do if exists(p.."/lua/challenge/dribble_goal_v0325.lua") then root=p;break end end
+assert(root,"repository root not found: expected lua/challenge/dribble_goal_v0325.lua. Check working directory and git pull.")
 package.path=root.."/lua/?.lua;"..root.."/lua/?/init.lua;"..package.path
-package.loaded["challenge.dribble_goal_v0326"]=nil
-local P=require("challenge.dribble_goal_v0326")
+package.loaded["challenge.dribble_goal_v0325"]=nil
+local P=require("challenge.dribble_goal_v0325")
 assert(memory and memory.read_u8 and memory.read_u16_le and memory.read_s16_le and emu and emu.frameadvance and emu.framecount and joypad and joypad.set,"BizHawk API missing")
 local session=os.date("!%Y%m%dT%H%M%SZ")
 local command=root.."/dribble_bot_commands_v0326.txt"
