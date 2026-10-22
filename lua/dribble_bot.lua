@@ -57,6 +57,7 @@ local Commands=require("challenge.dribble_commands_v035")
 local ResultDetector=require("challenge.dribble_result_detector")
 local Dash=require("challenge.dribble_dash_v3")
 local RouteV1=require("challenge.dribble_route_optimization_v1")
+local ZoneV2=require("challenge.dribble_collection_zone_v2")
 local Straight=require("challenge.dribble_direct_line_calibration_v2")
 local result_observer=ResultDetector.new()
 -- Compact is the default: two canonical files + one multiplexed diagnostics CSV.
@@ -130,6 +131,7 @@ end
 print("[ISSD.dribble_bot] CSV mode="..output_mode..
  (output_mode=="COMPACT" and " (summary, observer, diagnostics v2; trace disabled)" or " (legacy full reports)"))
 
+setup(csv_dir.."/dribble_collection_zone_v2.csv","session,frame,flag,event,pre_frame,pre_x,pre_y,post_x,post_y,pre_distance,post_distance,sample_frame,sample_x,sample_y,classification")
 setup(csv_dir.."/dribble_route_optimization_v1.csv","session,flag,event,mode,frame,travel_distance,elapsed_frames,samples,collection_x,collection_y")
 setup(csv_dir.."/dribble_direct_line_calibration_v2.csv","session,frame,flag,event,cross_track_error,signed_error,progress,diagonal,correcting,frames,max_error,avg_error,corrections,diagonal_frames,axis_frames,outside_segment_frames,closest_error")
 setup(csv_dir.."/dribble_dash_calibration_v3.csv","session,frame,flag,event,distance_to_waypoint,brake_distance,closing_speed,reason,dash_frames,starts,stops,off_cause,ball_gap,minimum_distance,frames_since_last_off")
@@ -315,7 +317,7 @@ local function command_handle(cmd)
   W.approach_profile=selected_approach
   W.travel_profile=selected_travel
   state=P.new();armed=true;pending=false;grace_exit=nil
-  local s=snapshot();attempt={dash=Dash.new(),straight=Straight.new(),route_v1=RouteV1.new(),route_mode=route_mode,id=session.."_"..tostring(s.frame),started=s.frame,profile=selected_profile,time_start=s.time,last=s,last_remaining=s.remaining,last_flag_frame=s.frame,flags_seen=0,active=Start.new(s),route=Benchmark.new(s.frame),goal=Goal.new(s),confirmed=false,score=nil,final=false,approach_profile=selected_approach,travel_profile=selected_travel,
+  local s=snapshot();attempt={dash=Dash.new(),straight=Straight.new(),route_v1=RouteV1.new(),zone_v2=ZoneV2.new(),route_mode=route_mode,id=session.."_"..tostring(s.frame),started=s.frame,profile=selected_profile,time_start=s.time,last=s,last_remaining=s.remaining,last_flag_frame=s.frame,flags_seen=0,active=Start.new(s),route=Benchmark.new(s.frame),goal=Goal.new(s),confirmed=false,score=nil,final=false,approach_profile=selected_approach,travel_profile=selected_travel,
    proximity={{},{},{},{},{}},proximity_written=false}
   for i=1,5 do attempt.proximity[i]={observed=0,near24=0,near12=0,
    precision=0,search=0,recover=0,precision_idle=0,collected=false} end
@@ -344,6 +346,26 @@ while true do
   if attempt.active.complete then flush_start(attempt,s.frame,attempt.active.final_reason) end
   buttons,state,reason=P.step(s,state)
   RouteV1.observe(attempt.route_v1,s)
+  -- Passive collection-zone discovery: no button-policy or waypoint changes.
+  local zone_events=ZoneV2.observe(attempt.zone_v2,s,W.waypoints)
+  for _,ze in ipairs(zone_events) do
+   if ze.kind=="collection_transition" then
+    local c=ze.record
+    write(csv_dir.."/dribble_collection_zone_v2.csv",
+     {attempt.id,c.frame,c.flag,"collection_transition",c.pre_frame,c.pre_x,c.pre_y,
+      c.post_x,c.post_y,c.pre_distance,c.post_distance,nil,nil,nil,"observed_transition"},15)
+    for _,p in ipairs(c.window) do
+     write(csv_dir.."/dribble_collection_zone_v2.csv",
+      {attempt.id,c.frame,c.flag,"pre_window",c.pre_frame,c.pre_x,c.pre_y,
+       c.post_x,c.post_y,c.pre_distance,c.post_distance,p.frame,p.x,p.y,
+       "historical_position_not_collection_boundary"},15)
+    end
+   elseif ze.kind=="near_without_transition" then
+    write(csv_dir.."/dribble_collection_zone_v2.csv",
+     {attempt.id,ze.frame,ze.flag,"near_without_transition",nil,ze.x,ze.y,
+      nil,nil,ze.distance,nil,nil,nil,nil,"negative_observation"},15)
+   end
+  end
   if s.remaining and s.remaining>=1 and s.remaining<=5 then
    local i=6-s.remaining
    local q=attempt.proximity[i]
