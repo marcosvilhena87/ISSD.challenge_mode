@@ -143,3 +143,7 @@ goal_counter_sessions_v2.csv
 goal_counter_events_v3.txt
 goal_counter_validation_v3.csv
 goal_counter_sessions_v3.csv
+
+goal_evidence_events_v4.txt
+goal_evidence_trace_v4.csv
+goal_evidence_sessions_v4.csv
