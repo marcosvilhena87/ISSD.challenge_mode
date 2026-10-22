@@ -85,6 +85,17 @@ local command_reader=Commands.new(command,function(msg)
 end)
 local armed=false;local attempt=nil;local state=P.new();local pending=false;local grace_exit=nil
 -- Independent read-only observer. Never changes buttons, armed, attempt or outcome.
+local function release() joypad.set({},1) end
+local function read(fn,a) local ok,v=pcall(fn,a,"WRAM");if ok then return v end end
+local function bcd(b) if type(b)~="number" then return nil end;local lo=b%16;local hi=math.floor(b/16);if lo>9 or hi>9 then return nil end;return hi*10+lo end
+local function fields(s)
+ s.time=bcd(read(memory.read_u8,0x014F0));s.bonus=bcd(read(memory.read_u8,0x014F4))
+ s.timefrac=read(memory.read_u16_le,0x014F2);s.bonusfrac=read(memory.read_u16_le,0x014F6)
+end
+local function snapshot()
+ local s={frame=emu.framecount(),gs=read(memory.read_u16_le,0x00BA),ptr=read(memory.read_u16_le,0x1ACC),remaining=read(memory.read_u8,0x006B4),poss=read(memory.read_u16_le,0x00A6),px=read(memory.read_s16_le,0x0F2A),py=read(memory.read_s16_le,0x0F2C),bx=read(memory.read_s16_le,0x042A),by=read(memory.read_s16_le,0x042C)}
+ fields(s);s.goal=read(memory.read_u16_le,0x0DA2);s.lo=read(memory.read_u8,0x0DA2);s.hi=read(memory.read_u8,0x0DA3);return s
+end
 local function result_snapshot(s)
  s=s or snapshot()
  local function rbyte(a) return read(memory.read_u8,a) end
@@ -93,7 +104,9 @@ local function result_snapshot(s)
   time=rbyte(0x01CF3),bonus=rword(0x01CF8),total=rword(0x01CFA),copy=rword(0x0DC06)}
 end
 local function observe_result(s)
- local ok,events=pcall(ResultDetector.step,result_observer,result_snapshot(s))
+ local ok,events=pcall(function()
+  return ResultDetector.step(result_observer,result_snapshot(s))
+ end)
  if not ok then
   print("[ISSD.dribble_bot] result observer error: "..tostring(events))
   return
@@ -108,17 +121,6 @@ local function observe_result(s)
     a and a.copy_confirmed_frame,e.extra and e.extra.verdict,
     e.extra and e.extra.reason,"hypothesis_only"},18)
  end
-end
-local function release() joypad.set({},1) end
-local function read(fn,a) local ok,v=pcall(fn,a,"WRAM");if ok then return v end end
-local function bcd(b) if type(b)~="number" then return nil end;local lo=b%16;local hi=math.floor(b/16);if lo>9 or hi>9 then return nil end;return hi*10+lo end
-local function fields(s)
- s.time=bcd(read(memory.read_u8,0x014F0));s.bonus=bcd(read(memory.read_u8,0x014F4))
- s.timefrac=read(memory.read_u16_le,0x014F2);s.bonusfrac=read(memory.read_u16_le,0x014F6)
-end
-local function snapshot()
- local s={frame=emu.framecount(),gs=read(memory.read_u16_le,0x00BA),ptr=read(memory.read_u16_le,0x1ACC),remaining=read(memory.read_u8,0x006B4),poss=read(memory.read_u16_le,0x00A6),px=read(memory.read_s16_le,0x0F2A),py=read(memory.read_s16_le,0x0F2C),bx=read(memory.read_s16_le,0x042A),by=read(memory.read_s16_le,0x042C)}
- fields(s);s.goal=read(memory.read_u16_le,0x0DA2);s.lo=read(memory.read_u8,0x0DA2);s.hi=read(memory.read_u8,0x0DA3);return s
 end
 local function flush_start(a,frame,reason)
  if not a or a.active_written then return end
