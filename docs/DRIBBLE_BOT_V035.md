@@ -41,3 +41,16 @@ Import-Csv .\dribble_profile_audit_v035.csv | Select-Object -Last 4 | Format-Tab
 ```
 
 Expect `arm_applied` with `applied_profile=FLAG1_X_MINUS_4` and `wp1_x=551`; use `CONTROL` to restore `wp1_x=555`. The target route optimization report should match the applied profile. If they disagree, **do not compare performance** until the discrepancy is resolved.
+
+## Flag 2 target experiment (760,325)
+
+Profile `FLAG2_760_325` moves only the second waypoint from `(772,304)` to `(760,325)` (delta X -12, Y +21); `CONTROL` remains unchanged. Restart the Lua runner after pulling the update so the module loads new profiles. With runner active, send commands in sequence:
+
+```powershell
+Add-Content .\dribble_bot_commands_v035.txt 'PROFILE:FLAG2_760_325'
+Import-Csv .\dribble_profile_audit_v035.csv | Select-Object -Last 1 | Format-List
+# Check profile_queued, then:
+Add-Content .\dribble_bot_commands_v035.txt 'ARM'
+```
+
+The Lua Console ARMED line now prints `wp2=(760,325)` when the profile is applied. Confirm `arm_applied` reports `FLAG2_760_325`. Then consult `dribble_route_experiments_v035.csv` and `dribble_route_optimization_v035.csv` to compare the second segment with its historical 244-frame reference. Changes are experimental, no efficiency claim yet.
