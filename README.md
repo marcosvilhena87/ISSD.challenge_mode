@@ -85,3 +85,7 @@ Run the read-only `dribble_timer_validation_v1.lua` to record per-frame u8/u16/u
 ## DRIBBLE Timer Decoder v1
 
 Run `lua decode_dribble_timers_v1.lua` on `dribble_timer_validation_v1.csv` to interpret experimental `0x014F0` (TIME) and `0x014F4` (BONUS TIME) seconds as packed BCD, and export the raw fractional u16 registers without presuming a scale. Produces `dribble_timer_decoded_v1.csv` and `dribble_timer_decoder_summary_v1.csv`. [Protocol](docs/DRIBBLE_TIMER_DECODER_V1.md). These addresses are not canonical until checked against HUD frames.
+
+## DRIBBLE Bot v0.3 — Goal Completion (experimental)
+
+Run `dribble_bot_v03.lua` alone in BizHawk, using `dribble_bot_commands_v03.txt` for ARM/STOP. Preserves v0.2.2 five-flag policy and transitions to an experimental goal approach and B charge/release instead of stopping at five flags. Logs `dribble_bot_trace_v03.csv` with phases and frames. **Goal target / shooting behavior uncalibrated; gameplay exit is NOT verified success.** [Protocol](docs/DRIBBLE_BOT_V03.md).
