@@ -109,3 +109,7 @@ Run `dribble_bot_v0322.lua` in BizHawk, arm via `dribble_bot_commands_v0322.txt`
 ## DRIBBLE Bot v0.3.2.3 — Delayed Movement Detection
 
 Run `dribble_bot_v0323.lua` in BizHawk. After failed escape probes, the bot observes player and ball movements separately for up to 18 frames before retrying or stopping. Trace has a corrected 20-column header and records delayed-response diagnostics. See [docs/DRIBBLE_BOT_V0323.md](docs/DRIBBLE_BOT_V0323.md). Confirmation remains operator-driven.
+
+## DRIBBLE Bot v0.3.2.4 — Initial Movement Calibration
+
+Use `dribble_bot_v0324.lua` alone in BizHawk with `dribble_bot_commands_v0324.txt` ARM/STOP. A passive 90-frame startup calibration logs first player/ball movement and possession changes in `dribble_initial_calibration_v0324.csv`; this postpones premature initial stuck detection without changing waypoint or goal inputs. [Protocol](docs/DRIBBLE_BOT_V0324.md). Not yet validated in the emulator.
