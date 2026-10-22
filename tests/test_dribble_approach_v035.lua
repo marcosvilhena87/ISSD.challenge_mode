@@ -42,4 +42,19 @@ assert(O.apply(O.DEFAULT_PROFILE))
 assert(W.waypoints[2][1]==760 and W.waypoints[2][2]==330)
 assert(W.waypoints[5][1]==1460 and W.waypoints[5][2]==360)
 W.approach_profile="CONTINUOUS_PRECISION"
+-- The travel profile only affects the far-field waypoint leg.
+local origin={frame=100,gs=0,ptr=0x0F00,remaining=4,px=600,py=280,bx=600,by=280,poss=0x0F00}
+W.travel_profile="AXIS"
+local ba,sta,ra=W.step(origin,W.new())
+W.travel_profile="DIRECT_LINE"
+local bd,std,rd=W.step(origin,W.new())
+assert(ra=="waypoint" and rd=="waypoint")
+assert(ba.Right and bd.Right)
+assert(std.line and std.line.tx==760 and std.line.ty==330)
+-- Recovery bypasses direct-line steering and clears line state.
+local lost={frame=101,gs=0,ptr=0x0F00,remaining=4,px=600,py=280,bx=650,by=300,poss=0}
+local recover_buttons,_,recover_reason=W.step(lost,std)
+assert(recover_reason=="recover_ball" and recover_buttons.Right)
+assert(std.line==nil,"recovery must reset direct-line segment")
+W.travel_profile="AXIS"
 print("PASS: reversible approach, recovery invariant, waypoint restore")
