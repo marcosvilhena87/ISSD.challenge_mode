@@ -101,3 +101,7 @@ Run `dribble_bot_v032.lua` with `ARM`/`STOP` via `dribble_bot_commands_v032.txt`
 ## DRIBBLE Bot v0.3.2.1 — Stuck Recovery Fix
 
 Run `dribble_bot_v0321.lua` alone in BizHawk; send `ARM`/`STOP` to `dribble_bot_commands_v0321.txt`. This version preserves flag waypoints and goal control, adds at most two 24-frame directional recovery probes for flag-phase stalls, and records recovery events to `dribble_bot_trace_v0321.csv`. See [docs/DRIBBLE_BOT_V0321.md](docs/DRIBBLE_BOT_V0321.md). Goal and score confirmation remains operator-driven via `confirm_dribble_score_v032.py --summary dribble_bot_summary_v0321.csv`.
+
+## DRIBBLE Bot v0.3.2.2 — Recovery Diagnostics & Optimization
+
+Run `dribble_bot_v0322.lua` in BizHawk, arm via `dribble_bot_commands_v0322.txt`. Adaptive bounded recovery uses at most two 12-frame probes with per-frame diagnostics in `dribble_bot_trace_v0322.csv`, preserving the existing five waypoints and goal policy. [Protocol and score confirmation](docs/DRIBBLE_BOT_V0322.md). Experimental until ROM validation.
