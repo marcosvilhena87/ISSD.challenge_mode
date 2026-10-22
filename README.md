@@ -1,3 +1,9 @@
+## DRIBBLE — runtime canonico
+
+O ponto de entrada unico do BizHawk e `main.lua`, que seleciona `MONITOR`, `DRIBBLE` ou `SCORE_PROBE` usando `challenge_mode.txt`. O modo DRIBBLE executa exclusivamente `lua/dribble_bot.lua`, consolidado a partir do ultimo runner v0.3.5. As versoes historicas `dribble_bot_v*.lua` foram retiradas da arvore ativa; continuam recuperaveis no historico Git. Os modulos reutilizaveis em `lua/challenge/` permanecem separados e versionados quando pertinente. Nao execute mais de um controlador no BizHawk. Os relatórios CSV vao para `csv/` e os arquivos de comando continuam na raiz.
+
+O numero de versao do comportamento do bot segue v0.3.5; a mudanca e estrutural, sem alteracao intencional na politica de jogo. Testes sintéticos nao substituem testes reais no BizHawk. Revisar documentos `docs/DRIBBLE_BOT_V*.md` como registros historicos, nao como instrucoes atuais de carregamento.
+
 ## SCORE_PROBE v1 — descoberta observacional do placar DRIBBLE LV.1
 
 Experimento de leitura de WRAM, sem controlar o jogador e sem declarar enderecos validados. Configure `challenge_mode.txt` como `SCORE_PROBE` e inicie `main.lua`. O arquivo `score_probe_commands_v1.txt` fica na raiz; os candidatos sao gravados em `csv/score_candidates_v1.csv`.
@@ -17,7 +23,7 @@ Exemplo: `Import-Csv .\csv\dribble_bot_summary_v035.csv`.
 Carregue **somente `main.lua`** no Lua Console do BizHawk para iniciar o modo desejado. A seleção acontece na inicialização, lendo o arquivo `challenge_mode.txt` na raiz do repositório:
 
 - Sem arquivo, ou com `MONITOR`: inicia o reconhecedor contextual original (modo padrão).
-- Com `DRIBBLE`: inicia o bot `lua/dribble_bot_v035.lua`, com o mesmo diretório raiz e caminho de módulos definidos em `main.lua`.
+- Com `DRIBBLE`: inicia o bot canônico `lua/dribble_bot.lua`, com o mesmo diretório raiz e caminho de módulos definidos em `main.lua`.
 
 No PowerShell, a partir da raiz do repositório:
 
@@ -187,15 +193,15 @@ Run `lua/dribble_bot_v034.lua` for contextual goal counter evidence, integrated 
 
 ## DRIBBLE Bot v0.3.5 — Route Optimization Benchmark
 
-`lua/dribble_bot_v035.lua` introduces reversible, isolated four-unit waypoint experiments (default `CONTROL`) with `dribble_route_optimization_v035.csv` and `dribble_route_experiments_v035.csv`. The goal and shot logic remain unchanged; no route improvement is asserted without emulator evidence. [Protocol](docs/DRIBBLE_BOT_V035.md).
+`lua/dribble_bot.lua` introduces reversible, isolated four-unit waypoint experiments (default `CONTROL`) with `dribble_route_optimization_v035.csv` and `dribble_route_experiments_v035.csv`. The goal and shot logic remain unchanged; no route improvement is asserted without emulator evidence. [Protocol](docs/DRIBBLE_BOT_V035.md).
 
 ## Organizacao dos scripts Lua
 
-`main.lua` continua na raiz e e o ponto de entrada do monitor de Challenge Mode. Os antigos scripts Lua da raiz foram movidos para `lua/`, preservando seus nomes e conteudo. Os modulos do jogo permanecem em `lua/challenge/` e os testes em `tests/`. Para executar o bot de drible pelo Lua Console use `lua/dribble_bot_v035.lua`; execute outros probes diretamente de `lua/`. O diretorio de trabalho do BizHawk deve continuar na raiz do repositorio, onde comandos e CSVs sao lidos/gerados.
+`main.lua` continua na raiz e e o ponto de entrada do monitor de Challenge Mode. Os antigos scripts Lua da raiz foram movidos para `lua/`, preservando seus nomes e conteudo. Os modulos do jogo permanecem em `lua/challenge/` e os testes em `tests/`. Para executar o bot de drible pelo Lua Console use `lua/dribble_bot.lua`; execute outros probes diretamente de `lua/`. O diretorio de trabalho do BizHawk deve continuar na raiz do repositorio, onde comandos e CSVs sao lidos/gerados.
 
 ## Modularizacao incremental do DRIBBLE v0.3.5
 
-O arquivo `lua/dribble_bot_v035.lua` continua sendo o ponto de entrada para o bot de drible. Infraestrutura reutilizável foi extraída sem alterar as regras de controle:
+O arquivo `lua/dribble_bot.lua` continua sendo o ponto de entrada para o bot de drible. Infraestrutura reutilizável foi extraída sem alterar as regras de controle:
 
 - `lua/challenge/dribble_csv_v035.lua`: inicializacao de cabeçalhos, backups seguros e escrita de linhas, preservando os mesmos formatos CSV.
 - `lua/challenge/dribble_commands_v035.lua`: leitura incremental do arquivo `dribble_bot_commands_v035.txt`, ignorando linhas antigas no inicio e aguardando novas linhas completas.
