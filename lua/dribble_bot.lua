@@ -151,7 +151,7 @@ setup(csv_dir.."/dribble_travel_profile_v035.csv","session,route_profile,approac
 setup(csv_dir.."/dribble_approach_proximity_v035.csv","session,route_profile,approach_profile,flag_number,observed_frames,near24_frames,near12_frames,precision_frames,local_search_frames,recover_ball_frames,precision_idle_frames,complete")
 local W=require("challenge.dribble_waypoints_v022")
 local approach_names={CONTROL=true,CONTINUOUS_PRECISION=true}
-local selected_travel="AXIS"
+local selected_travel="DIRECT_LINE"
 local requested_travel=nil
 local selected_approach="CONTINUOUS_PRECISION"
 local requested_approach=nil
@@ -300,6 +300,7 @@ local function command_handle(cmd)
   if requested_travel then selected_travel=requested_travel;requested_travel=nil end
   assert(Optimization.apply(selected_profile))
   W.approach_profile=selected_approach
+  W.travel_profile=selected_travel
   state=P.new();armed=true;pending=false;grace_exit=nil
   local s=snapshot();attempt={dash=Dash.new(),id=session.."_"..tostring(s.frame),started=s.frame,profile=selected_profile,time_start=s.time,last=s,last_remaining=s.remaining,last_flag_frame=s.frame,flags_seen=0,active=Start.new(s),route=Benchmark.new(s.frame),goal=Goal.new(s),confirmed=false,score=nil,final=false,approach_profile=selected_approach,travel_profile=selected_travel,
    proximity={{},{},{},{},{}},proximity_written=false}
@@ -354,7 +355,10 @@ while true do
   if ge then log_goal(attempt,s,ge) end
   -- Dash only during safe far-field waypoint travel; never in shot/recovery.
   local dash_events
-  buttons,_,dash_events=Dash.step(attempt.dash,buttons,s,reason,W.waypoints)
+  -- Dash temporarily disabled during DIRECT_LINE calibration.
+  -- Keep Y explicitly absent regardless of previous output.
+  buttons.Y=nil
+  dash_events={}
   for _,de in ipairs(dash_events) do
    local flag=de.flag
    write(csv_dir.."/dribble_dash_calibration_v3.csv",

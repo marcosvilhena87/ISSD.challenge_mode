@@ -2,7 +2,7 @@
 local M={}
 M.waypoints={{555,261},{760,330},{974,356},{1228,293},{1460,360}}
 M.TIME_LIMIT=1800
-M.travel_profile="AXIS" -- DIRECT_LINE is experimental; approach policy independent
+M.travel_profile="DIRECT_LINE" -- experimental straight path; AXIS remains available
 M.approach_profile="CONTINUOUS_PRECISION" -- default; reversible via APPROACH:CONTROL
 local function int(x) return type(x)=="number" and x==x and x%1==0 end
 function M.new() return {started=nil,last_remaining=nil,target=1,near_since=nil,search_step=0,search_since=nil,motion_frame=nil,motion_x=nil,motion_y=nil,moving_frames=0,grace_until=nil,event=nil,line=nil} end
