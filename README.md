@@ -1,3 +1,24 @@
+## Inicialização centralizada em main.lua
+
+Carregue **somente `main.lua`** no Lua Console do BizHawk para iniciar o modo desejado. A seleção acontece na inicialização, lendo o arquivo `challenge_mode.txt` na raiz do repositório:
+
+- Sem arquivo, ou com `MONITOR`: inicia o reconhecedor contextual original (modo padrão).
+- Com `DRIBBLE`: inicia o bot `lua/dribble_bot_v035.lua`, com o mesmo diretório raiz e caminho de módulos definidos em `main.lua`.
+
+No PowerShell, a partir da raiz do repositório:
+
+```powershell
+Set-Content .\challenge_mode.txt 'DRIBBLE'
+```
+
+Reinicie `main.lua` no BizHawk, depois envie `ARM` em `dribble_bot_commands_v035.txt`. Para voltar ao monitor:
+
+```powershell
+Set-Content .\challenge_mode.txt 'MONITOR'
+```
+
+Reinicie `main.lua` novamente: a escolha de modo **não muda durante uma execução**. Arquivos com valores desconhecidos geram erro explícito, em vez de iniciar um bot inesperado. A carga direta do bot antigo continua suportada apenas por compatibilidade. Os caminhos e formatos dos CSVs permanecem na raiz, sem mudanças. A prova de não-regressão do bot continua exigindo teste no BizHawk (5 bandeiras e rota de referência de 667 frames).
+
 # ISSD.challenge_mode
 
 Projeto reiniciado do zero em 21/10/2026. **v0.4 experimental**, BizHawk + Lua, International Superstar Soccer Deluxe (SNES).
