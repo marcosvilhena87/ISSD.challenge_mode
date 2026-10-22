@@ -1,3 +1,11 @@
+## SCORE_PROBE v1 — descoberta observacional do placar DRIBBLE LV.1
+
+Experimento de leitura de WRAM, sem controlar o jogador e sem declarar enderecos validados. Configure `challenge_mode.txt` como `SCORE_PROBE` e inicie `main.lua`. O arquivo `score_probe_commands_v1.txt` fica na raiz; os candidatos sao gravados em `csv/score_candidates_v1.csv`.
+
+Na tela YOUR RECORD de cada caso, acrescente uma linha via PowerShell (`Add-Content .\\score_probe_commands_v1.txt "BOTH" -Encoding ASCII`, substituindo por `TIME_ONLY` e `ZERO` quando apropriado). Valores de referencia dos exemplos visuais: BOTH 183/268, TIME_ONLY 213/0, ZERO 0/0. A captura nao depende da ordem. Ao concluir as tres capturas, acrescente `EXPORT`; o algoritmo procura valores exatos e padroes positivos/zero, incluindo bytes BCD e words, e marca tudo como `hypothesis_only`. Nao execute SCORE_PROBE e o bot controlador simultaneamente. Se o jogo retornar ao menu ou mudar de tela antes do comando, refaca a sessao.
+
+Os exemplos sao do placar final e podem variar em novas tentativas. Para testar valores diferentes, atualize as referencias do experimento antes de interpretar correspondencias exatas. A correlacao de tres capturas so gera candidatos: validar requer novas execucoes com pontuacoes diferentes e controles negativos.
+
 ## Saidas CSV (modos ativos)
 
 Os modos MONITOR e DRIBBLE v0.3.5 gravam CSVs em `csv/`. Arquivos `.txt` de comandos continuam na raiz. Relatorios antigos na raiz nao sao movidos automaticamente; scripts Lua historicos independentes mantem seus comportamentos.
