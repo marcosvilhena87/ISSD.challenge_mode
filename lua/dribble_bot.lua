@@ -45,8 +45,11 @@ local trace=csv_dir.."/dribble_bot_trace_v035.csv"
 local summary=csv_dir.."/dribble_bot_summary_v035.csv"
 local CSV=require("challenge.dribble_csv_v035")
 local Commands=require("challenge.dribble_commands_v035")
+local ResultDetector=require("challenge.dribble_result_detector")
+local result_observer=ResultDetector.new()
 local setup=CSV.setup
 local write=CSV.write
+setup(csv_dir.."/dribble_result_observer_v1.csv","session,detector_trial,frame,event,gameplay,remaining,time_score,bonus_score,total_score,copy_total,start_frame,exit_frame,early_frame,early_verdict,copy_match_frame,final_verdict,finish_reason,status")
 setup(trace,"session,frame,armed,phase,event,reason,gs,ptr,remaining,poss,player_x,player_y,ball_x,ball_y,buttons,time_bcd,bonus_bcd,time_frac_u16,bonus_frac_u16,recovery_diagnostics")
 setup(summary,"session,started_frame,flags_frame,shot_frame,exit_frame,flags_elapsed_frames,goal_elapsed_frames,total_elapsed_frames,flags_remaining,time_start_bcd,time_at_fifth_bcd,bonus_at_fifth_bcd,time_at_exit_bcd,bonus_at_exit_bcd,shot_attempts,exit_reason,outcome,evidence,record_score")
 setup(csv_dir.."/dribble_initial_calibration_v035.csv","session,start_frame,end_frame,first_player_frame,first_ball_frame,first_possession_change_frame,classification,finish_reason")
@@ -81,6 +84,31 @@ local command_reader=Commands.new(command,function(msg)
  print("[ISSD.dribble_bot] "..msg.." frame="..emu.framecount())
 end)
 local armed=false;local attempt=nil;local state=P.new();local pending=false;local grace_exit=nil
+-- Independent read-only observer. Never changes buttons, armed, attempt or outcome.
+local function result_snapshot(s)
+ s=s or snapshot()
+ local function rbyte(a) return read(memory.read_u8,a) end
+ local function rword(a) return read(memory.read_u16_le,a) end
+ return {frame=s.frame,gameplay=s.gs==0 and s.ptr==0x0F00,remaining=s.remaining,
+  time=rbyte(0x01CF3),bonus=rword(0x01CF8),total=rword(0x01CFA),copy=rword(0x0DC06)}
+end
+local function observe_result(s)
+ local ok,events=pcall(ResultDetector.step,result_observer,result_snapshot(s))
+ if not ok then
+  print("[ISSD.dribble_bot] result observer error: "..tostring(events))
+  return
+ end
+ for _,e in ipairs(events) do
+  local a=e.trial
+  local p=a and a.preliminary
+  write(csv_dir.."/dribble_result_observer_v1.csv",
+   {session,e.id or "",e.frame,e.type,e.sample.gameplay and 1 or 0,
+    e.sample.remaining,e.sample.time,e.sample.bonus,e.sample.total,e.sample.copy,
+    a and a.start,a and a.exited,p and p.frame,p and p.verdict,
+    a and a.copy_confirmed_frame,e.extra and e.extra.verdict,
+    e.extra and e.extra.reason,"hypothesis_only"},18)
+ end
+end
 local function release() joypad.set({},1) end
 local function read(fn,a) local ok,v=pcall(fn,a,"WRAM");if ok then return v end end
 local function bcd(b) if type(b)~="number" then return nil end;local lo=b%16;local hi=math.floor(b/16);if lo>9 or hi>9 then return nil end;return hi*10+lo end
@@ -210,7 +238,7 @@ while true do
   command_handle(line)
  end)
  if armed then
-  local s=snapshot();local buttons;local reason
+  local s=snapshot();observe_result(s);local buttons;local reason
   Start.observe(attempt.active,s)
   if attempt.active.complete then flush_start(attempt,s.frame,attempt.active.final_reason) end
   buttons,state,reason=P.step(s,state)
@@ -283,7 +311,12 @@ while true do
    attempt.sync_written=true
   end
   if state.event~="" then print("[ISSD.dribble_bot] "..state.event.." frame="..s.frame) end
- elseif pending and grace_exit and emu.framecount()>=grace_exit then end_attempt()
- else release() end
+ elseif pending and grace_exit and emu.framecount()>=grace_exit then
+  observe_result()
+  end_attempt()
+ else
+  observe_result()
+  release()
+ end
  emu.frameadvance()
 end

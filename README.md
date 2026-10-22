@@ -1,3 +1,7 @@
+## DRIBBLE Result Detector — integracao observacional
+
+O modo DRIBBLE agora envia os snapshots a `challenge.dribble_result_detector` todos os frames, inclusive enquanto o controlador esta desarmado ou aguardando finalizacao. O detector le separadamente 0x01CF3 (time), 0x01CF8 (bonus), 0x01CFA (total) e 0x0DC06 (copia), sem afetar `P.step`, `joypad.set`, comandos, rota, classificacao de gol ou a maquina principal. O CSV `csv/dribble_result_observer_v1.csv` identifica apenas evidencias `hypothesis_only`. Nao ha conclusao automatica de gol ou sincronizacao obrigatoria da copia. Valide os logs no BizHawk; teste unitario ja existente em `tests/test_dribble_result_detector.lua`.
+
 ## Reusable DRIBBLE Result Detector (pure module)
 
 `lua/challenge/dribble_result_detector.lua` contains the passive detection state machine without BizHawk APIs, I/O, or controller inputs. Call `local D=require("challenge.dribble_result_detector")`, `local state=D.new()`, and `local events=D.step(state,snapshot)` once per frame. Snapshot requires `frame`, `gameplay` (boolean), `remaining`, `time`, `bonus`, `total`, `copy`. Events: gameplay_start_candidate, fifth_flag_candidate, gameplay_exit_candidate, primary_change, early_result_candidate, early_candidate_superseded, late_copy_correlated, trial_closed. The sonda `lua/score_probe.lua` owns WRAM reads and CSV files. The actual bot is unchanged. Context and scoreboard addresses are experimental; never treat a detected candidate as definitive goal confirmation. Synthetic unit tests: `lua tests/test_dribble_result_detector.lua`.
