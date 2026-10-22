@@ -29,35 +29,10 @@ local session=os.date("!%Y%m%dT%H%M%SZ")
 local command=root.."/dribble_bot_commands_v035.txt"
 local trace=root.."/dribble_bot_trace_v035.csv"
 local summary=root.."/dribble_bot_summary_v035.csv"
-local function csv_columns(line)
- local _,commas=line:gsub(",","")
- return commas+1
-end
-local function setup(path,header)
- local f=io.open(path,"rb")
- if not f then
-  local created=assert(io.open(path,"wb"));created:write(header.."\n");created:close()
-  return
- end
- local raw=assert(f:read("*a"));f:close()
- local first=raw:match("([^\n]*)") or ""
- first=first:gsub("^\239\187\191",""):gsub("\r$","")
- if first==header then return end
- -- Only repair a headerless file if the first row looks structurally like data.
- -- Never overwrite the original without a complete backup.
- assert(first=="" or
-  (csv_columns(first)==csv_columns(header) and ((header:match("^session,") and first:match("^%d%d%d%d%d%d%d%dT%d%d%d%d%d%dZ_")) or (header:match("^frame,") and first:match("^%d+,")))),
-  "CSV needs manual review: "..path.." expected="..header.." actual="..first)
- local backup=path..".bak."..os.date("!%Y%m%dT%H%M%SZ")
- local n=0
- while io.open(backup,"rb") do n=n+1;backup=path..".bak."..os.date("!%Y%m%dT%H%M%SZ").."."..n end
- local b=assert(io.open(backup,"wb"))
- assert(b:write(raw));assert(b:close())
- local out=assert(io.open(path,"wb"))
- assert(out:write(header.."\n"..raw));assert(out:close())
- print("[ISSD.dribble_bot] CSV header restored path="..path.." backup="..backup)
-end
-
+local CSV=require("challenge.dribble_csv_v035")
+local Commands=require("challenge.dribble_commands_v035")
+local setup=CSV.setup
+local write=CSV.write
 setup(trace,"session,frame,armed,phase,event,reason,gs,ptr,remaining,poss,player_x,player_y,ball_x,ball_y,buttons,time_bcd,bonus_bcd,time_frac_u16,bonus_frac_u16,recovery_diagnostics")
 setup(summary,"session,started_frame,flags_frame,shot_frame,exit_frame,flags_elapsed_frames,goal_elapsed_frames,total_elapsed_frames,flags_remaining,time_start_bcd,time_at_fifth_bcd,bonus_at_fifth_bcd,time_at_exit_bcd,bonus_at_exit_bcd,shot_attempts,exit_reason,outcome,evidence,record_score")
 setup(root.."/dribble_initial_calibration_v035.csv","session,start_frame,end_frame,first_player_frame,first_ball_frame,first_possession_change_frame,classification,finish_reason")
@@ -88,39 +63,9 @@ local requested_profile=nil
 assert(Optimization.apply(selected_profile))
 W.approach_profile=selected_approach
 W.travel_profile=selected_travel
-local pos=0
-local initial=io.open(command,"rb")
-if initial then pos=initial:seek("end") or 0;initial:close() end
-local command_poll_count=0
-local command_bytes_seen=0
-local function poll_commands(handle)
- local cf=io.open(command,"rb")
- if not cf then return end
- local size=cf:seek("end") or 0
- if size<pos then
-  print("[ISSD.dribble_bot] command file truncated; cursor reset from "..pos.." to 0")
-  pos=0
- end
- cf:seek("set",pos)
- local chunk=cf:read("*a") or ""
- cf:close()
- if #chunk==0 then return end
- -- Advance only over newline-terminated commands, leaving incomplete writes unread.
- local last_newline=nil
- for i=#chunk,1,-1 do if chunk:sub(i,i)=="\n" then last_newline=i;break end end
- if not last_newline then return end
- local complete=chunk:sub(1,last_newline)
- pos=pos+last_newline
- command_bytes_seen=command_bytes_seen+last_newline
- for raw in complete:gmatch("([^\n]*)\n") do
-  local line=raw:gsub("^\239\187\191",""):gsub("\r$",""):match("^%s*(.-)%s*$")
-  if line~="" then
-   print("[ISSD.dribble_bot] command received="..line.." frame="..emu.framecount())
-   handle(line)
-  end
- end
-end
-
+local command_reader=Commands.new(command,function(msg)
+ print("[ISSD.dribble_bot] "..msg.." frame="..emu.framecount())
+end)
 local armed=false;local attempt=nil;local state=P.new();local pending=false;local grace_exit=nil
 local function release() joypad.set({},1) end
 local function read(fn,a) local ok,v=pcall(fn,a,"WRAM");if ok then return v end end
@@ -128,13 +73,6 @@ local function bcd(b) if type(b)~="number" then return nil end;local lo=b%16;loc
 local function fields(s)
  s.time=bcd(read(memory.read_u8,0x014F0));s.bonus=bcd(read(memory.read_u8,0x014F4))
  s.timefrac=read(memory.read_u16_le,0x014F2);s.bonusfrac=read(memory.read_u16_le,0x014F6)
-end
-local function textval(v) return v==nil and "" or tostring(v) end
-local function write(path,columns,n)
- -- Use explicit column counts: ipairs stops at the first nil value.
- local values={}
- for i=1,n do values[i]=textval(columns[i]) end
- local f=assert(io.open(path,"a"));f:write(table.concat(values,",").."\n");f:close()
 end
 local function snapshot()
  local s={frame=emu.framecount(),gs=read(memory.read_u16_le,0x00BA),ptr=read(memory.read_u16_le,0x1ACC),remaining=read(memory.read_u8,0x006B4),poss=read(memory.read_u16_le,0x00A6),px=read(memory.read_s16_le,0x0F2A),py=read(memory.read_s16_le,0x0F2C),bx=read(memory.read_s16_le,0x042A),by=read(memory.read_s16_le,0x042C)}
@@ -253,14 +191,10 @@ end
 print("[ISSD.dribble_bot] v0.3.5 DISARMED; commands="..command)
 release()
 while true do
- command_poll_count=command_poll_count+1
- poll_commands(command_handle)
- if command_poll_count%600==0 then
-  local z=io.open(command,"rb")
-  local sz=-1
-  if z then sz=z:seek("end") or -1;z:close() end
-  print("[ISSD.dribble_bot] command poll frame="..emu.framecount().." cursor="..pos.." file_bytes="..sz.." consumed="..command_bytes_seen.." pending_profile="..tostring(requested_profile))
- end
+ command_reader.poll(function(line)
+  print("[ISSD.dribble_bot] command received="..line.." frame="..emu.framecount())
+  command_handle(line)
+ end)
  if armed then
   local s=snapshot();local buttons;local reason
   Start.observe(attempt.active,s)
