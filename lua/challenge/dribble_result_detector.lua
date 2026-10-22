@@ -1,4 +1,4 @@
--- Pure reusable passive DRIBBLE result detector. No BizHawk, file, joypad or globals.
+-- Result Detector v2 - pure reusable passive DRIBBLE result detector. No BizHawk, file, joypad or globals.
 local M={}
 local function key(s)
  if type(s.time)~="number" or type(s.bonus)~="number" or type(s.total)~="number" then return "unreadable" end
@@ -37,10 +37,16 @@ function M.step(st,s)
     a.preliminary=nil;a.copy_confirmed_frame=nil
    end
   end
-  if s.gameplay and s.remaining==0 and not a.first_zero then a.first_zero=s.frame;emit("fifth_flag_candidate",a) end
-  if not s.gameplay and not a.exited then a.exited=s.frame;emit("gameplay_exit_candidate",a) end
+  if not a.exited and s.gameplay and s.remaining==0 and not a.first_zero then a.first_zero=s.frame;emit("fifth_flag_candidate",a) end
+  if not s.gameplay and not a.exited then
+   a.exited=s.frame;emit("gameplay_exit_candidate",a)
+  end
+  -- A new gameplay epoch cannot contribute flags or results to the old one.
+  local reentered=a.exited and s.gameplay
+  -- Incomplete attempts can never produce a positive result, even after WRAM resets.
+  local incomplete=a.exited and not a.first_zero
   local coherent=s.time~=nil and s.bonus~=nil and s.total~=nil and s.total==s.time+s.bonus
-  if a.exited and not a.preliminary and a.first_zero and a.main_changed_post_exit and coherent and
+  if a.exited and not reentered and not incomplete and not a.preliminary and a.first_zero and a.main_changed_post_exit and coherent and
     s.frame-a.stable_since>=st.opts.stable then
    local verdict=s.bonus>0 and "positive_bonus_candidate" or
      (s.time>0 and "time_only_candidate" or "zero_score_candidate")
@@ -53,16 +59,18 @@ function M.step(st,s)
   local reason
   if not a.exited then
    if s.frame-a.start>st.opts.max_game then reason="gameplay_timeout" end
+  elseif reentered then reason="new_game_before_resolution"
+  elseif incomplete then reason="exit_before_fifth_flag"
   elseif a.preliminary and a.copy_confirmed_frame then reason="copy_correlation_observed"
   elseif s.frame-a.exited>=st.opts.copy_wait then reason="post_exit_timeout"
-  elseif s.gameplay and st.consecutive>=st.opts.enter then reason="new_game_before_resolution" end
+  end
   if reason then
    local verdict=not a.exited and "gameplay_interrupted" or
     (not a.first_zero and "five_flags_unobserved" or
     (not a.preliminary and "no_stable_fresh_primary_result" or
     (a.copy_confirmed_frame and "copy_correlated_candidate" or "copy_unverified")))
    emit("trial_closed",a,{reason=reason,verdict=verdict})
-   st.active=nil;st.blocked=true
+   st.active=nil;st.blocked=true;st.consecutive=0
   end
  end
  if st.blocked and not s.gameplay then st.blocked=false end
