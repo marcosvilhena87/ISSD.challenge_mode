@@ -2,8 +2,12 @@
 local M={}
 local Route=require("challenge.dribble_route_optimization_v1")
 local Zone3=require("challenge.dribble_collection_zone_v3")
+local Entry7=require("challenge.dribble_entry_target_v7")
 M.segment_modes={}
 M.zone_approach=nil
+M.entry_v7=false
+M.entry_v7_event=nil
+function M.set_entry_v7(enabled) M.entry_v7=enabled==true;M.entry_v7_event=nil end
 function M.set_zone_approach(mode) M.zone_approach=mode end
 function M.set_segment_modes(modes) M.segment_modes=modes or {} end
 M.waypoints={{555,261},{760,330},{974,356},{1228,293},{1460,360}}
@@ -11,7 +15,7 @@ M.TIME_LIMIT=1800
 M.travel_profile="DIRECT_LINE" -- experimental straight path; AXIS remains available
 M.approach_profile="CONTINUOUS_PRECISION" -- default; reversible via APPROACH:CONTROL
 local function int(x) return type(x)=="number" and x==x and x%1==0 end
-function M.new() return {started=nil,last_remaining=nil,target=1,near_since=nil,search_step=0,search_since=nil,motion_frame=nil,motion_x=nil,motion_y=nil,moving_frames=0,grace_until=nil,event=nil,line=nil,zone_stage={done=false}} end
+function M.new() return {started=nil,last_remaining=nil,target=1,near_since=nil,search_step=0,search_since=nil,motion_frame=nil,motion_x=nil,motion_y=nil,moving_frames=0,grace_until=nil,event=nil,line=nil,zone_stage={done=false},entry_v7=Entry7.new()} end
 local function steer(dx,dy,frame,fine,continuous)
  local b={}
  local dead=fine and 2 or 6
@@ -36,17 +40,26 @@ function M.step(s,st)
   st.motion_frame=s.frame;st.motion_x=s.px;st.motion_y=s.py;st.moving_frames=0;st.grace_until=s.frame+60
   st.line=nil
   st.zone_stage={done=false}
+  st.entry_v7=Entry7.new()
   st.event='flag_collected'
  else
   st.event=nil
  end
  st.last_remaining=s.remaining
  local target=6-s.remaining
- if st.target~=target then st.line=nil;st.zone_stage={done=false} end
+ if st.target~=target then st.line=nil;st.zone_stage={done=false};st.entry_v7=Entry7.new() end
  st.target=target
  if s.remaining==0 then return {},st,"five_collected" end
  local wp=M.waypoints[st.target]
  if not wp then return {},st,"no_waypoint" end
+ if st.target==2 and M.entry_v7 then
+  local selected=Entry7.choose(st.entry_v7,s)
+  if st.entry_v7.event then
+   M.entry_v7_event=st.entry_v7.event
+   st.entry_v7.event=nil
+  end
+  if selected then wp=selected end
+ end
  local bx,by=s.bx-s.px,s.by-s.py
  local recover=s.poss~=0x0F00 and (math.abs(bx)>34 or math.abs(by)>34)
  local dx,dy=wp[1]-s.px,wp[2]-s.py

@@ -133,6 +133,7 @@ end
 print("[ISSD.dribble_bot] CSV mode="..output_mode..
  (output_mode=="COMPACT" and " (summary, observer, diagnostics v2; trace disabled)" or " (legacy full reports)"))
 
+setup(csv_dir.."/dribble_entry_target_v7.csv","session,frame,mode,event,cause,x,y,elapsed_frames")
 setup(csv_dir.."/dribble_collection_zone_v4.csv","session,frame,flag,mode,event,transitions,near_without_transition,post_min_x,post_max_x,post_min_y,post_max_y,near_min_x,near_max_x,near_min_y,near_max_y,min_pre_distance,max_pre_distance,classification")
 setup(csv_dir.."/dribble_collection_zone_v3.csv","session,frame,flag,mode,event,pre_x,pre_y,post_x,post_y,pre_distance,post_distance,entry_direction,travel_distance,elapsed_frames")
 setup(csv_dir.."/dribble_collection_zone_v2.csv","session,frame,flag,event,pre_frame,pre_x,pre_y,post_x,post_y,pre_distance,post_distance,sample_frame,sample_x,sample_y,classification")
@@ -166,6 +167,8 @@ local route_mode="DIRECT_LINE"
 local requested_route=nil
 local route_flag=2
 local zone_mode=nil
+local entry_v7=false
+local requested_entry_v7=nil
 local requested_zone=nil
 local requested_travel=nil
 local selected_approach="CONTINUOUS_PRECISION"
@@ -294,7 +297,11 @@ local function end_attempt()
 end
 local function command_handle(cmd)
  local c=cmd:upper()
- if c:match("^ZONE:") then
+ if c:match("^ENTRY:") then
+  local mode=c:match("^ENTRY:(.+)$")
+  if mode=="ON" or mode=="OFF" then requested_entry_v7=mode;print("[ISSD.dribble_bot] entry v7 queued="..mode.." next ARM")
+  else print("[ISSD.dribble_bot] invalid entry v7 mode="..tostring(mode)) end
+ elseif c:match("^ZONE:") then
   local mode=c:match("^ZONE:(.+)$")
   if mode=="OFF" or ZoneV3.NAMES[mode] then requested_zone=mode;print("[ISSD.dribble_bot] zone queued="..mode.." next ARM")
   else print("[ISSD.dribble_bot] invalid zone mode="..tostring(mode)) end
@@ -336,14 +343,14 @@ local function command_handle(cmd)
   W.approach_profile=selected_approach
   W.travel_profile=selected_travel
   state=P.new();armed=true;pending=false;grace_exit=nil
-  local s=snapshot();attempt={dash=Dash.new(),straight=Straight.new(),route_v1=RouteV1.new(),zone_v2=ZoneV2.new(),zone_v4=ZoneV4.new(),zone_mode=zone_mode,route_mode=route_mode,id=session.."_"..tostring(s.frame),started=s.frame,profile=selected_profile,time_start=s.time,last=s,last_remaining=s.remaining,last_flag_frame=s.frame,flags_seen=0,active=Start.new(s),route=Benchmark.new(s.frame),goal=Goal.new(s),confirmed=false,score=nil,final=false,approach_profile=selected_approach,travel_profile=selected_travel,
+  local s=snapshot();attempt={dash=Dash.new(),straight=Straight.new(),route_v1=RouteV1.new(),zone_v2=ZoneV2.new(),zone_v4=ZoneV4.new(),zone_mode=zone_mode,entry_v7=entry_v7,route_mode=route_mode,id=session.."_"..tostring(s.frame),started=s.frame,profile=selected_profile,time_start=s.time,last=s,last_remaining=s.remaining,last_flag_frame=s.frame,flags_seen=0,active=Start.new(s),route=Benchmark.new(s.frame),goal=Goal.new(s),confirmed=false,score=nil,final=false,approach_profile=selected_approach,travel_profile=selected_travel,
    proximity={{},{},{},{},{}},proximity_written=false}
   for i=1,5 do attempt.proximity[i]={observed=0,near24=0,near12=0,
    precision=0,search=0,recover=0,precision_idle=0,collected=false} end
   write(csv_dir.."/dribble_start_state_v035.csv",{attempt.id,s.frame,s.gs,s.ptr,s.remaining,s.poss,s.px,s.py,s.bx,s.by,s.time,s.timefrac,s.bonus,s.bonusfrac},14)
   local W=require("challenge.dribble_waypoints_v022")
   write(csv_dir.."/dribble_profile_audit_v035.csv",{s.frame,"arm_applied",selected_profile,selected_profile,attempt.id,W.waypoints[1][1],W.waypoints[1][2]},7)
-  print("[ISSD.dribble_bot] approach applied="..selected_approach.." travel applied="..selected_travel.." route flag2="..route_mode.." zone="..(zone_mode or "OFF"))
+  print("[ISSD.dribble_bot] approach applied="..selected_approach.." travel applied="..selected_travel.." route flag2="..route_mode.." zone="..(entry_v7 and "ENTRY_V7" or (zone_mode or "OFF")).." entry_v7="..(entry_v7 and "ON" or "OFF"))
   print("[ISSD.dribble_bot] v0.3.5 ARMED profile="..selected_profile.." session="..attempt.id.." frame="..s.frame.." wp2=("..W.waypoints[2][1]..","..W.waypoints[2][2]..")")
  elseif c=="STOP" then
   if attempt then attempt.exit_reason=attempt.exit_reason or "operator_stop" end
