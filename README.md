@@ -1,3 +1,7 @@
+## Adaptive Entry Target v7.1 — Activation & Collection Telemetry
+
+O bot registra `entry_target_activated`, `candidate_reached`, `fallback_started`, `collected_before_fallback` e `collected_after_fallback` ao atingir os respectivos estados da politica v7. Eventos sao encaminhados via `dribble_entry_target_v7.csv` (FULL) ou `dribble_diagnostics_v2.csv` (COMPACT). Registros v3/v4 usam `ENTRY_V7` quando ativo, evitando confusao com `OFF`. Teste `tests/test_dribble_entry_target_v71.lua`. A chegada perto do candidato nao comprova um limite de colisao; deslocamento e tempo reais ainda precisam de comparação. Navegacao, chute e Dash desligado permanecem como antes.
+
 ### v7 activation hotfix
 
 O comando `ENTRY:ON` e lido e armazenado ate o proximo `ARM`; nesse momento e aplicado a `entry_v7` e ao `W.set_entry_v7()`, e registrado no log `entry_v7=ON`. O `ENTRY:OFF` funciona simetricamente. Antes deste conserto, o comando era aceito mas a ativacao nao era aplicada na rotina ARM. Teste sintético em `tests/test_dribble_entry_v7_activation.lua`; a verificacao no BizHawk e o log `entry_v7=ON` continuam necessarios.

@@ -253,7 +253,7 @@ local function end_attempt()
  attempt.final=true;armed=false;pending=false;release()
  flush_proximity(attempt)
  for i=1,5 do
-  local row=ZoneV4.row(attempt.zone_v4,i,i==2 and (attempt.zone_mode or "OFF") or "OFF",
+  local row=ZoneV4.row(attempt.zone_v4,i,i==2 and (attempt.entry_v7 and "ENTRY_V7" or (attempt.zone_mode or "OFF")) or "OFF",
     (attempt.last and attempt.last.frame) or attempt.started)
   write(csv_dir.."/dribble_collection_zone_v4.csv",
     {attempt.id,row[1],row[2],row[3],row[4],row[5],row[6],row[7],row[8],
@@ -376,6 +376,12 @@ while true do
   Start.observe(attempt.active,s)
   if attempt.active.complete then flush_start(attempt,s.frame,attempt.active.final_reason) end
   buttons,state,reason=P.step(s,state)
+  for _,ev in ipairs(W.entry_v7_events or {}) do
+   write(csv_dir.."/dribble_entry_target_v7.csv",
+    {attempt.id,ev.frame,"ENTRY_V7",ev.kind,ev.cause,ev.x,ev.y,ev.elapsed},8)
+   print("[ISSD.dribble_bot] entry v7 "..ev.kind.." reason="..ev.cause.." frame="..ev.frame)
+  end
+  W.entry_v7_events={}
   RouteV1.observe(attempt.route_v1,s)
   -- Passive collection-zone discovery: no button-policy or waypoint changes.
   local zone_events=ZoneV2.observe(attempt.zone_v2,s,W.waypoints)
@@ -386,7 +392,7 @@ while true do
     if c.flag==2 then
      local metric=attempt.route_v1.segments[2]
      write(csv_dir.."/dribble_collection_zone_v3.csv",
-      {attempt.id,c.frame,2,attempt.zone_mode or "OFF","collection_transition",
+      {attempt.id,c.frame,2,attempt.entry_v7 and "ENTRY_V7" or (attempt.zone_mode or "OFF"),"collection_transition",
        c.pre_x,c.pre_y,c.post_x,c.post_y,c.pre_distance,c.post_distance,
        ZoneV3.direction(c),metric and metric.distance,metric and metric.frames},14)
     end

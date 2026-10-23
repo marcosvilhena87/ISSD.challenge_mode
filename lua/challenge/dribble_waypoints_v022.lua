@@ -6,7 +6,7 @@ local Entry7=require("challenge.dribble_entry_target_v7")
 M.segment_modes={}
 M.zone_approach=nil
 M.entry_v7=false
-M.entry_v7_event=nil
+M.entry_v7_events={}
 function M.set_entry_v7(enabled) M.entry_v7=enabled==true;M.entry_v7_event=nil end
 function M.set_zone_approach(mode) M.zone_approach=mode end
 function M.set_segment_modes(modes) M.segment_modes=modes or {} end
@@ -36,6 +36,10 @@ function M.step(s,st)
  if s.frame-st.started>=M.TIME_LIMIT then return {},st,"time_limit" end
  if st.last_remaining and (s.remaining>st.last_remaining or st.last_remaining-s.remaining>1) then return {},st,"counter_discontinuity" end
  if st.last_remaining~=nil and s.remaining<st.last_remaining then
+  if M.entry_v7 and st.last_remaining==4 and s.remaining==3 then
+   Entry7.collected(st.entry_v7,s)
+   for _,ev in ipairs(Entry7.drain(st.entry_v7)) do M.entry_v7_events[#M.entry_v7_events+1]=ev end
+  end
   st.near_since=nil;st.search_since=nil;st.search_step=0
   st.motion_frame=s.frame;st.motion_x=s.px;st.motion_y=s.py;st.moving_frames=0;st.grace_until=s.frame+60
   st.line=nil
@@ -54,10 +58,7 @@ function M.step(s,st)
  if not wp then return {},st,"no_waypoint" end
  if st.target==2 and M.entry_v7 then
   local selected=Entry7.choose(st.entry_v7,s)
-  if st.entry_v7.event then
-   M.entry_v7_event=st.entry_v7.event
-   st.entry_v7.event=nil
-  end
+  for _,ev in ipairs(Entry7.drain(st.entry_v7)) do M.entry_v7_events[#M.entry_v7_events+1]=ev end
   if selected then wp=selected end
  end
  local bx,by=s.bx-s.px,s.by-s.py
