@@ -338,7 +338,12 @@ local function command_handle(cmd)
   if requested_route then route_mode=requested_route;requested_route=nil end
   W.set_segment_modes({[route_flag]=route_mode})
   if requested_zone then zone_mode=requested_zone=="OFF" and nil or requested_zone;requested_zone=nil end
-  W.set_zone_approach(zone_mode)
+  if requested_entry_v7 then
+   entry_v7=(requested_entry_v7=="ON")
+   requested_entry_v7=nil
+  end
+  W.set_entry_v7(entry_v7)
+  W.set_zone_approach(entry_v7 and nil or zone_mode)
   assert(Optimization.apply(selected_profile))
   W.approach_profile=selected_approach
   W.travel_profile=selected_travel

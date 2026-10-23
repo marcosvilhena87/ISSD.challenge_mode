@@ -1,3 +1,7 @@
+### v7 activation hotfix
+
+O comando `ENTRY:ON` e lido e armazenado ate o proximo `ARM`; nesse momento e aplicado a `entry_v7` e ao `W.set_entry_v7()`, e registrado no log `entry_v7=ON`. O `ENTRY:OFF` funciona simetricamente. Antes deste conserto, o comando era aceito mas a ativacao nao era aplicada na rotina ARM. Teste sintético em `tests/test_dribble_entry_v7_activation.lua`; a verificacao no BizHawk e o log `entry_v7=ON` continuam necessarios.
+
 ## Collection Zone Optimization v7 — Adaptive Entry Target
 
 Comandos reversiveis `ENTRY:ON` / `ENTRY:OFF` (aplicados no proximo `ARM`). Por padrao OFF. Em ON, apenas a bandeira 2 tenta o alvo experimental (744,329), derivado da posicao pos-coleta observada em sessoes OFF; ao alcancar tolerancia de 6 unidades em X/Y sem coleta ou completar 170 frames nesse trecho, volta automaticamente ao waypoint original (760,330). O resultado real pode ser pior: o ponto (744,329) NAO e limite conhecido de colisao. A coleta normal por contador continua inalterada. O evento fallback entra em `dribble_entry_target_v7.csv` no modo FULL ou no consolidado no modo COMPACT. Contadores e telemetria historica de rota continuam disponiveis para comparar tempos e deslocamentos. `ENTRY:ON` desativa a antiga abordagem ZONE durante a tentativa; OFF mantem a configuracao ZONE previamente escolhida (use `ZONE:OFF` para referencia limpa). Teste `tests/test_dribble_entry_target_v7.lua`. Chute, Dash (desligado) e demais bandeiras preservados.
