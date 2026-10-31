@@ -7,6 +7,7 @@ assert(memory and memory.read_u8 and emu and emu.framecount and emu.frameadvance
 local Probe=require("challenge.probe")
 local Tracking=require("challenge.pass_tracking_v02")
 local Possession=require("challenge.pass_possession_monitor_v03")
+local Spatial=require("challenge.pass_spatial_v04")
 local Commands=require("challenge.dribble_commands_v035")
 local function mkdir(p) os.execute('mkdir "'..p..'" >nul 2>&1') end
 mkdir(root.."/csv"); mkdir(root.."/txt")
@@ -70,6 +71,22 @@ local function dump_wram(label)
 end
 local tracker=Tracking.new_tracker(3)
 local possession=Possession.new({minimum=3})
+local spatial=Spatial.new({threshold=24,gap=6,stable=4})
+local spatial_path=root.."/csv/pass_spatial_v04.csv"
+local sf=assert(io.open(spatial_path,"ab"))
+if sf:seek("end")==0 then
+ assert(sf:write("session,frame,event,from_player,to_player,ball_x,ball_y,nearest_distance,goalkeeper_distance,visited_count,route,distance_estimate,confidence\n"))
+end
+sf:close()
+local function spatial_write(e,sample)
+ local planned=Tracking.plan(sample.players,e.to,spatial.visited)
+ local h=assert(io.open(spatial_path,"ab"))
+ assert(h:write(csv({session,e.frame,e.kind,e.from,e.to,sample.ball.x,sample.ball.y,
+ string.format("%.2f",e.distance),string.format("%.2f",e.goalkeeper_distance),
+ e.visited_count,planned and table.concat(planned.sequence,">") or "",
+ planned and string.format("%.2f",planned.distance) or "",e.confidence},13)))
+ assert(h:close())
+end
 local possession_path=root.."/csv/pass_possession_v03.csv"
 local ph=assert(io.open(possession_path,"ab"))
 if ph:seek("end")==0 then
@@ -128,6 +145,14 @@ release()
 while true do
   local p=observe()
   if armed then
+   local ss,err=Spatial.read(memory.read_s16_le)
+   if ss then
+    local event=spatial:step(ss,emu.framecount())
+    if event then spatial_write(event,ss) end
+   elseif not spatial.read_error_logged then
+    print("[ISSD.pass_lv1] spatial read error: "..tostring(err))
+    spatial.read_error_logged=true
+   end
    local raw=sample_candidate()
    local player_id=nil
    if map and raw~=nil then
@@ -160,7 +185,7 @@ while true do
     if cmd=="ARM" then
       -- Probe is not proof of gameplay; explicit LV.1 selection is a safety gate.
       if p.status=="candidate" and p.challenge=="PASS" and p.level==1 then
-        armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});record("armed_candidate_only",p)
+        armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});record("armed_candidate_only",p)
         print("[ISSD.pass_lv1] armed for observation; PASS LV.1 identity remains unconfirmed")
       else
         armed=false;record("arm_rejected",p)
