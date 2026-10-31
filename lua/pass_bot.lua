@@ -5,14 +5,15 @@ package.path=root.."/lua/?.lua;"..root.."/lua/?/init.lua;"..package.path
 assert(memory and memory.read_u8 and emu and emu.framecount and emu.frameadvance
   and joypad and joypad.set,"BizHawk APIs missing")
 local Probe=require("challenge.probe")
+local Tracking=require("challenge.pass_tracking_v02")
 local Commands=require("challenge.dribble_commands_v035")
 local function mkdir(p) os.execute('mkdir "'..p..'" >nul 2>&1') end
 mkdir(root.."/csv"); mkdir(root.."/txt")
 local log_path=root.."/csv/pass_lv1_observations_v01.csv"
 local command_path=root.."/txt/pass_bot_commands_v01.txt"
-local function csv(v)
+local function csv(v,n)
   local out={}
-  for i=1,#v do out[i]='"'..tostring(v[i]==nil and "" or v[i]):gsub('"','""')..'"' end
+  for i=1,n do out[i]='"'..tostring(v[i]==nil and "" or v[i]):gsub('"','""')..'"' end
   return table.concat(out,",").."\n"
 end
 local f=assert(io.open(log_path,"ab"))
@@ -21,6 +22,61 @@ if f:seek("end")==0 then
 end
 f:close()
 local session=os.date("!%Y%m%dT%H%M%SZ")
+local map_path=root.."/pass_ram_map_v02.lua"
+local map=nil
+local map_file=io.open(map_path,"rb")
+if map_file then
+ map_file:close()
+ local ok,loaded=pcall(dofile,map_path)
+ if ok then
+  local valid,reason=Tracking.validate(loaded)
+  if valid then map=loaded else print("[ISSD.pass_lv1] invalid RAM map: "..reason) end
+ else print("[ISSD.pass_lv1] RAM map load failed: "..tostring(loaded)) end
+end
+local snapshot_sequence=0
+local function dump_wram(label)
+  if not label:match("^[A-Z0-9_]+$") or #label>32 then
+    print("[ISSD.pass_lv1] invalid SNAP label (A-Z, 0-9, _, max 32)")
+    return
+  end
+  snapshot_sequence=snapshot_sequence+1
+  local stamp=string.format("%s_%06d_%s",session,snapshot_sequence,label)
+  local path=root.."/csv/pass_wram_"..stamp..".bin"
+  local h=assert(io.open(path,"wb"))
+  -- SNES WRAM memory domain is 128 KiB; capture is read-only.
+  for base=0,0x1ffff,1024 do
+    local bytes={}
+    for addr=base,base+1023 do
+      local ok,v=pcall(memory.read_u8,addr,"WRAM")
+      if not ok or type(v)~="number" or v<0 or v>255 then
+        h:close();os.remove(path)
+        print("[ISSD.pass_lv1] WRAM snapshot failed at "..string.format("0x%05X",addr))
+        return
+      end
+      bytes[#bytes+1]=string.char(v)
+    end
+    assert(h:write(table.concat(bytes)))
+  end
+  assert(h:close())
+  local meta_path=root.."/csv/pass_wram_snapshots_v02.csv"
+  local m=io.open(meta_path,"ab")
+  if m then
+    if m:seek("end")==0 then m:write("session,frame,label,path,bytes,armed\n") end
+    m:write(csv({session,emu.framecount(),label,"pass_wram_"..stamp..".bin",131072,armed and 1 or 0},6))
+    m:close()
+  end
+  print("[ISSD.pass_lv1] captured "..path)
+end
+local tracker=Tracking.new_tracker(3)
+local tracking_log=root.."/csv/pass_lv1_tracking_v02.csv"
+local tf=assert(io.open(tracking_log,"ab"))
+if tf:seek("end")==0 then
+ assert(tf:write("session,frame,event,from_player,to_player,visited_count,planned_route,estimated_distance,confidence\n"))
+end
+tf:close()
+local function track_write(row)
+ local f=assert(io.open(tracking_log,"ab"));assert(f:write(csv(row,9)));assert(f:close())
+end
 local armed=false
 local previous=nil
 local function release() joypad.set({},1) end
@@ -28,7 +84,7 @@ local function record(event,p)
   local raw=p.raw or {}
   local row={session,emu.framecount(),event,armed and 1 or 0,p.status,p.challenge,p.level,
     raw.challenge_a,raw.challenge_b,raw.selected_level,p.reason}
-  local h=assert(io.open(log_path,"ab"));assert(h:write(csv(row)));assert(h:close())
+  local h=assert(io.open(log_path,"ab"));assert(h:write(csv(row,11)));assert(h:close())
 end
 local function observe()
   local p=Probe.read(memory.read_u8)
@@ -44,17 +100,36 @@ print("[ISSD.pass_lv1] commands="..command_path.." log="..log_path)
 release()
 while true do
   local p=observe()
+  if map and armed and p.status=="candidate" and p.challenge=="PASS" and p.level==1 then
+   local sample,reason=Tracking.sample(map,memory.read_u8,memory.read_u16_le,memory.read_s16_le)
+   if sample then
+    local event=tracker:step(sample,emu.framecount())
+    if event then
+     local count=0
+     for _ in pairs(tracker.visited) do count=count+1 end
+     local planned=Tracking.plan(sample.players,event.to,tracker.visited)
+     local route=planned and table.concat(planned.sequence,">") or ""
+     track_write({session,event.frame,event.kind,event.from,event.to,count,route,
+       planned and string.format("%.3f",planned.distance) or "","unverified_ram_candidate"})
+    end
+   elseif not tracker.read_error_logged then
+    print("[ISSD.pass_lv1] tracking read error: "..tostring(reason))
+    tracker.read_error_logged=true
+   end
+  end
   commands.poll(function(line)
     local cmd=line:upper()
     if cmd=="ARM" then
       -- Probe is not proof of gameplay; explicit LV.1 selection is a safety gate.
       if p.status=="candidate" and p.challenge=="PASS" and p.level==1 then
-        armed=true;record("armed_candidate_only",p)
+        armed=true;tracker=Tracking.new_tracker(3);record("armed_candidate_only",p)
         print("[ISSD.pass_lv1] armed for observation; PASS LV.1 identity remains unconfirmed")
       else
         armed=false;record("arm_rejected",p)
         print("[ISSD.pass_lv1] ARM rejected: PASS LV.1 candidate not observed")
       end
+    elseif cmd:match("^SNAP:[A-Z0-9_]+$") then
+      dump_wram(cmd:sub(6))
     elseif cmd=="STOP" then
       armed=false;record("stopped",p);release()
     else
