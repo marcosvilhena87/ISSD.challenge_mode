@@ -24,12 +24,9 @@ function M.new()
   self.previous=s
   if not s or not p then return nil end
   local event=nil
-  -- Detect transition from a zero bonus counter to a positive one.
-  -- This is a candidate: initial nonzero or already-running bonus is not an activation.
+  -- A zero-to-positive transition may initialize the bonus; never call it activation.
   if not self.bonus_active and p.bonus==0 and s.bonus and s.bonus>0 then
-   self.bonus_active=true
-   self.bonus_activation_frame=frame
-   event={kind="bonus_zero_to_positive_candidate",frame=frame}
+   event={kind="bonus_initialized_candidate",frame=frame}
   elseif p.bonus~=nil and s.bonus~=nil and p.bonus~=s.bonus then
    event={kind="bonus_value_change",frame=frame}
   elseif p.time~=nil and s.time~=nil and p.time~=s.time then
