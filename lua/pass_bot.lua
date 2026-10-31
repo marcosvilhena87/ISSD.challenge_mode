@@ -11,6 +11,7 @@ local Spatial=require("challenge.pass_spatial_v04")
 local Timers=require("challenge.pass_timers_v05")
 local Bonus=require("challenge.pass_bonus_validation_v051")
 local Auto=require("challenge.pass_auto_v071")
+local Alignment=require("challenge.pass_alignment_v08")
 local Finish=require("challenge.pass_finish_v07")
 local Commands=require("challenge.dribble_commands_v035")
 local function mkdir(p) os.execute('mkdir "'..p..'" >nul 2>&1') end
@@ -313,10 +314,16 @@ while true do
   local buttons={}
   if armed and autopass.enabled and sample_for_auto then
     local holder=spatial.holder
-    local plan=holder and Tracking.plan(sample_for_auto.players,holder,spatial.visited) or nil
+    local receiver=holder and Alignment.choose(sample_for_auto,holder,spatial.visited,{tolerance=12,alignment_weight=0.25}) or nil
+    local plan=receiver and {target=receiver.id,aligned=receiver.aligned} or nil
     local reason
     buttons,reason=Auto.step(autopass,emu.framecount(),sample_for_auto,holder,spatial.visited,plan,completion_frame~=nil)
-    if reason=="pass_pulse" and autopass.last_attempt then
+    if reason=="target_selected" and receiver then
+      auto_write(emu.framecount(),"receiver_selected",holder,receiver.id,selected_pass_button,
+       string.format("distance=%.2f|misalignment=%.2f|cost=%.2f|aligned=%s",receiver.distance,receiver.misalignment,receiver.cost,tostring(receiver.aligned)))
+    elseif reason=="alignment_correction" then
+      auto_write(emu.framecount(),"alignment_correction",holder,autopass.target,selected_pass_button,"bounded_directional_pre_align")
+    elseif reason=="pass_pulse" and autopass.last_attempt then
       local a=autopass.last_attempt
       auto_write(emu.framecount(),"pass_pulse",a.from,a.to,a.button,"experimental_unverified")
     elseif reason=="transfer_candidate_observed" or reason=="ball_moved_without_transfer" or reason=="no_ball_motion_detected" or reason=="timeout" or reason=="completion_candidate_stop" or reason=="coordinates_lost" then
