@@ -11,7 +11,9 @@ function M.new()
   end
   if not s or not p or type(s.bonus)~="number" or type(p.bonus)~="number" then return nil end
   local kind
-  if s.bonus<p.bonus then
+  if s.bonus==0 and p.bonus>=2 then
+   kind="bonus_abrupt_reset_candidate"
+  elseif s.bonus<p.bonus then
    if not self.first_decrement_frame then
     self.first_decrement_frame=frame
     kind="first_bonus_decrement"
