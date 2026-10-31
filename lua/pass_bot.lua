@@ -33,6 +33,40 @@ if map_file then
   if valid then map=loaded else print("[ISSD.pass_lv1] invalid RAM map: "..reason) end
  else print("[ISSD.pass_lv1] RAM map load failed: "..tostring(loaded)) end
 end
+local snapshot_sequence=0
+local function dump_wram(label)
+  if not label:match("^[A-Z0-9_]+$") or #label>32 then
+    print("[ISSD.pass_lv1] invalid SNAP label (A-Z, 0-9, _, max 32)")
+    return
+  end
+  snapshot_sequence=snapshot_sequence+1
+  local stamp=string.format("%s_%06d_%s",session,snapshot_sequence,label)
+  local path=root.."/csv/pass_wram_"..stamp..".bin"
+  local h=assert(io.open(path,"wb"))
+  -- SNES WRAM memory domain is 128 KiB; capture is read-only.
+  for base=0,0x1ffff,1024 do
+    local bytes={}
+    for addr=base,base+1023 do
+      local ok,v=pcall(memory.read_u8,addr,"WRAM")
+      if not ok or type(v)~="number" or v<0 or v>255 then
+        h:close();os.remove(path)
+        print("[ISSD.pass_lv1] WRAM snapshot failed at "..string.format("0x%05X",addr))
+        return
+      end
+      bytes[#bytes+1]=string.char(v)
+    end
+    assert(h:write(table.concat(bytes)))
+  end
+  assert(h:close())
+  local meta_path=root.."/csv/pass_wram_snapshots_v02.csv"
+  local m=io.open(meta_path,"ab")
+  if m then
+    if m:seek("end")==0 then m:write("session,frame,label,path,bytes,armed\n") end
+    m:write(csv({session,emu.framecount(),label,"pass_wram_"..stamp..".bin",131072,armed and 1 or 0},6))
+    m:close()
+  end
+  print("[ISSD.pass_lv1] captured "..path)
+end
 local tracker=Tracking.new_tracker(3)
 local tracking_log=root.."/csv/pass_lv1_tracking_v02.csv"
 local tf=assert(io.open(tracking_log,"ab"))
@@ -94,6 +128,8 @@ while true do
         armed=false;record("arm_rejected",p)
         print("[ISSD.pass_lv1] ARM rejected: PASS LV.1 candidate not observed")
       end
+    elseif cmd:match("^SNAP:[A-Z0-9_]+$") then
+      dump_wram(cmd:sub(6))
     elseif cmd=="STOP" then
       armed=false;record("stopped",p);release()
     else
