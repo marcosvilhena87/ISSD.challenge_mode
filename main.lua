@@ -54,10 +54,10 @@ local function selected_mode()
  end
  local value=raw:match("^%s*([%a_]+)") or ""
  value=value:upper()
- if value~="MONITOR" and value~="DRIBBLE" and value~="SCORE_PROBE" then
+ if value~="MONITOR" and value~="DRIBBLE" and value~="SCORE_PROBE" and value~="PASS" then
   local shown=raw:gsub("[\r\n\t]"," "):sub(1,70)
   error("Modo invalido em "..mode_file..": '"..shown..
-   "'. Valores permitidos: MONITOR, DRIBBLE ou SCORE_PROBE. Verifique a codificacao (UTF-8/ASCII).",0)
+   "'. Valores permitidos: MONITOR, DRIBBLE, PASS ou SCORE_PROBE. Verifique a codificacao (UTF-8/ASCII).",0)
  end
  return value
 end
@@ -66,6 +66,11 @@ print("[ISSD.challenge_mode] boot mode="..mode.." root="..root)
 if mode=="SCORE_PROBE" then
  _G.ISSD_PROJECT_ROOT=root
  dofile(file("lua/score_probe.lua"))
+ return
+end
+if mode=="PASS" then
+ _G.ISSD_PROJECT_ROOT=root
+ dofile(file("lua/pass_bot.lua"))
  return
 end
 if mode=="DRIBBLE" then
