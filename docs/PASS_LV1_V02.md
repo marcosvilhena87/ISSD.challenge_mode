@@ -47,3 +47,15 @@ Execute `challenge_mode.txt` com `PASS`. Com PASS LV.1 selecionado, adicione `AR
 `python -m unittest discover -s tests -p 'test_pass_v02_static.py'`
 
 Testes estáticos não substituem execução de Lua no BizHawk.
+
+## Descoberta por snapshots da WRAM
+
+O runner aceita o comando `SNAP:ANTES` ou `SNAP:DEPOIS` (uma linha completa por comando) no arquivo `txt/pass_bot_commands_v01.txt`, sem exigir ARM. Cada comando captura **128 KiB da WRAM** em `csv/pass_wram_<sessao>_<numero>_<rotulo>.bin`, registra metadados em `csv/pass_wram_snapshots_v02.csv` e não altera a RAM.
+
+Faça pares controlados com mesmo estado inicial e somente uma ação diferente. Exemplos: início sem posse, posse do jogador A, passe A→B, posse de B. Repita com diferentes jogadores e controle negativo (nenhum passe).
+
+Exemplo de análise offline:
+```powershell
+python tools/pass_wram_diff_v02.py csv/pass_wram_SESSAO_000001_ANTES.bin csv/pass_wram_SESSAO_000002_DEPOIS.bin --output csv/pass_wram_candidates_v02.json
+```
+O relatório compara bytes e lista até 200 regiões de diferenças priorizadas por menor extensão. Não identifica automaticamente o jogador ou a semântica do endereço, pois mudanças podem refletir relógio, animação e outras estruturas.
