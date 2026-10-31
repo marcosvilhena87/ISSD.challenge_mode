@@ -44,7 +44,7 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   t.hold_count=t.hold_count+1
   if t.hold_count>=t.hold_frames then
    t.phase="wait";t.pass_frame=frame;t.tries=1
-   t.ball_before={x=sample.ball.x,y=sample.ball.y}
+   -- Preserve the pre-input position from target selection.
    t.last_attempt={frame=frame,from=t.origin,to=t.target,button="B",hold_frames=t.hold_frames}
    return buttons,"pass_pulse"
   end
@@ -57,6 +57,7 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
    return empty,"no_valid_target"
   end
   t.origin=holder;t.target=target;t.phase="hold";t.hold_count=0
+  t.ball_before={x=sample.ball.x,y=sample.ball.y}
   return empty,"target_selected"
  end
  return empty,"done"
