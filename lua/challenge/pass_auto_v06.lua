@@ -44,7 +44,7 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
  if not dest or not origin or dest.id==holder then return buttons,"invalid_target" end
  local dx,dy=dest.x-origin.x,dest.y-origin.y
  -- Input semantics/direction influence have not been validated in PASS LV.1.
- -- Aim for three frames, then release for a frame before the pass button pulse.
+ -- Aim for one frame, release for one frame, then pulse the pass button.
  if t.phase=="aim" then
   if math.abs(dx)>12 then buttons[dx>0 and "Right" or "Left"]=true end
   if math.abs(dy)>12 then buttons[dy>0 and "Down" or "Up"]=true end
