@@ -137,6 +137,16 @@ local function calibration_write(frame,result,a,observed,transfer_frame)
  string.format("%.2f",autopass.ball_max_displacement),pf,transfer_frame,pf and transfer_frame and transfer_frame-pf},11)))
  assert(h:close())
 end
+local input_csv=root.."/csv/pass_inputs_v081.csv"
+local ih=assert(io.open(input_csv,"ab"))
+if ih:seek("end")==0 then assert(ih:write("session,frame,phase,reason,holder,target,up,down,left,right,B,X\n")) end
+ih:close()
+local function log_input(frame,phase,reason,holder,target,b)
+ local h=assert(io.open(input_csv,"ab"))
+ assert(h:write(csv({session,frame,phase,reason,holder,target,b.Up and 1 or 0,b.Down and 1 or 0,
+ b.Left and 1 or 0,b.Right and 1 or 0,b.B and 1 or 0,b.X and 1 or 0},12)))
+ assert(h:close())
+end
 local auto_csv=root.."/csv/pass_auto_v06.csv"
 local af=assert(io.open(auto_csv,"ab"))
 if af:seek("end")==0 then assert(af:write("session,frame,event,from_player,to_player,button,reason\n")) end
@@ -317,7 +327,12 @@ while true do
     local receiver=holder and Alignment.choose(sample_for_auto,holder,spatial.visited,{tolerance=12,alignment_weight=0.25}) or nil
     local plan=receiver and {target=receiver.id,aligned=receiver.aligned} or nil
     local reason
+    local phase_before=autopass.phase
     buttons,reason=Auto.step(autopass,emu.framecount(),sample_for_auto,holder,spatial.visited,plan,completion_frame~=nil)
+    if buttons.B or buttons.Up or buttons.Down or buttons.Left or buttons.Right or
+       reason=="target_selected" or reason=="no_valid_target" or reason=="no_direction_for_pass" then
+      log_input(emu.framecount(),phase_before,reason,holder,autopass.target,buttons)
+    end
     if reason=="target_selected" and receiver then
       auto_write(emu.framecount(),"receiver_selected",holder,receiver.id,selected_pass_button,
        string.format("distance=%.2f|misalignment=%.2f|cost=%.2f|aligned=%s",receiver.distance,receiver.misalignment,receiver.cost,tostring(receiver.aligned)))
@@ -326,7 +341,7 @@ while true do
     elseif reason=="pass_pulse" and autopass.last_attempt then
       local a=autopass.last_attempt
       auto_write(emu.framecount(),"pass_pulse",a.from,a.to,a.button,"experimental_unverified")
-    elseif reason=="transfer_candidate_observed" or reason=="ball_moved_without_transfer" or reason=="no_ball_motion_detected" or reason=="timeout" or reason=="completion_candidate_stop" or reason=="coordinates_lost" then
+    elseif reason=="transfer_candidate_observed" or reason=="ball_moved_without_transfer" or reason=="no_ball_motion_detected" or reason=="timeout" or reason=="completion_candidate_stop" or reason=="coordinates_lost" or reason=="no_valid_target" or reason=="no_direction_for_pass" then
       auto_write(emu.framecount(),"single_pass_result",autopass.origin,autopass.target,selected_pass_button,reason.."|direction="..selected_direction.."|max_ball_displacement="..string.format("%.2f",autopass.ball_max_displacement))
       calibration_write(emu.framecount(),reason,autopass.last_attempt,reason=="transfer_candidate_observed" and holder or nil,reason=="transfer_candidate_observed" and emu.framecount() or nil)
       print("[ISSD.pass_lv1] single-pass result: "..reason.." max_ball_displacement="..string.format("%.2f",autopass.ball_max_displacement))
