@@ -8,6 +8,7 @@ local Probe=require("challenge.probe")
 local Tracking=require("challenge.pass_tracking_v02")
 local Possession=require("challenge.pass_possession_monitor_v03")
 local Spatial=require("challenge.pass_spatial_v04")
+local Timers=require("challenge.pass_timers_v05")
 local Commands=require("challenge.dribble_commands_v035")
 local function mkdir(p) os.execute('mkdir "'..p..'" >nul 2>&1') end
 mkdir(root.."/csv"); mkdir(root.."/txt")
@@ -72,6 +73,23 @@ end
 local tracker=Tracking.new_tracker(3)
 local possession=Possession.new({minimum=3})
 local spatial=Spatial.new({threshold=24,gap=6,stable=4})
+local timers=Timers.new()
+local last_spatial_frame=nil
+local timer_csv=root.."/csv/pass_timers_v05.csv"
+local timer_file=assert(io.open(timer_csv,"ab"))
+if timer_file:seek("end")==0 then
+ assert(timer_file:write("session,frame,event,time_bcd,time_fraction,bonus_bcd,bonus_fraction,spatial_candidate_count,last_spatial_frame,delta_from_last_spatial,bonus_activation_frame,evidence\n"))
+end
+timer_file:close()
+local function timer_write(e)
+ local count=0
+ for _ in pairs(spatial.visited) do count=count+1 end
+ local delta=last_spatial_frame and e.frame-last_spatial_frame or nil
+ local h=assert(io.open(timer_csv,"ab"))
+ assert(h:write(csv({session,e.frame,e.kind,e.time,e.time_frac,e.bonus,e.bonus_frac,
+ count,last_spatial_frame,delta,timers.bonus_activation_frame,"timer_transition_unverified"},12)))
+ assert(h:close())
+end
 local spatial_path=root.."/csv/pass_spatial_v04.csv"
 local sf=assert(io.open(spatial_path,"ab"))
 if sf:seek("end")==0 then
@@ -148,11 +166,14 @@ while true do
    local ss,err=Spatial.read(memory.read_s16_le)
    if ss then
     local event=spatial:step(ss,emu.framecount())
-    if event then spatial_write(event,ss) end
+    if event then last_spatial_frame=event.frame;spatial_write(event,ss) end
    elseif not spatial.read_error_logged then
     print("[ISSD.pass_lv1] spatial read error: "..tostring(err))
     spatial.read_error_logged=true
    end
+   local ts=Timers.read(memory.read_u8,memory.read_u16_le)
+   local te=timers:step(ts,emu.framecount())
+   if te then timer_write(te) end
    local raw=sample_candidate()
    local player_id=nil
    if map and raw~=nil then
@@ -185,7 +206,7 @@ while true do
     if cmd=="ARM" then
       -- Probe is not proof of gameplay; explicit LV.1 selection is a safety gate.
       if p.status=="candidate" and p.challenge=="PASS" and p.level==1 then
-        armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});record("armed_candidate_only",p)
+        armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();last_spatial_frame=nil;record("armed_candidate_only",p)
         print("[ISSD.pass_lv1] armed for observation; PASS LV.1 identity remains unconfirmed")
       else
         armed=false;record("arm_rejected",p)
