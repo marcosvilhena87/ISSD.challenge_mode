@@ -267,9 +267,6 @@ while true do
       -- print("[ISSD.pass_lv1] FINISH queued for next ARM; X shot only after spatial completion and bonus countdown")
     elseif cmd=="FINISH:OFF" then
       auto_finish_queued=false;finish.enabled=false;release()
-    elseif cmd:match("^DIRECTION:(AUTO|NEUTRAL)$") then
-      -- Lua patterns do not support alternatives; handled below as well.
-      selected_direction=cmd:sub(11)
     elseif cmd:match("^DIRECTION:") then
       local direction=cmd:sub(11)
       local valid={AUTO=true,NEUTRAL=true,Up=true,Down=true,Left=true,Right=true,
