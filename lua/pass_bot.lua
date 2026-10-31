@@ -81,6 +81,7 @@ local finish=Finish.new()
 local auto_finish_queued=false
 local selected_pass_button=nil
 local pending_auto=false
+local selected_direction="AUTO"
 local timers=Timers.new()
 local bonus=Bonus.new()
 local completion_frame=nil
@@ -122,6 +123,17 @@ ff:close()
 local function finish_write(frame,event)
  local h=assert(io.open(finish_csv,"ab"))
  assert(h:write(csv({session,frame,event,completion_frame,bonus.first_decrement_frame,finish.shot_frame,"operator_confirmed_button_unverified_goal"},7)))
+ assert(h:close())
+end
+local calibration_csv=root.."/csv/pass_direction_v072.csv"
+local cf=assert(io.open(calibration_csv,"ab"))
+if cf:seek("end")==0 then assert(cf:write("session,frame,result,from_player,planned_player,observed_player,direction,ball_displacement,pass_frame,transfer_frame,latency_frames\n")) end
+cf:close()
+local function calibration_write(frame,result,a,observed,transfer_frame)
+ local h=assert(io.open(calibration_csv,"ab"))
+ local pf=a and a.frame or nil
+ assert(h:write(csv({session,frame,result,a and a.from,a and a.to,observed,autopass.direction,
+ string.format("%.2f",autopass.ball_max_displacement),pf,transfer_frame,pf and transfer_frame and transfer_frame-pf},11)))
  assert(h:close())
 end
 local auto_csv=root.."/csv/pass_auto_v06.csv"
@@ -255,6 +267,16 @@ while true do
       -- print("[ISSD.pass_lv1] FINISH queued for next ARM; X shot only after spatial completion and bonus countdown")
     elseif cmd=="FINISH:OFF" then
       auto_finish_queued=false;finish.enabled=false;release()
+    elseif cmd:match("^DIRECTION:") then
+      local direction=cmd:sub(11)
+      local valid={AUTO=true,NEUTRAL=true,Up=true,Down=true,Left=true,Right=true,
+       Up_Left=true,Up_Right=true,Down_Left=true,Down_Right=true}
+      local normalized=direction:gsub("^UP","Up"):gsub("^DOWN","Down"):gsub("^LEFT","Left"):gsub("^RIGHT","Right")
+      normalized=normalized:gsub("_UP","_Up"):gsub("_DOWN","_Down"):gsub("_LEFT","_Left"):gsub("_RIGHT","_Right")
+      if valid[normalized] then
+        selected_direction=normalized;autopass.enabled=false;pending_auto=false
+        print("[ISSD.pass_lv1] selected pass direction: "..selected_direction)
+      else print("[ISSD.pass_lv1] invalid DIRECTION: "..direction) end
     elseif cmd=="AUTO:ON" then
       if selected_pass_button then
        pending_auto=true;print("[ISSD.pass_lv1] AUTO queued ON for next ARM")
@@ -270,7 +292,7 @@ while true do
       -- Probe is not proof of gameplay; explicit LV.1 selection is a safety gate.
       if p.status=="candidate" and p.challenge=="PASS" and p.level==1 then
         armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();bonus=Bonus.new();completion_frame=nil;last_spatial_frame=nil;autopass=Auto.new();finish=Finish.new();finish.enabled=false;auto_finish_queued=false
-        autopass.enabled=pending_auto and selected_pass_button=="B";autopass.button=selected_pass_button;autopass.start_frame=emu.framecount()
+        autopass.enabled=pending_auto and selected_pass_button=="B";autopass.button=selected_pass_button;autopass.start_frame=emu.framecount();autopass.direction=selected_direction
         pending_auto=false
         auto_write(emu.framecount(),autopass.enabled and "auto_arm" or "observation_arm",nil,nil,selected_pass_button,"opt_in_required")
         record("armed_candidate_only",p)
@@ -298,7 +320,8 @@ while true do
       local a=autopass.last_attempt
       auto_write(emu.framecount(),"pass_pulse",a.from,a.to,a.button,"experimental_unverified")
     elseif reason=="transfer_candidate_observed" or reason=="ball_moved_without_transfer" or reason=="no_ball_motion_detected" or reason=="timeout" or reason=="completion_candidate_stop" or reason=="coordinates_lost" then
-      auto_write(emu.framecount(),"single_pass_result",autopass.origin,autopass.target,selected_pass_button,reason.."|max_ball_displacement="..string.format("%.2f",autopass.ball_max_displacement))
+      auto_write(emu.framecount(),"single_pass_result",autopass.origin,autopass.target,selected_pass_button,reason.."|direction="..selected_direction.."|max_ball_displacement="..string.format("%.2f",autopass.ball_max_displacement))
+      calibration_write(emu.framecount(),reason,autopass.last_attempt,reason=="transfer_candidate_observed" and holder or nil,reason=="transfer_candidate_observed" and emu.framecount() or nil)
       print("[ISSD.pass_lv1] single-pass result: "..reason.." max_ball_displacement="..string.format("%.2f",autopass.ball_max_displacement))
     end
   end
