@@ -102,7 +102,6 @@ function M.plan(players,start_id,visited)
     end
    end
   end end end
- end
  local best
  for _,node in pairs(states[2^n-1] or {}) do
   if not best or node.cost<best.cost then best=node end
