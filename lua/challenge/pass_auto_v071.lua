@@ -50,7 +50,7 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   local origin=find(sample and sample.players,t.origin)
   if not dest or not origin then t.enabled=false;return empty,"coordinates_lost" end
   local dx,dy=dest.x-origin.x,dest.y-origin.y
-  local buttons={B=true}
+  local buttons={}
   local direction=t.direction or "AUTO"
   if direction=="AUTO" then
    if dx>12 then buttons.Right=true elseif dx< -12 then buttons.Left=true end
@@ -58,6 +58,11 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   elseif direction~="NEUTRAL" then
    for key in direction:gmatch("[^_]+") do buttons[key]=true end
   end
+  -- B is valid only when a control-pad direction is pressed in the SAME frame.
+  if not (buttons.Left or buttons.Right or buttons.Up or buttons.Down) then
+   t.enabled=false;t.phase="done";return {},"no_direction_for_pass"
+  end
+  buttons.B=true
   t.hold_count=t.hold_count+1
   if t.hold_count>=t.hold_frames then
    t.phase="wait";t.pass_frame=frame;t.tries=1
@@ -71,7 +76,7 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   if not sample or not sample.ball or not holder then return empty,"no_stable_holder" end
   local target=plan and (plan.target or (plan.sequence and plan.sequence[1]))
   if not target or target==holder or not find(sample.players,target) then
-   return empty,"no_valid_target"
+   t.enabled=false;return empty,"no_valid_target"
   end
   t.origin=holder;t.target=target;t.phase=(plan and plan.aligned==false) and "align" or "hold";t.hold_count=0;t.align_count=0
   t.ball_before={x=sample.ball.x,y=sample.ball.y}
