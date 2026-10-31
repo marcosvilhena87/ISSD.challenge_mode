@@ -10,7 +10,7 @@ local Possession=require("challenge.pass_possession_monitor_v03")
 local Spatial=require("challenge.pass_spatial_v04")
 local Timers=require("challenge.pass_timers_v05")
 local Bonus=require("challenge.pass_bonus_validation_v051")
-local Auto=require("challenge.pass_auto_v06")
+local Auto=require("challenge.pass_auto_v071")
 local Finish=require("challenge.pass_finish_v07")
 local Commands=require("challenge.dribble_commands_v035")
 local function mkdir(p) os.execute('mkdir "'..p..'" >nul 2>&1') end
@@ -250,8 +250,9 @@ while true do
   commands.poll(function(line)
     local cmd=line:upper()
     if cmd=="FINISH:ON" then
-      auto_finish_queued=true
-      print("[ISSD.pass_lv1] FINISH queued for next ARM; X shot only after spatial completion and bonus countdown")
+      auto_finish_queued=false
+      print("[ISSD.pass_lv1] FINISH disabled in v0.7.1 single-pass diagnostic")
+      -- print("[ISSD.pass_lv1] FINISH queued for next ARM; X shot only after spatial completion and bonus countdown")
     elseif cmd=="FINISH:OFF" then
       auto_finish_queued=false;finish.enabled=false;release()
     elseif cmd=="AUTO:ON" then
@@ -268,8 +269,8 @@ while true do
     elseif cmd=="ARM" then
       -- Probe is not proof of gameplay; explicit LV.1 selection is a safety gate.
       if p.status=="candidate" and p.challenge=="PASS" and p.level==1 then
-        armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();bonus=Bonus.new();completion_frame=nil;last_spatial_frame=nil;autopass=Auto.new();finish=Finish.new();finish.enabled=auto_finish_queued;auto_finish_queued=false
-        autopass.enabled=pending_auto and selected_pass_button~=nil;autopass.button=selected_pass_button;autopass.start_frame=emu.framecount()
+        armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();bonus=Bonus.new();completion_frame=nil;last_spatial_frame=nil;autopass=Auto.new();finish=Finish.new();finish.enabled=false;auto_finish_queued=false
+        autopass.enabled=pending_auto and selected_pass_button=="B";autopass.button=selected_pass_button;autopass.start_frame=emu.framecount()
         pending_auto=false
         auto_write(emu.framecount(),autopass.enabled and "auto_arm" or "observation_arm",nil,nil,selected_pass_button,"opt_in_required")
         record("armed_candidate_only",p)
@@ -296,8 +297,9 @@ while true do
     if reason=="pass_pulse" and autopass.last_attempt then
       local a=autopass.last_attempt
       auto_write(emu.framecount(),"pass_pulse",a.from,a.to,a.button,"experimental_unverified")
-    elseif reason=="timeout" or reason=="attempt_limit" or reason=="completion_candidate_stop" then
-      auto_write(emu.framecount(),"auto_stopped",holder,nil,selected_pass_button,reason)
+    elseif reason=="transfer_candidate_observed" or reason=="ball_moved_without_transfer" or reason=="no_ball_motion_detected" or reason=="timeout" or reason=="completion_candidate_stop" or reason=="coordinates_lost" then
+      auto_write(emu.framecount(),"single_pass_result",autopass.origin,autopass.target,selected_pass_button,reason.."|max_ball_displacement="..string.format("%.2f",autopass.ball_max_displacement))
+      print("[ISSD.pass_lv1] single-pass result: "..reason.." max_ball_displacement="..string.format("%.2f",autopass.ball_max_displacement))
     end
   end
   if armed and finish.enabled then
