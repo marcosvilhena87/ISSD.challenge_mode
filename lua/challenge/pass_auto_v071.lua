@@ -55,6 +55,10 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   if direction=="AUTO" then
    if dx>12 then buttons.Right=true elseif dx< -12 then buttons.Left=true end
    if dy>12 then buttons.Down=true elseif dy< -12 then buttons.Up=true end
+   if not (buttons.Left or buttons.Right or buttons.Up or buttons.Down) then
+    if math.abs(dx)>=math.abs(dy) then buttons[dx>=0 and "Right" or "Left"]=true
+    else buttons[dy>=0 and "Down" or "Up"]=true end
+   end
   elseif direction~="NEUTRAL" then
    for key in direction:gmatch("[^_]+") do buttons[key]=true end
   end
