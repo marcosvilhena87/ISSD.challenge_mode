@@ -10,6 +10,7 @@ local Possession=require("challenge.pass_possession_monitor_v03")
 local Spatial=require("challenge.pass_spatial_v04")
 local Timers=require("challenge.pass_timers_v05")
 local Bonus=require("challenge.pass_bonus_validation_v051")
+local Auto=require("challenge.pass_auto_v06")
 local Commands=require("challenge.dribble_commands_v035")
 local function mkdir(p) os.execute('mkdir "'..p..'" >nul 2>&1') end
 mkdir(root.."/csv"); mkdir(root.."/txt")
@@ -74,6 +75,9 @@ end
 local tracker=Tracking.new_tracker(3)
 local possession=Possession.new({minimum=3})
 local spatial=Spatial.new({threshold=24,gap=6,stable=4})
+local autopass=Auto.new()
+local selected_pass_button=nil
+local pending_auto=false
 local timers=Timers.new()
 local bonus=Bonus.new()
 local completion_frame=nil
@@ -108,6 +112,15 @@ if sf:seek("end")==0 then
  assert(sf:write("session,frame,event,from_player,to_player,ball_x,ball_y,nearest_distance,goalkeeper_distance,visited_count,route,distance_estimate,confidence\n"))
 end
 sf:close()
+local auto_csv=root.."/csv/pass_auto_v06.csv"
+local af=assert(io.open(auto_csv,"ab"))
+if af:seek("end")==0 then assert(af:write("session,frame,event,from_player,to_player,button,reason\n")) end
+af:close()
+local function auto_write(frame,event,from,to,button,reason)
+ local h=assert(io.open(auto_csv,"ab"))
+ assert(h:write(csv({session,frame,event,from,to,button,reason},7)))
+ assert(h:close())
+end
 local function spatial_write(e,sample)
  local planned=Tracking.plan(sample.players,e.to,spatial.visited)
  local h=assert(io.open(spatial_path,"ab"))
@@ -174,8 +187,10 @@ print("[ISSD.pass_lv1] commands="..command_path.." log="..log_path)
 release()
 while true do
   local p=observe()
+  local sample_for_auto=nil
   if armed then
    local ss,err=Spatial.read(memory.read_s16_le)
+   sample_for_auto=ss
    if ss then
     local event=spatial:step(ss,emu.framecount())
     if event then
@@ -222,24 +237,52 @@ while true do
   end
   commands.poll(function(line)
     local cmd=line:upper()
-    if cmd=="ARM" then
+    if cmd=="AUTO:ON" then
+      if selected_pass_button then
+       pending_auto=true;print("[ISSD.pass_lv1] AUTO queued ON for next ARM")
+      else print("[ISSD.pass_lv1] AUTO denied: configure PASSBTN:A/B/X/Y/L/R first") end
+    elseif cmd=="AUTO:OFF" then
+      pending_auto=false;autopass.enabled=false;release()
+      auto_write(emu.framecount(),"auto_off",nil,nil,selected_pass_button,"operator")
+    elseif cmd:match("^PASSBTN:[ABXYLR]$") then
+      selected_pass_button=cmd:sub(9)
+      autopass.enabled=false;pending_auto=false;release()
+      print("[ISSD.pass_lv1] experimental pass button="..selected_pass_button.." (requires AUTO:ON and ARM)")
+    elseif cmd=="ARM" then
       -- Probe is not proof of gameplay; explicit LV.1 selection is a safety gate.
       if p.status=="candidate" and p.challenge=="PASS" and p.level==1 then
-        armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();bonus=Bonus.new();completion_frame=nil;last_spatial_frame=nil;record("armed_candidate_only",p)
+        armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();bonus=Bonus.new();completion_frame=nil;last_spatial_frame=nil;autopass=Auto.new()
+        autopass.enabled=pending_auto and selected_pass_button~=nil;autopass.button=selected_pass_button;autopass.start_frame=emu.framecount()
+        pending_auto=false
+        auto_write(emu.framecount(),autopass.enabled and "auto_arm" or "observation_arm",nil,nil,selected_pass_button,"opt_in_required")
+        record("armed_candidate_only",p)
         print("[ISSD.pass_lv1] armed for observation; PASS LV.1 identity remains unconfirmed")
       else
-        armed=false;record("arm_rejected",p)
+        armed=false;autopass.enabled=false;record("arm_rejected",p)
         print("[ISSD.pass_lv1] ARM rejected: PASS LV.1 candidate not observed")
       end
     elseif cmd:match("^SNAP:[A-Z0-9_]+$") then
       dump_wram(cmd:sub(6))
     elseif cmd=="STOP" then
-      armed=false;record("stopped",p);release()
+      armed=false;autopass.enabled=false;pending_auto=false;record("stopped",p);release()
     else
       print("[ISSD.pass_lv1] unknown command: "..line)
     end
   end)
-  -- Never output controller buttons until targets and controls are validated.
-  release()
+  -- Experimental control is explicitly opt-in; no RAM writes, no auto shot.
+  local buttons={}
+  if armed and autopass.enabled and sample_for_auto then
+    local holder=spatial.holder
+    local plan=holder and Tracking.plan(sample_for_auto.players,holder,spatial.visited) or nil
+    local reason
+    buttons,reason=Auto.step(autopass,emu.framecount(),sample_for_auto,holder,spatial.visited,plan,completion_frame~=nil)
+    if reason=="pass_pulse" and autopass.last_attempt then
+      local a=autopass.last_attempt
+      auto_write(emu.framecount(),"pass_pulse",a.from,a.to,a.button,"experimental_unverified")
+    elseif reason=="timeout" or reason=="attempt_limit" or reason=="completion_candidate_stop" then
+      auto_write(emu.framecount(),"auto_stopped",holder,nil,selected_pass_button,reason)
+    end
+  end
+  joypad.set(buttons,1)
   emu.frameadvance()
 end
