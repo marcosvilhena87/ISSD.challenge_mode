@@ -11,9 +11,9 @@ local function mkdir(p) os.execute('mkdir "'..p..'" >nul 2>&1') end
 mkdir(root.."/csv"); mkdir(root.."/txt")
 local log_path=root.."/csv/pass_lv1_observations_v01.csv"
 local command_path=root.."/txt/pass_bot_commands_v01.txt"
-local function csv(v)
+local function csv(v,n)
   local out={}
-  for i=1,#v do out[i]='"'..tostring(v[i]==nil and "" or v[i]):gsub('"','""')..'"' end
+  for i=1,n do out[i]='"'..tostring(v[i]==nil and "" or v[i]):gsub('"','""')..'"' end
   return table.concat(out,",").."\n"
 end
 local f=assert(io.open(log_path,"ab"))
@@ -41,7 +41,7 @@ if tf:seek("end")==0 then
 end
 tf:close()
 local function track_write(row)
- local f=assert(io.open(tracking_log,"ab"));assert(f:write(csv(row)));assert(f:close())
+ local f=assert(io.open(tracking_log,"ab"));assert(f:write(csv(row,9)));assert(f:close())
 end
 local armed=false
 local previous=nil
@@ -50,7 +50,7 @@ local function record(event,p)
   local raw=p.raw or {}
   local row={session,emu.framecount(),event,armed and 1 or 0,p.status,p.challenge,p.level,
     raw.challenge_a,raw.challenge_b,raw.selected_level,p.reason}
-  local h=assert(io.open(log_path,"ab"));assert(h:write(csv(row)));assert(h:close())
+  local h=assert(io.open(log_path,"ab"));assert(h:write(csv(row,11)));assert(h:close())
 end
 local function observe()
   local p=Probe.read(memory.read_u8)
