@@ -6,6 +6,7 @@ assert(memory and memory.read_u8 and emu and emu.framecount and emu.frameadvance
   and joypad and joypad.set,"BizHawk APIs missing")
 local Probe=require("challenge.probe")
 local Tracking=require("challenge.pass_tracking_v02")
+local Possession=require("challenge.pass_possession_monitor_v03")
 local Commands=require("challenge.dribble_commands_v035")
 local function mkdir(p) os.execute('mkdir "'..p..'" >nul 2>&1') end
 mkdir(root.."/csv"); mkdir(root.."/txt")
@@ -68,6 +69,32 @@ local function dump_wram(label)
   print("[ISSD.pass_lv1] captured "..path)
 end
 local tracker=Tracking.new_tracker(3)
+local possession=Possession.new({minimum=3})
+local possession_path=root.."/csv/pass_possession_v03.csv"
+local ph=assert(io.open(possession_path,"ab"))
+if ph:seek("end")==0 then
+ assert(ph:write("session,frame,event,previous_raw,current_raw,player_id,source,confidence\n"))
+end
+ph:close()
+local function possession_write(e,source)
+ local h=assert(io.open(possession_path,"ab"))
+ assert(h:write(csv({session,e.frame,e.kind,e.previous,e.current,e.player_id,
+  source,e.evidence},8)))
+ assert(h:close())
+end
+-- Legacy DRIBBLE possession word 0x00A6 is ONLY A CANDIDATE in PASS.
+-- Observe without allowing it to mark a player or a successful pass.
+local candidate_addr=0x00A6
+local candidate_width=16
+local function sample_candidate()
+ local address=(map and map.possession_address) or candidate_addr
+ local width=(map and map.possession_width) or candidate_width
+ local fn=width==8 and memory.read_u8 or memory.read_u16_le
+ if type(fn)~="function" then return nil end
+ local ok,v=pcall(fn,address,"WRAM")
+ if ok and type(v)=="number" then return v end
+ return nil
+end
 local tracking_log=root.."/csv/pass_lv1_tracking_v02.csv"
 local tf=assert(io.open(tracking_log,"ab"))
 if tf:seek("end")==0 then
@@ -100,6 +127,17 @@ print("[ISSD.pass_lv1] commands="..command_path.." log="..log_path)
 release()
 while true do
   local p=observe()
+  if armed then
+   local raw=sample_candidate()
+   local player_id=nil
+   if map and raw~=nil then
+    for _,entity in ipairs(map.players) do
+     if entity.possession_value==raw then player_id=entity.id;break end
+    end
+   end
+   local e=possession:step(emu.framecount(),raw,player_id)
+   if e then possession_write(e,map and "operator_ram_map" or "legacy_dribble_00A6_hypothesis") end
+  end
   if map and armed and p.status=="candidate" and p.challenge=="PASS" and p.level==1 then
    local sample,reason=Tracking.sample(map,memory.read_u8,memory.read_u16_le,memory.read_s16_le)
    if sample then
@@ -122,7 +160,7 @@ while true do
     if cmd=="ARM" then
       -- Probe is not proof of gameplay; explicit LV.1 selection is a safety gate.
       if p.status=="candidate" and p.challenge=="PASS" and p.level==1 then
-        armed=true;tracker=Tracking.new_tracker(3);record("armed_candidate_only",p)
+        armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});record("armed_candidate_only",p)
         print("[ISSD.pass_lv1] armed for observation; PASS LV.1 identity remains unconfirmed")
       else
         armed=false;record("arm_rejected",p)
