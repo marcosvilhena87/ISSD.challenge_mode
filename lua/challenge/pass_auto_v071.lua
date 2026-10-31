@@ -4,7 +4,7 @@ local M={}
 function M.new()
  return {enabled=false,button="B",phase="idle",start_frame=nil,tries=0,
  target=nil,origin=nil,pass_frame=nil,ball_before=nil,ball_max_displacement=0,
- hold_frames=3,wait_frames=90,last_attempt=nil,direction="AUTO"}
+ hold_frames=3,wait_frames=90,last_attempt=nil,direction="AUTO",align_frames=2}
 end
 local function find(players,id)
  for _,p in ipairs(players or {}) do if p.id==id then return p end end
@@ -33,6 +33,18 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   end
   return empty,"await_ball_motion"
  end
+ if t.phase=="align" then
+  local dest=find(sample and sample.players,t.target)
+  local origin=find(sample and sample.players,t.origin)
+  if not dest or not origin then t.enabled=false;return empty,"coordinates_lost" end
+  local dx,dy=dest.x-origin.x,dest.y-origin.y
+  local buttons={}
+  if dx>12 then buttons.Right=true elseif dx< -12 then buttons.Left=true end
+  if dy>12 then buttons.Down=true elseif dy< -12 then buttons.Up=true end
+  t.align_count=(t.align_count or 0)+1
+  if t.align_count>=t.align_frames then t.phase="hold" end
+  return buttons,"alignment_correction"
+ end
  if t.phase=="hold" then
   local dest=find(sample and sample.players,t.target)
   local origin=find(sample and sample.players,t.origin)
@@ -50,18 +62,18 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   if t.hold_count>=t.hold_frames then
    t.phase="wait";t.pass_frame=frame;t.tries=1
    -- Preserve the pre-input position from target selection.
-   t.last_attempt={frame=frame,from=t.origin,to=t.target,button="B",hold_frames=t.hold_frames,direction=t.direction}
+   t.last_attempt={frame=frame,from=t.origin,to=t.target,button="B",hold_frames=t.hold_frames,direction=t.direction,alignment_frames=t.align_count or 0}
    return buttons,"pass_pulse"
   end
   return buttons,"direction_and_B_hold"
  end
  if t.phase=="idle" then
   if not sample or not sample.ball or not holder then return empty,"no_stable_holder" end
-  local target=plan and plan.sequence and plan.sequence[1]
+  local target=plan and (plan.target or (plan.sequence and plan.sequence[1]))
   if not target or target==holder or not find(sample.players,target) then
    return empty,"no_valid_target"
   end
-  t.origin=holder;t.target=target;t.phase="hold";t.hold_count=0
+  t.origin=holder;t.target=target;t.phase=(plan and plan.aligned==false) and "align" or "hold";t.hold_count=0;t.align_count=0
   t.ball_before={x=sample.ball.x,y=sample.ball.y}
   return empty,"target_selected"
  end
