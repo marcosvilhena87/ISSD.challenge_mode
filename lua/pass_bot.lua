@@ -147,6 +147,30 @@ local function log_input(frame,phase,reason,holder,target,b)
  b.Left and 1 or 0,b.Right and 1 or 0,b.B and 1 or 0,b.X and 1 or 0},12)))
  assert(h:close())
 end
+local candidate_csv=root.."/csv/pass_candidates_v082.csv"
+local candidate_file=assert(io.open(candidate_csv,"ab"))
+if candidate_file:seek("end")==0 then
+ assert(candidate_file:write("session,frame,holder,selector_reason,players,eligible,excluded_holder,excluded_visited,excluded_invalid,candidate_id,dx,dy,distance,misalignment,cost,selected\n"))
+end
+candidate_file:close()
+local function candidate_write(frame,holder,reason,report,selected)
+ local h=assert(io.open(candidate_csv,"ab"))
+ if report and #report.candidates>0 then
+  for _,c in ipairs(report.candidates) do
+   assert(h:write(csv({session,frame,holder,reason,report.players,report.eligible,
+    report.excluded_holder,report.excluded_visited,report.excluded_invalid,
+    c.id,c.dx,c.dy,string.format("%.2f",c.distance),
+    string.format("%.2f",c.misalignment),string.format("%.2f",c.cost),
+    selected and c.id==selected.id and 1 or 0},16)))
+  end
+ else
+  assert(h:write(csv({session,frame,holder,reason,
+   report and report.players,report and report.eligible,
+   report and report.excluded_holder,report and report.excluded_visited,
+   report and report.excluded_invalid},16)))
+ end
+ assert(h:close())
+end
 local auto_csv=root.."/csv/pass_auto_v06.csv"
 local af=assert(io.open(auto_csv,"ab"))
 if af:seek("end")==0 then assert(af:write("session,frame,event,from_player,to_player,button,reason\n")) end
@@ -201,6 +225,7 @@ local function track_write(row)
 end
 local armed=false
 local previous=nil
+local auto_finished=false
 local function release() joypad.set({},1) end
 local function record(event,p)
   local raw=p.raw or {}
@@ -217,7 +242,7 @@ end
 local commands=Commands.new(command_path,function(message)
   print("[ISSD.pass_lv1] "..message)
 end)
-print("[ISSD.pass_lv1] OBSERVATION ONLY: no validated PASS targets or success signals")
+print("[ISSD.pass_lv1] observation default; experimental input is opt-in; PASS success signals unverified")
 print("[ISSD.pass_lv1] commands="..command_path.." log="..log_path)
 release()
 while true do
@@ -304,7 +329,7 @@ while true do
       if p.status=="candidate" and p.challenge=="PASS" and p.level==1 then
         armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();bonus=Bonus.new();completion_frame=nil;last_spatial_frame=nil;autopass=Auto.new();finish=Finish.new();finish.enabled=false;auto_finish_queued=false
         autopass.enabled=pending_auto and selected_pass_button=="B";autopass.button=selected_pass_button;autopass.start_frame=emu.framecount();autopass.direction=selected_direction
-        pending_auto=false
+        pending_auto=false;auto_finished=false
         auto_write(emu.framecount(),autopass.enabled and "auto_arm" or "observation_arm",nil,nil,selected_pass_button,"opt_in_required")
         record("armed_candidate_only",p)
         print("[ISSD.pass_lv1] armed for observation; PASS LV.1 identity remains unconfirmed")
@@ -322,9 +347,15 @@ while true do
   end)
   -- Experimental control is explicitly opt-in; no RAM writes, no auto shot.
   local buttons={}
-  if armed and autopass.enabled and sample_for_auto then
+  if armed and autopass.enabled and not auto_finished and sample_for_auto then
     local holder=spatial.holder
-    local receiver=holder and Alignment.choose(sample_for_auto,holder,spatial.visited,{tolerance=12,alignment_weight=0.25}) or nil
+    local receiver,selector_reason,report
+    if holder then
+      receiver,selector_reason,report=Alignment.choose(sample_for_auto,holder,spatial.visited,{tolerance=12,alignment_weight=0.25})
+    else selector_reason="no_stable_holder" end
+    if autopass.phase=="idle" and holder then
+      candidate_write(emu.framecount(),holder,selector_reason,report,receiver)
+    end
     local plan=receiver and {target=receiver.id,aligned=receiver.aligned} or nil
     local reason
     local phase_before=autopass.phase
@@ -332,6 +363,12 @@ while true do
     if buttons.B or buttons.Up or buttons.Down or buttons.Left or buttons.Right or
        reason=="target_selected" or reason=="no_valid_target" or reason=="no_direction_for_pass" then
       log_input(emu.framecount(),phase_before,reason,holder,autopass.target,buttons)
+    end
+    if reason=="no_valid_target" then
+      local diagnostic=string.format("selector=%s|players=%d|eligible=%d|excluded_visited=%d|excluded_invalid=%d",
+       tostring(selector_reason),report and report.players or 0,report and report.eligible or 0,
+       report and report.excluded_visited or 0,report and report.excluded_invalid or 0)
+      auto_write(emu.framecount(),"target_rejected",holder,nil,selected_pass_button,diagnostic)
     end
     if reason=="target_selected" and receiver then
       auto_write(emu.framecount(),"receiver_selected",holder,receiver.id,selected_pass_button,
@@ -344,6 +381,7 @@ while true do
     elseif reason=="transfer_candidate_observed" or reason=="ball_moved_without_transfer" or reason=="no_ball_motion_detected" or reason=="timeout" or reason=="completion_candidate_stop" or reason=="coordinates_lost" or reason=="no_valid_target" or reason=="no_direction_for_pass" then
       auto_write(emu.framecount(),"single_pass_result",autopass.origin,autopass.target,selected_pass_button,reason.."|direction="..selected_direction.."|max_ball_displacement="..string.format("%.2f",autopass.ball_max_displacement))
       calibration_write(emu.framecount(),reason,autopass.last_attempt,reason=="transfer_candidate_observed" and holder or nil,reason=="transfer_candidate_observed" and emu.framecount() or nil)
+      autopass.enabled=false;auto_finished=true
       print("[ISSD.pass_lv1] single-pass result: "..reason.." max_ball_displacement="..string.format("%.2f",autopass.ball_max_displacement))
     end
   end
