@@ -19,7 +19,7 @@ function M.validate(config)
  for _,p in ipairs(config.players) do
   if type(p.id)~="number" or ids[p.id] then return nil,"duplicate_or_invalid_player_id" end
   if type(p.possession_value)~="number" or slots[p.possession_value] then return nil,"duplicate_or_invalid_possession_value" end
-  if not finite(p.x_address) or not finite(p.y_address) or p.x_address<0 or p.y_address<0 or p.x_address>0x1ffff or p.y_address>0x1ffff then
+  if type(p.x_address)~="number" or type(p.y_address)~="number" or p.x_address%1~=0 or p.y_address%1~=0 or p.x_address<0 or p.y_address<0 or p.x_address>0x1ffff or p.y_address>0x1ffff then
    return nil,"invalid_position_address"
   end
   ids[p.id]=true;slots[p.possession_value]=p.id
