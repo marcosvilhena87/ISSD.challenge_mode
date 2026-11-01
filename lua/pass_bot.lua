@@ -1045,6 +1045,11 @@ while true do
               for key,pressed in pairs(buttons) do if pressed then movement.burst_direction=key end end
             end
             local desired_burst=(holder==5 and target==8 and not movement.right_suspended and buttons.Right) and 8 or Ordered.BURST_FRAMES
+            if holder==7 and target==10 and buttons.Right and not buttons.Left and not buttons.B then
+              desired_burst=Ordered.CONTINUOUS_HOLD_710
+            elseif holder==6 and target==7 and buttons.Up and buttons.Right and not buttons.B then
+              desired_burst=Ordered.CONTINUOUS_HOLD_67
+            end
             local recovery_cap=(movement.recovery_exploratory and (movement.recovery_left or 0)>0)
                 and movement.recovery_left or desired_burst
             movement.burst_remaining=math.min(desired_burst,
@@ -1057,6 +1062,12 @@ while true do
               "|geometry_reason="..tostring(movement.geometry_reason)..
               "|up="..tostring(buttons.Up==true)..
               "|right="..tostring(buttons.Right==true))
+            if desired_burst>Ordered.BURST_FRAMES and movement.burst_remaining>0 then
+              auto_write(emu.framecount(),"approach_continuous_hold_started",holder,target,selected_pass_button,
+                "frames="..tostring(movement.burst_remaining)..
+                "|direction="..tostring(movement.burst_direction)..
+                "|approach_frames="..tostring(pass_chain.approach_frames))
+            end
             auto_write(emu.framecount(),"approach_burst_started",holder,target,selected_pass_button,
               "frames="..movement.burst_remaining.."|axis="..tostring(movement.axis))
           end
@@ -1081,6 +1092,13 @@ while true do
             end
           end
           movement.burst_remaining=movement.burst_remaining-1
+          if movement.burst_remaining==0 and
+             ((holder==7 and target==10 and movement.burst_direction=="Right")
+               or (holder==6 and target==7 and movement.burst_direction=="Up_Right")) then
+            auto_write(emu.framecount(),"approach_continuous_hold_ended",holder,target,selected_pass_button,
+              "direction="..tostring(movement.burst_direction)..
+              "|approach_frames="..tostring(pass_chain.approach_frames))
+          end
           pass_chain.approach_neutral=movement.burst_remaining==0
           if pass_chain.approach_neutral and holder==5 and target==8 and movement.burst_direction=="Right" then
             movement.right_followup_left=3
