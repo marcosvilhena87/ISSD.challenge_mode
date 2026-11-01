@@ -735,6 +735,23 @@ while true do
               "|cumulative_growth="..tostring(movement.pair_89_total_growth))
           end
         end
+        if holder==6 and target==7 and measurement and movement.burst_start
+          and movement.burst_direction=="Up_Right" then
+          local d=measurement.distance-movement.burst_start.distance
+          local l=measurement.lateral-movement.burst_start.lateral
+          local motion=movement.last_motion
+          local moved=motion and (math.abs(motion.holder_dx)+math.abs(motion.holder_dy)) or 0
+          movement.pair_67_diagonal_trials=(movement.pair_67_diagonal_trials or 0)+1
+          if (d>2 and l>2) or
+             ((movement.pair_67_diagonal_trials or 0)>=2 and moved<0.5) then
+            movement.pair_67_diagonal_disabled=true
+          end
+          auto_write(emu.framecount(),"approach_67_diagonal_feedback",holder,target,selected_pass_button,
+            "distance_growth="..tostring(d).."|lateral_growth="..tostring(l)..
+            "|holder_motion="..tostring(moved)..
+            "|trials="..tostring(movement.pair_67_diagonal_trials)..
+            "|disabled="..tostring(movement.pair_67_diagonal_disabled or false))
+        end
         if holder==6 and target==7 and measurement and movement.burst_start then
           local gain=movement.burst_start.distance-measurement.distance
           local lateral_gain=movement.burst_start.lateral-measurement.lateral

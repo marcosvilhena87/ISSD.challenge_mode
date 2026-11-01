@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.52",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.53",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -102,6 +102,15 @@ function M.step(sample,holder,target,state)
   local blocked=state.pair_67_avoid_direction
   state.penalties=state.penalties or {}
   if blocked then state.penalties[blocked]=math.max(state.penalties[blocked] or 0,36) end
+ end
+ -- 6→7: experimental UP+RIGHT movement (no B). Require the target
+ -- to be up-right and use WRAM feedback to retire a regressing diagonal.
+ if holder==6 and target==7 and state and dx>8 and dy< -8
+   and not state.pair_67_diagonal_disabled
+   and (state.pair_67_diagonal_trials or 0)<4 then
+  state.direction="Up_Right";state.axis="xy"
+  state.geometry_reason="pair_67_up_right_approach"
+  return {Up=true,Right=true},"approach_step",metrics
  end
  -- Only 6→7: maintain UP while recent neutral feedback proves progress.
  if holder==6 and target==7 and state and state.pair_67_avoid_direction~="Up" and (state.pair_67_up_streak or 0)>=2
