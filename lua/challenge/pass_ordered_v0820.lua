@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.28",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.29",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -74,23 +74,36 @@ function M.observe(state,metrics)
  if state.burst_start and state.burst_direction then
   local before=state.burst_start
   local gain=M.score(before)-M.score(metrics)
+  local delta_distance=before.distance-d
+  local delta_lateral=before.lateral-lateral
   local key=state.burst_direction
   state.penalties=state.penalties or {}
   state.tried=state.tried or {}
   state.tried[key]=true
-  if gain< -0.5 then
+  state.last_distance_gain=delta_distance
+  state.last_lateral_gain=delta_lateral
+  if delta_distance>0.5 or delta_lateral>0.5 then
+   -- Partial improvement must not count as a bad burst even if weighted cost rose.
+   state.penalties[key]=math.max(0,(state.penalties[key] or 0)-2)
+   state.bad_bursts=0;state.zero_bursts=0;state.tried={}
+   result="direction_partial_progress"
+  elseif delta_distance< -0.5 and delta_lateral< -0.5 then
+   -- Only penalize when BOTH dimensions regress.
    state.penalties[key]=(state.penalties[key] or 0)+8
    state.bad_bursts=(state.bad_bursts or 0)+1
+   state.zero_bursts=0
    result="direction_worsened"
-  elseif gain<=0.5 then
-   state.penalties[key]=(state.penalties[key] or 0)+3
-   state.bad_bursts=(state.bad_bursts or 0)+1
-   result="direction_no_progress"
   else
-   state.penalties[key]=math.max(0,(state.penalties[key] or 0)-3)
-   state.bad_bursts=0
-   state.tried={}
-   result="direction_improved"
+   -- No detectable displacement may mean animation/latency: wait for samples.
+   state.zero_bursts=(state.zero_bursts or 0)+1
+   if state.zero_bursts>=3 then
+    state.penalties[key]=(state.penalties[key] or 0)+3
+    state.bad_bursts=(state.bad_bursts or 0)+1
+    state.zero_bursts=0
+    result="direction_no_progress"
+   else
+    result="direction_pending_feedback"
+   end
   end
   state.last_gain=gain
   state.burst_start=nil
