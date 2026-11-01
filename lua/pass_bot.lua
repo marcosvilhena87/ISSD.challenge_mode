@@ -92,6 +92,7 @@ local auto_finish_queued=false
 local selected_pass_button=nil
 local pending_auto=false
 local selected_direction="AUTO"
+local trigger_mode="A"
 local timers=Timers.new()
 local bonus=Bonus.new()
 local completion_frame=nil
@@ -191,6 +192,27 @@ af:close()
 local function auto_write(frame,event,from,to,button,reason)
  local h=assert(io.open(auto_csv,"ab"))
  assert(h:write(csv({session,frame,event,from,to,button,reason},7)))
+ assert(h:close())
+end
+local trigger_csv=root.."/csv/pass_trigger_v0811.csv"
+local trigger_header=assert(io.open(trigger_csv,"ab"))
+if trigger_header:seek("end")==0 then
+ assert(trigger_header:write("session,frame,mode,phase,reason,holder,target,ball_x,ball_y,holder_x,holder_y,distance,up,down,left,right,B\n"))
+end
+trigger_header:close()
+local function trigger_write(frame,mode,phase,reason,holder,target,sample,buttons)
+ local hp
+ if sample then
+  for _,p in ipairs(sample.players or {}) do if p.id==holder then hp=p;break end end
+ end
+ local ball=sample and sample.ball
+ local d=ball and hp and math.sqrt((ball.x-hp.x)^2+(ball.y-hp.y)^2) or nil
+ local h=assert(io.open(trigger_csv,"ab"))
+ assert(h:write(csv({session,frame,mode,phase,reason,holder,target,
+  ball and ball.x,ball and ball.y,hp and hp.x,hp and hp.y,
+  d and string.format("%.3f",d),buttons.Up and 1 or 0,
+  buttons.Down and 1 or 0,buttons.Left and 1 or 0,
+  buttons.Right and 1 or 0,buttons.B and 1 or 0},17)))
  assert(h:close())
 end
 local function spatial_write(e,sample)
@@ -330,7 +352,10 @@ while true do
   end
   commands.poll(function(line)
     local cmd=line:upper()
-    if cmd=="FINISH:ON" then
+    if cmd=="TRIGGER:A" or cmd=="TRIGGER:B" then
+      if armed then print("[ISSD.pass_lv1] TRIGGER mode requires a new ARM")
+      else trigger_mode=cmd:sub(9);print("[ISSD.pass_lv1] trigger experiment="..trigger_mode) end
+    elseif cmd=="FINISH:ON" then
       auto_finish_queued=false
       print("[ISSD.pass_lv1] FINISH disabled in v0.7.1 single-pass diagnostic")
       -- print("[ISSD.pass_lv1] FINISH queued for next ARM; X shot only after spatial completion and bonus countdown")
@@ -361,9 +386,9 @@ while true do
       -- Probe is not proof of gameplay; explicit LV.1 selection is a safety gate.
       if p.status=="candidate" and p.challenge=="PASS" and p.level==1 then
         armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();bonus=Bonus.new();completion_frame=nil;last_spatial_frame=nil;autopass=Auto.new();finish=Finish.new();finish.enabled=false;auto_finish_queued=false
-        autopass.enabled=pending_auto and selected_pass_button=="B";autopass.button=selected_pass_button;autopass.start_frame=emu.framecount();autopass.direction=selected_direction
+        autopass.enabled=pending_auto and selected_pass_button=="B";autopass.button=selected_pass_button;autopass.start_frame=emu.framecount();autopass.direction=selected_direction;autopass.trigger_delay=trigger_mode=="B" and 12 or 0
         pending_auto=false;auto_finished=false;previous_gate=nil
-        pass_chain={active=autopass.enabled,passes=0,next_frame=0,limit=14,started=false}
+        pass_chain={active=autopass.enabled,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0}
         auto_write(emu.framecount(),autopass.enabled and "auto_arm" or "observation_arm",nil,nil,selected_pass_button,"opt_in_required")
         record("armed_candidate_only",p)
         print("[ISSD.pass_lv1] armed for observation; PASS LV.1 identity remains unconfirmed")
@@ -521,7 +546,7 @@ while true do
           -- Retain the spatial visitor set, reset only the one-pass actuator.
           local next_auto=Auto.new()
           next_auto.enabled=true;next_auto.button="B";next_auto.direction=selected_direction
-          next_auto.start_frame=emu.framecount()
+          next_auto.start_frame=emu.framecount();next_auto.trigger_delay=trigger_mode=="B" and 12 or 0
           autopass=next_auto;pass_chain.next_frame=emu.framecount()+8
           auto_write(emu.framecount(),"chain_next_pending",holder,nil,selected_pass_button,"cooldown_frames=8")
         end
@@ -539,6 +564,16 @@ while true do
     -- Finalization only emits X once; it must never combine with pass B.
     if shot.X then buttons={X=true};autopass.enabled=false
     elseif completion_frame then buttons={} end
+  end
+  -- Frame-level WRAM evidence surrounding every pass and trigger delay.
+  if armed and sample_for_auto and
+      (autopass.phase=="prewait" or autopass.phase=="align" or
+       autopass.phase=="hold" or autopass.phase=="wait") then
+    local pf=autopass.pass_frame
+    if autopass.phase~="wait" or (pf and emu.framecount()-pf<=30) then
+      trigger_write(emu.framecount(),trigger_mode,autopass.phase,"frame_sample",
+        spatial.holder,autopass.target,sample_for_auto,buttons)
+    end
   end
   joypad.set(buttons,1)
   emu.frameadvance()
