@@ -17,6 +17,8 @@ package.loaded["challenge.pass_auto_v071"]=nil
 package.loaded["challenge.pass_bridge_v083"]=nil
 local Alignment=require("challenge.pass_alignment_v08")
 local Bridge=require("challenge.pass_bridge_v083")
+package.loaded["challenge.pass_relay_v0810"]=nil
+package.loaded["challenge.pass_priority_v087"]=nil
 local Priority=require("challenge.pass_priority_v087")
 Auto=require("challenge.pass_auto_v071")
 local Finish=require("challenge.pass_finish_v07")
@@ -237,7 +239,7 @@ end
 local armed=false
 local previous=nil
 local auto_finished=false
-local pass_chain={active=false,passes=0,next_frame=0,limit=14,started=false}
+local pass_chain={active=false,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0}
 local previous_gate=nil
 local function gate_write(frame,gate,reason,p,sample)
  local signature=table.concat({gate,tostring(armed),tostring(autopass.enabled),
@@ -420,7 +422,7 @@ while true do
     local holder=spatial.holder
     local plan,selector_reason,bridge_info,priority_stage
     if holder and integration_ok then
-      plan,selector_reason,bridge_info,priority_stage=Priority.resolve(Bridge,Alignment,sample_for_auto,holder,spatial.visited)
+      plan,selector_reason,bridge_info,priority_stage=Priority.resolve(Bridge,Alignment,sample_for_auto,holder,spatial.visited,pass_chain.previous,pass_chain.consecutive_relays)
     elseif not integration_ok then selector_reason="integration_selftest_failed"
     else selector_reason="no_stable_holder" end
     local report=bridge_info and bridge_info.report
@@ -430,7 +432,7 @@ while true do
       auto_write(emu.framecount(),"handoff_diagnostic",holder,
        bridge_info and bridge_info.receiver_id,selected_pass_button,
        "module="..tostring(Alignment.VERSION).."|selector="..tostring(bridge_info and bridge_info.reason or selector_reason)..
-       "|receiver="..tostring(bridge_info and bridge_info.receiver_id).."|plan="..tostring(plan and plan.target).."|priority_stage="..tostring(priority_stage).."|route_score="..tostring(bridge_info and bridge_info.route_score).."|route_version=0.8.9")
+       "|receiver="..tostring(bridge_info and bridge_info.receiver_id).."|plan="..tostring(plan and plan.target).."|priority_stage="..tostring(priority_stage).."|route_score="..tostring(bridge_info and bridge_info.route_score).."|route_version=0.8.10|relay_mode="..tostring(bridge_info and bridge_info.relay_mode))
     end
     if autopass.phase=="idle" and bridge_info and bridge_info.route_evaluated then
       for rank,c in ipairs(bridge_info.route_evaluated) do
@@ -459,6 +461,7 @@ while true do
       auto_write(emu.framecount(),"target_rejected",holder,nil,selected_pass_button,diagnostic)
     end
     if reason=="target_selected" and receiver then
+      autopass.target_was_visited=spatial.visited[receiver.id] and true or false
       local c
       for _,candidate in ipairs(report and report.candidates or {}) do
        if candidate.id==receiver.id then c=candidate;break end
@@ -500,6 +503,16 @@ while true do
       local completed_displacement=autopass.ball_max_displacement
       if reason=="transfer_candidate_observed" and pass_chain.active then
         pass_chain.passes=pass_chain.passes+1
+        if spatial.visited[holder] and holder~=autopass.origin then
+          -- Spatial visited is already updated by Spatial.step; inspect whether
+          -- this was a previously visited receiver via a saved pre-pass snapshot.
+          if autopass.target_was_visited then
+            pass_chain.consecutive_relays=pass_chain.consecutive_relays+1
+          else
+            pass_chain.consecutive_relays=0
+          end
+        end
+        pass_chain.previous=autopass.origin
         local visits=0;for id in pairs(spatial.visited) do if type(id)=="number" and id>=2 and id<=11 then visits=visits+1 end end
         auto_write(emu.framecount(),"chain_transfer_candidate",autopass.origin,holder,selected_pass_button,
           "observed="..tostring(holder).."|planned="..tostring(autopass.target).."|visited="..visits.."/10|passes="..pass_chain.passes)
