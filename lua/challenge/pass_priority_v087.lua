@@ -29,7 +29,7 @@ function M.resolve(bridge,selector,sample,holder,visited)
  for id in pairs(visited or {}) do filtered[id]=true end
  local plan,reason,info=bridge.resolve(selector,sample,holder,filtered)
  if plan and info and info.report then
-  local best,score,evaluated=Route.choose(sample,holder,filtered,info.report,stage)
+  local best,score,evaluated=Route.choose(sample,holder,visited,info.report,stage)
   if best then
    plan.target=best.id;plan.aligned=best.aligned
    info.receiver_id=best.id;info.plan_target=best.id
