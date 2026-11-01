@@ -24,9 +24,11 @@ function M.choose(sample,holder,visited,previous,consecutive)
  local best,score,details
  for id in pairs(goals) do
   if id~=holder and points[id] then
-   local cost=leg(points[holder],points[id])
+   local direct=leg(points[holder],points[id])
+   -- Strongly discourage long, hard-to-control direct passes.
+   local cost=direct+math.max(0,direct-180)*2
    if not best or cost<score then
-    best=id;score=cost;details={mode="new",immediate=cost,onward=0,total=cost}
+    best=id;score=cost;details={mode="new",immediate=direct,onward=0,total=cost}
    end
   end
  end
@@ -42,7 +44,7 @@ function M.choose(sample,holder,visited,previous,consecutive)
       if not second or d<second then second=d end
      end
     end
-    if second then
+    if second and first<=200 and second<=200 then
      local total=first+second+M.RELAY_PENALTY
      if not best or total<score then
       best=id;score=total
