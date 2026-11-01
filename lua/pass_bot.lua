@@ -668,6 +668,13 @@ while true do
       auto_write(emu.framecount(),"target_rejected",holder,nil,selected_pass_button,diagnostic)
     end
     if reason=="target_selected" and receiver then
+      -- Per-pass experiment: apply UP+B only to 6 -> 2.
+      -- Do not change selected_direction or subsequent pass settings.
+      if autopass.origin==6 and autopass.target==2 then
+        autopass.direction="Up"
+        auto_write(emu.framecount(),"pass_direction_override",6,2,selected_pass_button,
+          "direction=Up|button=B|policy=pair_6_2_only")
+      end
       autopass.visited_before_pass={}
       for id,seen in pairs(spatial.visited) do autopass.visited_before_pass[id]=seen end
       local c
