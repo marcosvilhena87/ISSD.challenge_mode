@@ -944,7 +944,7 @@ while true do
             local initial=Feet.measure(sample_for_auto,holder,target)
             movement.burst_start=initial
             movement.burst_positions=Ordered.capture(sample_for_auto,holder,target)
-            if holder==8 and target==9 and buttons.Up and buttons.Right then
+            if (holder==8 and target==9 or holder==6 and target==7) and buttons.Up and buttons.Right then
               movement.burst_direction="Up_Right"
               movement.diagonal_start=initial
               auto_write(emu.framecount(),"approach_diagonal_started",holder,target,selected_pass_button,
@@ -963,7 +963,10 @@ while true do
             auto_write(emu.framecount(),"approach_coordinate_decision",holder,target,selected_pass_button,
               "dx="..tostring(initial and initial.dx).."|dy="..tostring(initial and initial.dy)..
               "|direction="..tostring(movement.burst_direction)..
-              "|frames="..tostring(movement.burst_remaining))
+              "|frames="..tostring(movement.burst_remaining)..
+              "|geometry_reason="..tostring(movement.geometry_reason)..
+              "|up="..tostring(buttons.Up==true)..
+              "|right="..tostring(buttons.Right==true))
             auto_write(emu.framecount(),"approach_burst_started",holder,target,selected_pass_button,
               "frames="..movement.burst_remaining.."|axis="..tostring(movement.axis))
           end
@@ -1217,6 +1220,20 @@ while true do
       "between="..tostring(blocker.between).."|offset="..tostring(blocker.offset).."|blocked="..tostring(blocker.blocked)) end
   end
   if buttons.X then log_input(emu.framecount(),"finish","shoot_pulse",spatial.holder,nil,buttons) end
+  if armed and pass_chain.active and (holder==9 or holder==6) and
+      (pass_chain.approach_state and (pass_chain.approach_state.direction or
+       pass_chain.approach_state.burst_direction)) then
+    local trace=pass_chain.approach_state
+    local target=autopass and autopass.target
+    if target==7 and (buttons.Up or buttons.Right or buttons.Left or buttons.Down) then
+      auto_write(emu.framecount(),"approach_7_joypad_commit",holder,target,selected_pass_button,
+        "selected="..tostring(trace.burst_direction or trace.direction)..
+        "|reason="..tostring(trace.geometry_reason)..
+        "|up="..tostring(buttons.Up==true).."|right="..tostring(buttons.Right==true)..
+        "|down="..tostring(buttons.Down==true).."|left="..tostring(buttons.Left==true)..
+        "|pass_b="..tostring(buttons.B==true))
+    end
+  end
   joypad.set(buttons,1)
   emu.frameadvance()
 end
