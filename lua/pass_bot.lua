@@ -559,6 +559,17 @@ while true do
         buttons={};reason="approach_neutral";pass_chain.approach_neutral=false
         local measurement=Feet.measure(sample_for_auto,holder,target)
         local feedback=Ordered.observe(pass_chain.approach_state,measurement)
+        if feedback=="direction_worsened" or feedback=="direction_no_progress" or feedback=="direction_improved" then
+          auto_write(emu.framecount(),"approach_direction_feedback",holder,target,selected_pass_button,
+            "result="..feedback.."|gain="..tostring(movement.last_gain)..
+            "|bad_bursts="..tostring(movement.bad_bursts or 0)..
+            "|distance="..tostring(measurement and measurement.distance)..
+            "|lateral="..tostring(measurement and measurement.lateral))
+        elseif feedback=="no_direction_improves" then
+          auto_write(emu.framecount(),"approach_no_improvement",holder,target,selected_pass_button,
+            "bad_bursts="..tostring(movement.bad_bursts))
+          buttons={};autopass.enabled=false;pass_chain.active=false;auto_finished=true
+        end
         if feedback=="axis_switched" then
           auto_write(emu.framecount(),"approach_axis_switched",holder,target,selected_pass_button,
             "axis="..tostring(pass_chain.approach_state.axis).."|switches="..tostring(pass_chain.approach_state.switches)..
@@ -602,6 +613,9 @@ while true do
           buttons,reason=Ordered.step(sample_for_auto,holder,target,movement)
           if reason=="approach_step" then
             movement.burst_buttons=buttons
+            local initial=Feet.measure(sample_for_auto,holder,target)
+            movement.burst_start=initial
+            for key,pressed in pairs(buttons) do if pressed then movement.burst_direction=key end end
             movement.burst_remaining=math.min(Ordered.BURST_FRAMES,
               (movement.approach_limit or Ordered.MAX_APPROACH)-(pass_chain.approach_frames or 0))
             auto_write(emu.framecount(),"approach_burst_started",holder,target,selected_pass_button,
