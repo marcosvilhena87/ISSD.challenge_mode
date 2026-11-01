@@ -400,7 +400,7 @@ while true do
         armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();bonus=Bonus.new();completion_frame=nil;last_spatial_frame=nil;autopass=Auto.new();finish=Finish.new();finish.enabled=auto_finish_queued;auto_finish_queued=false
         autopass.enabled=pending_auto and selected_pass_button=="B";autopass.button=selected_pass_button;autopass.start_frame=emu.framecount();autopass.direction=selected_direction;autopass.trigger_delay=trigger_mode=="B" and 12 or 0
         pending_auto=false;auto_finished=false;previous_gate=nil
-        pass_chain={active=autopass.enabled,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0}
+        pass_chain={active=autopass.enabled,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0,route_index=1,approach_frames=0,approach_neutral=false}
         auto_write(emu.framecount(),autopass.enabled and "auto_arm" or "observation_arm",nil,nil,selected_pass_button,"opt_in_required")
         record("armed_candidate_only",p)
         print("[ISSD.pass_lv1] armed for observation; PASS LV.1 identity remains unconfirmed")
@@ -503,7 +503,7 @@ while true do
     if autopass.phase=="idle" and not plan and selector_reason=="approach_required"
         and pass_chain.active and holder then
       local target=bridge_info and bridge_info.target
-      if pass_chain.approach_frames>=Ordered.MAX_APPROACH then
+      if (pass_chain.approach_frames or 0)>=Ordered.MAX_APPROACH then
         reason="approach_timeout";buttons={};autopass.enabled=false
         pass_chain.active=false;auto_finished=true
         auto_write(emu.framecount(),"approach_timeout",holder,target,selected_pass_button,
