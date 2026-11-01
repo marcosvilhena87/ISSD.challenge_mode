@@ -650,30 +650,41 @@ while true do
             "|lateral_growth="..tostring(lateral_growth)..
             "|disabled="..tostring(movement.diagonal_disabled))
         end
-        -- Evaluate 8→9 using the result at each neutral boundary. Stop early
-        -- if repeated bursts increase distance instead of blindly switching.
+        -- 8→9: separate movement of the carrier from movement of the receiver.
+        -- Receiver escape is not automatically blamed on the commanded input.
         if holder==8 and target==9 and measurement and movement.burst_start then
           local delta=measurement.distance-movement.burst_start.distance
           local lateral_delta=measurement.lateral-movement.burst_start.lateral
-          if delta>1.5 then
-            movement.pair_89_last_bad_direction=movement.burst_direction
-            movement.pair_89_regression=(movement.pair_89_regression or 0)+1
-            movement.pair_89_total_growth=(movement.pair_89_total_growth or 0)+delta
-          elseif delta< -0.5 or lateral_delta< -1 then
+          local m=movement.last_motion
+          local carrier=m and m.holder_toward or 0
+          local escape=m and m.receiver_away or 0
+          local closing=m and m.relative_closing or 0
+          if carrier>0.5 then
+            movement.pair_89_carrier_stall=0
             movement.pair_89_last_bad_direction=nil
-            movement.pair_89_regression=0
+          elseif delta>1.5 then
+            movement.pair_89_carrier_stall=(movement.pair_89_carrier_stall or 0)+1
+            movement.pair_89_last_bad_direction=movement.burst_direction
           end
-          auto_write(emu.framecount(),"approach_89_feedback",holder,target,selected_pass_button,
+          if delta>1.5 then
+            movement.pair_89_total_growth=(movement.pair_89_total_growth or 0)+delta
+          elseif delta< -0.5 then
+            movement.pair_89_total_growth=math.max(0,(movement.pair_89_total_growth or 0)+delta)
+          end
+          auto_write(emu.framecount(),"approach_89_relative_feedback",holder,target,selected_pass_button,
             "direction="..tostring(movement.burst_direction)..
+            "|holder_toward="..tostring(carrier)..
+            "|receiver_away="..tostring(escape)..
+            "|closing="..tostring(closing)..
             "|distance_delta="..tostring(delta)..
             "|lateral_delta="..tostring(lateral_delta)..
-            "|regression_streak="..tostring(movement.pair_89_regression or 0))
-          if (movement.pair_89_regression or 0)>=2 or
-             (movement.pair_89_total_growth or 0)>24 then
+            "|carrier_stall="..tostring(movement.pair_89_carrier_stall or 0))
+          if (movement.pair_89_carrier_stall or 0)>=2 or
+             (movement.pair_89_total_growth or 0)>65 then
             buttons={};autopass.enabled=false;pass_chain.active=false;auto_finished=true
             movement.pair_89_stopped=true
             auto_write(emu.framecount(),"approach_89_regression_stop",holder,target,selected_pass_button,
-              "streak="..tostring(movement.pair_89_regression)..
+              "carrier_stall="..tostring(movement.pair_89_carrier_stall or 0)..
               "|cumulative_growth="..tostring(movement.pair_89_total_growth))
           end
         end
@@ -879,6 +890,13 @@ while true do
       local c
       for _,candidate in ipairs(report and report.candidates or {}) do
        if candidate.id==receiver.id then c=candidate;break end
+      end
+      local gap=Feet.measure(sample_for_auto,holder,receiver.id)
+      if gap then
+        auto_write(emu.framecount(),"pass_min_gap_check",holder,receiver.id,selected_pass_button,
+          "distance="..tostring(gap.distance)..
+          "|minimum="..tostring(Feet.MIN_PASS_DISTANCE)..
+          "|valid="..tostring(gap.distance>=Feet.MIN_PASS_DISTANCE))
       end
       auto_write(emu.framecount(),"receiver_selected",holder,receiver.id,selected_pass_button,
        string.format("distance=%s|misalignment=%s|cost=%s|aligned=%s",
