@@ -1,11 +1,14 @@
 -- v0.8.10: route to new participants; visited players allowed only as costly relays.
 local Relay=require("challenge.pass_relay_v0810")
 local Feet=require("challenge.pass_feet_v0815")
+local BallLine=require("challenge.pass_alignment_ball_v0817")
 local M={VERSION="0.8.15"}
 function M.resolve(bridge,selector,sample,holder,visited,previous,consecutive,excluded)
  local target,choice,detail,stage=Relay.choose(sample,holder,visited,previous,consecutive,excluded)
  if target then
   local ok=Feet.check(sample,holder,target)
+  local aligned=BallLine.check(sample,holder,target)
+  ok=ok and aligned
   if not ok then
    -- Do not send an unbounded speculative pass into empty space.
    return nil,"unsafe_pass_geometry",{reason="unsafe_pass_geometry",report=nil},stage
