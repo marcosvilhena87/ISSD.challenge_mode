@@ -2,11 +2,12 @@
 -- Coordinates are signed 16-bit WRAM, verified by operator mapping.
 local M={}
 M.ball={x=0x042A,y=0x042C}
-M.goalkeeper={id=1,x=0x052A,y=0x052C}
+M.goalkeeper={id=1,x=0x052A,y=0x052C} -- absent during challenge; legacy diagnostics only
+M.center_field_y=0x12D8
 M.players={}
 for id=2,11 do M.players[#M.players+1]={id=id,x=0x042A+id*0x100,y=0x042C+id*0x100} end
 local function finite(x) return type(x)=="number" and x==x and x>=-32768 and x<=32767 end
-function M.read(read_s16)
+function M.read(read_s16,read_u16)
  local function get(addr)
   local ok,v=pcall(read_s16,addr,"WRAM")
   if ok and finite(v) then return v end
@@ -14,7 +15,11 @@ function M.read(read_s16)
  local bx,by=get(M.ball.x),get(M.ball.y)
  if not bx or not by then return nil,"ball_read_failed" end
  local gx,gy=get(M.goalkeeper.x),get(M.goalkeeper.y)
- if not gx or not gy then return nil,"goalkeeper_read_failed" end
+ local center_y=nil
+ if type(read_u16)=="function" then
+  local ok,v=pcall(read_u16,M.center_field_y,"WRAM")
+  if ok and type(v)=="number" and v>=0 and v<=65535 then center_y=v end
+ end
  local players={}
  for _,p in ipairs(M.players) do
   local x,y=get(p.x),get(p.y)
@@ -23,7 +28,7 @@ function M.read(read_s16)
   players[#players+1]={id=p.id,x=x,y=y,distance=math.sqrt(dx*dx+dy*dy)}
  end
  local gdx,gdy=gx-bx,gy-by
- return {ball={x=bx,y=by},goalkeeper={x=gx,y=gy,distance=math.sqrt(gdx*gdx+gdy*gdy)},players=players}
+ return {ball={x=bx,y=by},center_field_y=center_y,goalkeeper={x=gx,y=gy,distance=math.sqrt(gdx*gdx+gdy*gdy)},players=players}
 end
 function M.new(opts)
  opts=opts or {}
@@ -41,7 +46,7 @@ function M.new(opts)
   end
   local eligible=nearest and nearest.distance<=self.threshold
     and (not second or second.distance-nearest.distance>=self.gap)
-    and sample.goalkeeper.distance>nearest.distance
+    and (not sample.goalkeeper or sample.goalkeeper.distance>nearest.distance)
   local id=eligible and nearest.id or nil
   if id==self.candidate and id~=nil then self.streak=self.streak+1
   else self.candidate=id;self.streak=id and 1 or 0 end
