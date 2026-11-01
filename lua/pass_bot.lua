@@ -463,7 +463,9 @@ while true do
       -- Start at strict geometry on each fresh attempt, relax only if no route.
       Feet.set_level(autopass.relax_level or 0)
       plan,selector_reason,bridge_info,priority_stage=Priority.resolve(Bridge,Alignment,sample_for_auto,holder,spatial.visited,pass_chain.previous,pass_chain.consecutive_relays,autopass.retargets>0 and {[autopass.rejected_target]=true} or nil,pass_chain.route_index)
-      if false and autopass.phase=="idle" and not plan and selector_reason=="no_reachable_target" then
+      -- Adaptive thresholds remain defined, but ordered mode approaches the exact
+      -- requested player rather than broadening the search to another target.
+      if false then
         while not plan and (autopass.relax_level or 0)<Feet.MAX_LEVEL do
           autopass.relax_level=(autopass.relax_level or 0)+1
           local range,lateral=Feet.set_level(autopass.relax_level)
@@ -636,7 +638,7 @@ while true do
           "observed="..tostring(holder).."|planned="..tostring(autopass.target).."|visited="..visits.."/10|passes="..pass_chain.passes)
         if not pass_chain.active or visits>=10 or pass_chain.passes>=pass_chain.limit then
           pass_chain.active=false;autopass.enabled=false;auto_finished=true
-          auto_write(emu.framecount(),visits>=10 and "chain_complete_candidate" or "chain_limit_stop",
+          auto_write(emu.framecount(),not pass_chain.active and "route_stop" or (visits>=10 and "chain_complete_candidate" or "chain_limit_stop"),
             nil,holder,selected_pass_button,"visited="..visits.."/10|passes="..pass_chain.passes.."|no_auto_shot")
         else
           -- Retain the spatial visitor set, reset only the one-pass actuator.
