@@ -23,7 +23,7 @@ function M.step(sample,holder,target,state)
  local dx,dy=b.x-a.x,b.y-a.y
  local axis
  if why=="diagonal_risk" or (metrics and metrics.lateral>Feet.MAX_LATERAL) then
-  -- Reduce the SMALLER component to reduce lateral error; avoid zero crossing.
+  -- Move toward the target along its SMALLER absolute component.
   axis=math.abs(dx)<=math.abs(dy) and "x" or "y"
  else
   axis=(state and state.axis) or (math.abs(dx)>=math.abs(dy) and "x" or "y")
@@ -31,8 +31,8 @@ function M.step(sample,holder,target,state)
  if state then state.axis=axis;state.geometry_reason=why end
  local key
  if why=="diagonal_risk" or (metrics and metrics.lateral>Feet.MAX_LATERAL) then
-  if axis=="x" then key=dx>=0 and "Left" or "Right"
-  else key=dy>=0 and "Up" or "Down" end
+  if axis=="x" then key=dx>=0 and "Right" or "Left"
+  else key=dy>=0 and "Down" or "Up" end
  else
   if axis=="x" then key=dx>=0 and "Right" or "Left"
   else key=dy>=0 and "Down" or "Up" end
