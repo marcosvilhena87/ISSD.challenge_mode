@@ -17,6 +17,7 @@ package.loaded["challenge.pass_auto_v071"]=nil
 package.loaded["challenge.pass_bridge_v083"]=nil
 local Alignment=require("challenge.pass_alignment_v08")
 local Bridge=require("challenge.pass_bridge_v083")
+local Priority=require("challenge.pass_priority_v087")
 Auto=require("challenge.pass_auto_v071")
 local Finish=require("challenge.pass_finish_v07")
 local Commands=require("challenge.dribble_commands_v035")
@@ -417,9 +418,9 @@ while true do
       and (spatial.holder or autopass.phase~="idle")
       and (not pass_chain.active or emu.framecount()>=pass_chain.next_frame) then
     local holder=spatial.holder
-    local plan,selector_reason,bridge_info
+    local plan,selector_reason,bridge_info,priority_stage
     if holder and integration_ok then
-      plan,selector_reason,bridge_info=Bridge.resolve(Alignment,sample_for_auto,holder,spatial.visited)
+      plan,selector_reason,bridge_info,priority_stage=Priority.resolve(Bridge,Alignment,sample_for_auto,holder,spatial.visited)
     elseif not integration_ok then selector_reason="integration_selftest_failed"
     else selector_reason="no_stable_holder" end
     local report=bridge_info and bridge_info.report
@@ -429,7 +430,7 @@ while true do
       auto_write(emu.framecount(),"handoff_diagnostic",holder,
        bridge_info and bridge_info.receiver_id,selected_pass_button,
        "module="..tostring(Alignment.VERSION).."|selector="..tostring(bridge_info and bridge_info.reason or selector_reason)..
-       "|receiver="..tostring(bridge_info and bridge_info.receiver_id).."|plan="..tostring(plan and plan.target))
+       "|receiver="..tostring(bridge_info and bridge_info.receiver_id).."|plan="..tostring(plan and plan.target).."|priority_stage="..tostring(priority_stage))
     end
     local reason
     local phase_before=autopass.phase
@@ -462,7 +463,7 @@ while true do
       auto_write(emu.framecount(),"alignment_correction",holder,autopass.target,selected_pass_button,"bounded_directional_pre_align")
     elseif reason=="pass_pulse" and autopass.last_attempt then
       local a=autopass.last_attempt
-      auto_write(emu.framecount(),"pass_pulse",a.from,a.to,a.button,"experimental_unverified")
+      auto_write(emu.framecount(),"pass_pulse",a.from,a.to,a.button,"experimental_unverified|wait_frames="..tostring(autopass.wait_frames))
     elseif reason=="transfer_candidate_observed" or reason=="ball_moved_without_transfer" or reason=="no_ball_motion_detected" or reason=="timeout" or reason=="completion_candidate_stop" or reason=="coordinates_lost" or reason=="no_valid_target" or reason=="no_direction_for_pass" or reason=="selector_api_mismatch" or reason=="selector_report_missing" or reason=="integration_selftest_failed" or reason=="selected_without_receiver" or reason=="invalid_handoff" or reason=="no_unvisited_receiver" then
       auto_write(emu.framecount(),"single_pass_result",autopass.origin,autopass.target,selected_pass_button,reason.."|direction="..selected_direction.."|max_ball_displacement="..string.format("%.2f",autopass.ball_max_displacement))
       calibration_write(emu.framecount(),reason,autopass.last_attempt,reason=="transfer_candidate_observed" and holder or nil,reason=="transfer_candidate_observed" and emu.framecount() or nil)

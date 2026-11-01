@@ -82,6 +82,10 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   if not target or target==holder or not find(sample.players,target) then
    t.enabled=false;return empty,"no_valid_target"
   end
+  local origin=find(sample.players,holder)
+  local dest=find(sample.players,target)
+  local range=distance(origin,dest)
+  t.wait_frames=range<=150 and 90 or (range<=300 and 150 or 210)
   t.origin=holder;t.target=target;t.phase=(plan and plan.aligned==false) and "align" or "hold";t.hold_count=0;t.align_count=0
   t.ball_before={x=sample.ball.x,y=sample.ball.y}
   return empty,"target_selected"
