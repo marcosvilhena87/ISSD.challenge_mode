@@ -891,6 +891,13 @@ while true do
       for _,candidate in ipairs(report and report.candidates or {}) do
        if candidate.id==receiver.id then c=candidate;break end
       end
+      local gap=Feet.measure(sample_for_auto,holder,receiver.id)
+      if gap then
+        auto_write(emu.framecount(),"pass_min_gap_check",holder,receiver.id,selected_pass_button,
+          "distance="..tostring(gap.distance)..
+          "|minimum="..tostring(Feet.MIN_PASS_DISTANCE)..
+          "|valid="..tostring(gap.distance>=Feet.MIN_PASS_DISTANCE))
+      end
       auto_write(emu.framecount(),"receiver_selected",holder,receiver.id,selected_pass_button,
        string.format("distance=%s|misalignment=%s|cost=%s|aligned=%s",
         c and string.format("%.2f",c.distance) or "unknown",
