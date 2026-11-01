@@ -236,6 +236,7 @@ end
 local armed=false
 local previous=nil
 local auto_finished=false
+local pass_chain={active=false,passes=0,next_frame=0,limit=14,started=false}
 local previous_gate=nil
 local function gate_write(frame,gate,reason,p,sample)
  local signature=table.concat({gate,tostring(armed),tostring(autopass.enabled),
@@ -347,7 +348,7 @@ while true do
        pending_auto=true;print("[ISSD.pass_lv1] AUTO queued ON for next ARM")
       else print("[ISSD.pass_lv1] AUTO denied: configure PASSBTN:A/B/X/Y/L/R first") end
     elseif cmd=="AUTO:OFF" then
-      pending_auto=false;autopass.enabled=false;finish.enabled=false;release()
+      pending_auto=false;autopass.enabled=false;finish.enabled=false;pass_chain.active=false;release()
       auto_write(emu.framecount(),"auto_off",nil,nil,selected_pass_button,"operator")
     elseif cmd:match("^PASSBTN:[ABXYLR]$") then
       selected_pass_button=cmd:sub(9)
@@ -359,6 +360,7 @@ while true do
         armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();bonus=Bonus.new();completion_frame=nil;last_spatial_frame=nil;autopass=Auto.new();finish=Finish.new();finish.enabled=false;auto_finish_queued=false
         autopass.enabled=pending_auto and selected_pass_button=="B";autopass.button=selected_pass_button;autopass.start_frame=emu.framecount();autopass.direction=selected_direction
         pending_auto=false;auto_finished=false;previous_gate=nil
+        pass_chain={active=autopass.enabled,passes=0,next_frame=0,limit=14,started=false}
         auto_write(emu.framecount(),autopass.enabled and "auto_arm" or "observation_arm",nil,nil,selected_pass_button,"opt_in_required")
         record("armed_candidate_only",p)
         print("[ISSD.pass_lv1] armed for observation; PASS LV.1 identity remains unconfirmed")
@@ -369,7 +371,7 @@ while true do
     elseif cmd:match("^SNAP:[A-Z0-9_]+$") then
       dump_wram(cmd:sub(6))
     elseif cmd=="STOP" then
-      armed=false;autopass.enabled=false;finish.enabled=false;pending_auto=false;auto_finish_queued=false;record("stopped",p);release()
+      armed=false;autopass.enabled=false;finish.enabled=false;pending_auto=false;auto_finish_queued=false;pass_chain.active=false;record("stopped",p);release()
     else
       print("[ISSD.pass_lv1] unknown command: "..line)
     end
@@ -385,6 +387,21 @@ while true do
   elseif not integration_ok then gate="blocked";gate_reason="integration_selftest_failed"
   elseif not spatial.holder then gate="waiting";gate_reason="no_stable_holder" end
   gate_write(emu.framecount(),gate,gate_reason,p,sample_for_auto)
+  -- Continuous mode: the first stable carrier also counts toward ten outfield players.
+  if pass_chain.active and not pass_chain.started and spatial.holder
+      and spatial.holder>=2 and spatial.holder<=11 then
+    pass_chain.started=true
+    spatial.visited[spatial.holder]=true
+    auto_write(emu.framecount(),"chain_initial_player",nil,spatial.holder,selected_pass_button,"visited=1/10")
+  end
+  local chain_visits=0
+  for id in pairs(spatial.visited) do if type(id)=="number" and id>=2 and id<=11 then chain_visits=chain_visits+1 end end
+  if pass_chain.active and chain_visits>=10 then
+    pass_chain.active=false;autopass.enabled=false;auto_finished=true
+    auto_write(emu.framecount(),"chain_complete_candidate",nil,spatial.holder,selected_pass_button,
+      "visited=10/10|spatial_only|no_auto_shot")
+    print("[ISSD.pass_lv1] chain candidate complete: 10/10 outfield players; shot disabled")
+  end
   -- v0.8.5: lack of a stable holder is a transient wait, not a terminal failure.
   -- Timeout is measured from ARM and never emits controller input.
   local holder_pending=armed and autopass.enabled and not auto_finished
@@ -397,7 +414,8 @@ while true do
     print("[ISSD.pass_lv1] single-pass result: holder_detection_timeout")
   end
   if armed and autopass.enabled and not auto_finished and sample_for_auto
-      and (spatial.holder or autopass.phase~="idle") then
+      and (spatial.holder or autopass.phase~="idle")
+      and (not pass_chain.active or emu.framecount()>=pass_chain.next_frame) then
     local holder=spatial.holder
     local plan,selector_reason,bridge_info
     if holder and integration_ok then
@@ -448,7 +466,26 @@ while true do
     elseif reason=="transfer_candidate_observed" or reason=="ball_moved_without_transfer" or reason=="no_ball_motion_detected" or reason=="timeout" or reason=="completion_candidate_stop" or reason=="coordinates_lost" or reason=="no_valid_target" or reason=="no_direction_for_pass" or reason=="selector_api_mismatch" or reason=="selector_report_missing" or reason=="integration_selftest_failed" or reason=="selected_without_receiver" or reason=="invalid_handoff" or reason=="no_unvisited_receiver" then
       auto_write(emu.framecount(),"single_pass_result",autopass.origin,autopass.target,selected_pass_button,reason.."|direction="..selected_direction.."|max_ball_displacement="..string.format("%.2f",autopass.ball_max_displacement))
       calibration_write(emu.framecount(),reason,autopass.last_attempt,reason=="transfer_candidate_observed" and holder or nil,reason=="transfer_candidate_observed" and emu.framecount() or nil)
-      autopass.enabled=false;auto_finished=true
+      if reason=="transfer_candidate_observed" and pass_chain.active then
+        pass_chain.passes=pass_chain.passes+1
+        local visits=0;for id in pairs(spatial.visited) do if type(id)=="number" and id>=2 and id<=11 then visits=visits+1 end end
+        auto_write(emu.framecount(),"chain_transfer_candidate",autopass.origin,holder,selected_pass_button,
+          "observed="..tostring(holder).."|planned="..tostring(autopass.target).."|visited="..visits.."/10|passes="..pass_chain.passes)
+        if visits>=10 or pass_chain.passes>=pass_chain.limit then
+          pass_chain.active=false;autopass.enabled=false;auto_finished=true
+          auto_write(emu.framecount(),visits>=10 and "chain_complete_candidate" or "chain_limit_stop",
+            nil,holder,selected_pass_button,"visited="..visits.."/10|passes="..pass_chain.passes.."|no_auto_shot")
+        else
+          -- Retain the spatial visitor set, reset only the one-pass actuator.
+          local next_auto=Auto.new()
+          next_auto.enabled=true;next_auto.button="B";next_auto.direction=selected_direction
+          next_auto.start_frame=emu.framecount()
+          autopass=next_auto;pass_chain.next_frame=emu.framecount()+8
+          auto_write(emu.framecount(),"chain_next_pending",holder,nil,selected_pass_button,"cooldown_frames=8")
+        end
+      else
+        pass_chain.active=false;autopass.enabled=false;auto_finished=true
+      end
       print("[ISSD.pass_lv1] single-pass result: "..reason.." max_ball_displacement="..string.format("%.2f",autopass.ball_max_displacement))
     end
   end
