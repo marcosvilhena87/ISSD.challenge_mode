@@ -598,6 +598,13 @@ while true do
             "|projection="..tostring(motion.projection))
         end
         movement.burst_positions=nil
+        local diagonal_result,growth,lateral_growth=Ordered.guard_diagonal(movement,measurement)
+        if diagonal_result then
+          auto_write(emu.framecount(),"approach_diagonal_feedback",holder,target,selected_pass_button,
+            "result="..diagonal_result.."|distance_growth="..tostring(growth)..
+            "|lateral_growth="..tostring(lateral_growth)..
+            "|disabled="..tostring(movement.diagonal_disabled))
+        end
         local feedback=Ordered.observe(pass_chain.approach_state,measurement)
         if movement.recovery_phase=="awaiting_sample" then
           movement.recovery_phase="evaluated"
@@ -672,7 +679,12 @@ while true do
         if (movement.burst_remaining or 0)>0 and movement.burst_buttons then
           local new_buttons,check=Ordered.step(sample_for_auto,holder,target,movement)
           if check=="approach_step" then
-            buttons=new_buttons;reason="approach_step"
+            if movement.burst_direction=="Up_Right" and not movement.diagonal_disabled then
+              buttons={Up=true,Right=true}
+            else
+              buttons=new_buttons
+            end
+            reason="approach_step"
           else
             buttons={};reason=check;movement.burst_remaining=0
           end
@@ -683,7 +695,16 @@ while true do
             local initial=Feet.measure(sample_for_auto,holder,target)
             movement.burst_start=initial
             movement.burst_positions=Ordered.capture(sample_for_auto,holder,target)
-            for key,pressed in pairs(buttons) do if pressed then movement.burst_direction=key end end
+            if holder==8 and target==9 and buttons.Up and buttons.Right then
+              movement.burst_direction="Up_Right"
+              movement.diagonal_start=initial
+              auto_write(emu.framecount(),"approach_diagonal_started",holder,target,selected_pass_button,
+                "buttons=Up+Right|distance="..tostring(initial and initial.distance)..
+                "|lateral="..tostring(initial and initial.lateral))
+            else
+              movement.burst_direction=nil
+              for key,pressed in pairs(buttons) do if pressed then movement.burst_direction=key end end
+            end
             movement.burst_remaining=math.min(Ordered.BURST_FRAMES,
               (movement.approach_limit or Ordered.MAX_APPROACH)-(pass_chain.approach_frames or 0),
               (movement.recovery_exploratory and movement.recovery_left>0) and movement.recovery_left or Ordered.BURST_FRAMES)
