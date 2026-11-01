@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.49",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.50",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -15,6 +15,12 @@ end
 function M.can_extend(state,frames,measurement)
  if frames>=M.MAX_APPROACH_ABSOLUTE or not measurement then return false,"absolute_limit_or_missing_measurement" end
  if not state or type(state.initial_distance)~="number" or type(state.best_distance)~="number" then return false,"insufficient_progress_evidence" end
+ if state and (state.pair_710_right_streak or 0)>=2
+   and (state.pair_710_extension_count or 0)<2
+   and (state.pair_710_last_carrier or 0)>0.5
+   and (state.pair_710_last_distance or measurement.distance)>=measurement.distance-8 then
+  return true,"pair_710_recent_right_progress"
+ end
  if state and state.pair_67_up_streak and state.pair_67_up_streak>=2
     and (state.pair_67_extension_count or 0)<2
     and (state.pair_67_last_gain or 0)>0.5
@@ -97,6 +103,14 @@ function M.step(sample,holder,target,state)
    and state.pair_67_last_gain and state.pair_67_last_gain>0.5 then
   state.axis="y";state.direction="Up";state.geometry_reason="pair_67_recent_up_progress"
   return {Up=true},"approach_step",metrics
+ end
+ -- 7→10: favor RIGHT only while the carrier actually advances toward
+ -- the receiver; receiver escape alone does not revoke this preference.
+ if holder==7 and target==10 and state and dx>10
+   and (state.pair_710_right_streak or 0)>=2
+   and (state.pair_710_last_carrier or 0)>0.5 then
+  state.direction="Right";state.axis="x";state.geometry_reason="pair_710_relative_right_progress"
+  return {Right=true},"approach_step",metrics
  end
  -- Screen coordinates: positive X goes right; positive Y goes down.
  if holder==5 and target==8 and state and not state.right_suspended and dx>20 and
