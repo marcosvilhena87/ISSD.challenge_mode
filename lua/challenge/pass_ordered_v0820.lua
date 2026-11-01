@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.48",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.49",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -85,8 +85,15 @@ function M.step(sample,holder,target,state)
  local dx,dy=metrics.dx,metrics.dy
  local forecast=(holder==8 and target==9) and M.receiver_prediction(state,sample,holder,target,state and state.current_frame) or nil
  if forecast then dx,dy=forecast.dx,forecast.dy end
+ -- A persistently regressing 6→7 direction is excluded for the next
+ -- two decisions; orientation follows real receiver displacement.
+ if holder==6 and target==7 and state and state.pair_67_avoid_left and state.pair_67_avoid_left>0 then
+  local blocked=state.pair_67_avoid_direction
+  state.penalties=state.penalties or {}
+  if blocked then state.penalties[blocked]=math.max(state.penalties[blocked] or 0,36) end
+ end
  -- Only 6→7: maintain UP while recent neutral feedback proves progress.
- if holder==6 and target==7 and state and (state.pair_67_up_streak or 0)>=2
+ if holder==6 and target==7 and state and state.pair_67_avoid_direction~="Up" and (state.pair_67_up_streak or 0)>=2
    and state.pair_67_last_gain and state.pair_67_last_gain>0.5 then
   state.axis="y";state.direction="Up";state.geometry_reason="pair_67_recent_up_progress"
   return {Up=true},"approach_step",metrics
@@ -106,7 +113,7 @@ function M.step(sample,holder,target,state)
  -- Generic improvement lock: keep a recent good cardinal direction for a
  -- short, bounded period rather than oscillating because of old penalties.
  -- Pair-specific steering above this point retains priority.
- if state and state.last_good_direction and (state.good_direction_streak or 0)>=2
+ if state and not (holder==6 and target==7 and state.last_good_direction==state.pair_67_avoid_direction and (state.pair_67_avoid_left or 0)>0) and state.last_good_direction and (state.good_direction_streak or 0)>=2
     and (state.good_direction_lock or 0)>0 then
   local key=state.last_good_direction
   state.good_direction_lock=state.good_direction_lock-1
@@ -161,6 +168,13 @@ function M.step(sample,holder,target,state)
   return x.key<y.key
  end)
  local candidate=choices[1]
+ if holder==6 and target==7 and state and (state.pair_67_avoid_left or 0)>0 then
+  for _,choice in ipairs(choices) do
+   if choice.key~=state.pair_67_avoid_direction then candidate=choice;break end
+  end
+  state.pair_67_avoid_left=state.pair_67_avoid_left-1
+  if state.pair_67_avoid_left==0 then state.pair_67_avoid_direction=nil end
+ end
  if holder==5 and target==8 and dx>0 and (not state or not state.right_suspended) then
   for _,choice in ipairs(choices) do if choice.key=="Right" then candidate=choice;break end end
  end
