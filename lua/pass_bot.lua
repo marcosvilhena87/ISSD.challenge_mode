@@ -268,7 +268,7 @@ end
 local armed=false
 local previous=nil
 local auto_finished=false
-local pass_chain={active=false,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0,route_index=1,approach_frames=0,approach_neutral=false}
+local pass_chain={active=false,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0,route_index=1,approach_frames=0,approach_neutral=false,approach_state={}}
 local previous_gate=nil
 local function gate_write(frame,gate,reason,p,sample)
  local signature=table.concat({gate,tostring(armed),tostring(autopass.enabled),
@@ -409,7 +409,7 @@ while true do
         armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();bonus=Bonus.new();completion_frame=nil;last_spatial_frame=nil;autopass=Auto.new();finish=Finish.new();finish.enabled=auto_finish_queued;auto_finish_queued=false
         autopass.enabled=pending_auto and selected_pass_button=="B";autopass.button=selected_pass_button;autopass.start_frame=emu.framecount();autopass.direction=selected_direction;autopass.trigger_delay=trigger_mode=="B" and 12 or 0;autopass.calibration_mode=calibration_mode
         pending_auto=false;auto_finished=false;previous_gate=nil
-        pass_chain={active=autopass.enabled,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0,route_index=1,approach_frames=0,approach_neutral=false}
+        pass_chain={active=autopass.enabled,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0,route_index=1,approach_frames=0,approach_neutral=false,approach_state={}}
         auto_write(emu.framecount(),autopass.enabled and "auto_arm" or "observation_arm",nil,nil,selected_pass_button,"opt_in_required")
         record("armed_candidate_only",p)
         print("[ISSD.pass_lv1] armed for observation; PASS LV.1 identity remains unconfirmed")
@@ -519,13 +519,31 @@ while true do
           "max_frames="..Ordered.MAX_APPROACH)
       elseif pass_chain.approach_neutral then
         buttons={};reason="approach_neutral";pass_chain.approach_neutral=false
+        local measurement=Feet.measure(sample_for_auto,holder,target)
+        local feedback=Ordered.observe(pass_chain.approach_state,measurement)
+        if feedback=="axis_switched" then
+          auto_write(emu.framecount(),"approach_axis_switched",holder,target,selected_pass_button,
+            "axis="..tostring(pass_chain.approach_state.axis).."|switches="..tostring(pass_chain.approach_state.switches)..
+            "|distance="..tostring(measurement and measurement.distance))
+          if (pass_chain.approach_state.switches or 0)%2==0 and (autopass.relax_level or 0)<Feet.MAX_LEVEL then
+            autopass.relax_level=(autopass.relax_level or 0)+1
+            local range,lateral=Feet.set_level(autopass.relax_level)
+            auto_write(emu.framecount(),"limits_expanded",holder,target,selected_pass_button,
+              "level="..autopass.relax_level.."|range="..range.."|lateral="..lateral.."|cause=approach_stall")
+          end
+        end
+        auto_write(emu.framecount(),"approach_progress",holder,target,selected_pass_button,
+          "distance="..tostring(measurement and measurement.distance)..
+          "|initial="..tostring(pass_chain.approach_state.initial_distance)..
+          "|best="..tostring(pass_chain.approach_state.best_distance)..
+          "|stalled="..tostring(pass_chain.approach_state.stalled or 0))
       else
-        buttons,reason=Ordered.step(sample_for_auto,holder,target)
+        buttons,reason=Ordered.step(sample_for_auto,holder,target,pass_chain.approach_state)
         if reason=="approach_step" then
           pass_chain.approach_frames=pass_chain.approach_frames+1
           pass_chain.approach_neutral=true
           auto_write(emu.framecount(),"approach_step",holder,target,selected_pass_button,
-            "step="..pass_chain.approach_frames.."|range_limit="..Feet.MAX_RANGE)
+            "step="..pass_chain.approach_frames.."|range_limit="..Feet.MAX_RANGE.."|axis="..tostring(pass_chain.approach_state.axis))
         else
           buttons={};pass_chain.active=false;autopass.enabled=false;auto_finished=true
           auto_write(emu.framecount(),"approach_aborted",holder,target,selected_pass_button,reason)
@@ -637,7 +655,7 @@ while true do
         pass_chain.previous=autopass.origin
         if holder==autopass.target then
           pass_chain.route_index=pass_chain.route_index+1
-          pass_chain.approach_frames=0;pass_chain.approach_neutral=false
+          pass_chain.approach_frames=0;pass_chain.approach_neutral=false;pass_chain.approach_state={}
           auto_write(emu.framecount(),"route_advanced",autopass.origin,holder,selected_pass_button,
             "index="..pass_chain.route_index.."/10")
         else
