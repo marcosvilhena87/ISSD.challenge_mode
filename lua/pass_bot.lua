@@ -746,6 +746,17 @@ while true do
               "frames="..movement.burst_remaining.."|axis="..tostring(movement.axis))
           end
         end
+        if reason=="approach_step" and holder==5 and target==8 then
+          local coords=Ordered.capture(sample_for_auto,holder,target)
+          if coords then
+            auto_write(emu.framecount(),"approach_right_frame",holder,target,selected_pass_button,
+              "right="..tostring(buttons.Right and true or false)..
+              "|up="..tostring(buttons.Up and true or false)..
+              "|left="..tostring(buttons.Left and true or false)..
+              "|holder_x="..coords.hx.."|holder_y="..coords.hy..
+              "|target_x="..coords.tx.."|target_y="..coords.ty)
+          end
+        end
         if reason=="approach_step" then
           pass_chain.approach_frames=pass_chain.approach_frames+1
           if (movement.recovery_left or 0)>0 then
