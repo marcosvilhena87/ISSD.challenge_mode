@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.37",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.38",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -157,7 +157,7 @@ function M.guard_right(state,metrics,motion)
  local distance_change=metrics.distance-state.burst_start.distance
  local actual_projection=motion and motion.projection or nil
  state.last_right_distance_change=distance_change
- if distance_change>2 or (actual_projection and actual_projection< -0.5) then
+ if distance_change>8 or (actual_projection and actual_projection< -6) then
   state.right_suspended=true
   state.right_block_reason="measured_regression"
   state.right_progress_streak=0
@@ -165,7 +165,17 @@ function M.guard_right(state,metrics,motion)
   state.penalties.Right=(state.penalties.Right or 0)+24
   return "right_regressed",distance_change
  end
+ if distance_change>0 or (actual_projection and actual_projection<0) then
+  state.right_small_negative=(state.right_small_negative or 0)+1
+  if state.right_small_negative>=4 and (state.right_cumulative_regression or 0)>12 then
+   state.right_suspended=true;state.right_block_reason="repeated_regression"
+   return "right_repeated_regression",distance_change
+  end
+  state.right_cumulative_regression=(state.right_cumulative_regression or 0)+math.max(0,distance_change)
+  return "right_tolerated",distance_change
+ end
  if distance_change< -0.5 then
+  state.right_small_negative=0;state.right_cumulative_regression=0
   state.right_progress_streak=(state.right_progress_streak or 0)+1
   return "right_progress",distance_change
  end
