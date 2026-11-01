@@ -541,12 +541,34 @@ while true do
           "|best="..tostring(pass_chain.approach_state.best_distance)..
           "|stalled="..tostring(pass_chain.approach_state.stalled or 0))
       else
-        buttons,reason=Ordered.step(sample_for_auto,holder,target,pass_chain.approach_state)
+        local movement=pass_chain.approach_state
+        -- Keep a direction continuously for up to four frames; check safety on
+        -- every frame and sample progress once per burst on the neutral frame.
+        if (movement.burst_remaining or 0)>0 and movement.burst_buttons then
+          local _,check=Ordered.step(sample_for_auto,holder,target,movement)
+          if check=="approach_step" then
+            buttons=movement.burst_buttons;reason="approach_step"
+          else
+            buttons={};reason=check;movement.burst_remaining=0
+          end
+        else
+          buttons,reason=Ordered.step(sample_for_auto,holder,target,movement)
+          if reason=="approach_step" then
+            movement.burst_buttons=buttons
+            movement.burst_remaining=math.min(Ordered.BURST_FRAMES,
+              Ordered.MAX_APPROACH-(pass_chain.approach_frames or 0))
+            auto_write(emu.framecount(),"approach_burst_started",holder,target,selected_pass_button,
+              "frames="..movement.burst_remaining.."|axis="..tostring(movement.axis))
+          end
+        end
         if reason=="approach_step" then
           pass_chain.approach_frames=pass_chain.approach_frames+1
-          pass_chain.approach_neutral=true
+          movement.burst_remaining=movement.burst_remaining-1
+          pass_chain.approach_neutral=movement.burst_remaining==0
           auto_write(emu.framecount(),"approach_step",holder,target,selected_pass_button,
-            "step="..pass_chain.approach_frames.."|range_limit="..Feet.MAX_RANGE.."|axis="..tostring(pass_chain.approach_state.axis))
+            "step="..pass_chain.approach_frames.."|range_limit="..Feet.MAX_RANGE.."|axis="..tostring(movement.axis))
+        elseif reason=="target_in_range" then
+          buttons={};reason="approach_neutral";pass_chain.approach_neutral=false
         else
           buttons={};pass_chain.active=false;autopass.enabled=false;auto_finished=true
           auto_write(emu.framecount(),"approach_aborted",holder,target,selected_pass_button,reason)
