@@ -1222,12 +1222,33 @@ while true do
     if shot.X then
       buttons=shot;autopass.enabled=false
       if goal_monitor then
-        goal_monitor.shot=emu.framecount()
         goal_monitor.complete=completion_frame
         goal_monitor.bonus=bonus.first_decrement_frame
-        goal_write(emu.framecount(),"shot_x_issued",GoalEvidence.read(memory.read_u8,memory.read_u16_le,emu.framecount()))
+        local shot_sample=GoalEvidence.read(memory.read_u8,memory.read_u16_le,emu.framecount())
+        if GoalEvidence.mark_shot(goal_monitor,shot_sample) then
+          goal_write(emu.framecount(),"shot_x_issued",shot_sample)
+          auto_write(emu.framecount(),"goal_post_shot_started",spatial.holder,nil,"X",
+            "window="..tostring(GoalEvidence.WINDOW).."|baseline="..tostring(shot_sample.goal))
+        end
       end
     elseif completion_frame then buttons={} end
+  end
+  -- DRIBBLE-derived passive counter observation after the X pulse.
+  -- This continues even when the pass automation has been disabled.
+  if armed and goal_monitor and goal_monitor.shot and not goal_monitor.closed
+     and emu.framecount()>goal_monitor.shot then
+    local g=GoalEvidence.read(memory.read_u8,memory.read_u16_le,emu.framecount())
+    local event=GoalEvidence.step(goal_monitor,g)
+    if event or goal_monitor.closed or
+       (emu.framecount()-goal_monitor.shot)%GoalEvidence.SAMPLE_EVERY==0 then
+      local kind=event or (goal_monitor.closed and "post_shot_window_closed" or "post_shot_sample")
+      goal_write(emu.framecount(),kind,g)
+      if event or goal_monitor.closed then
+        auto_write(emu.framecount(),"goal_post_shot_"..kind,spatial.holder,nil,"X",
+          "classification="..GoalEvidence.classify(goal_monitor)..
+          "|goal="..tostring(g.goal).."|baseline="..tostring(goal_monitor.baseline))
+      end
+    end
   end
   -- Frame-level WRAM evidence surrounding every pass and trigger delay.
   if armed and sample_for_auto and
