@@ -309,15 +309,17 @@ local previous=nil
 local auto_finished=false
 local pass_chain={active=false,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0,route_index=1,approach_frames=0,approach_neutral=false,approach_state={}}
 local reach=Reach.new()
-local reach_path=root.."/csv/pass_reach_v0863.csv"
+local reach_path=root.."/csv/pass_reach_v0864.csv"
 local rf=assert(io.open(reach_path,"ab"))
-if rf:seek("end")==0 then assert(rf:write("session,frame,event,attempt,from_player,planned_player,observed_player,initial_gap,carrier_walk,ball_path,ball_max_displacement,elapsed,ball_x,ball_y\\n")) end
+if rf:seek("end")==0 then assert(rf:write("session,frame,event,attempt,from_player,planned_player,observed_player,initial_gap,carrier_walk,receiver_walk,combined_walk,ball_path,ball_max_displacement,closest_ball_receiver_gap,final_ball_receiver_gap,reception_class,elapsed,ball_x,ball_y\n")) end
 rf:close()
 local function reach_emit(event,frame,attempt,receiver,sample,elapsed)
  local h=assert(io.open(reach_path,"ab"))
  assert(h:write(csv({session,frame,event,attempt.id,attempt.from,attempt.to,receiver,
-  attempt.initial,attempt.walk,attempt.ball_path,attempt.ball_max,elapsed,
-  sample and sample.ball and sample.ball.x,sample and sample.ball and sample.ball.y},14)))
+  attempt.initial,attempt.walk,attempt.receiver_walk,attempt.combined_walk,
+  attempt.ball_path,attempt.ball_max,attempt.closest_gap,attempt.receiver_final_gap,
+  attempt.reception_class,elapsed,
+  sample and sample.ball and sample.ball.x,sample and sample.ball and sample.ball.y},19)))
  assert(h:close())
 end
 local previous_gate=nil
