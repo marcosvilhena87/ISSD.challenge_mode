@@ -537,10 +537,29 @@ while true do
       local target=bridge_info and bridge_info.target
       local movement=pass_chain.approach_state
       local approach_limit=movement.approach_limit or Ordered.MAX_APPROACH
-      if movement.recovery_phase=="awaiting_sample" then
+      if holder==5 and target==8 and movement.right_settle_remaining==nil then
+        movement.right_settle_remaining=4
+        movement.right_settle_previous=Ordered.capture(sample_for_auto,holder,target)
+      end
+      if holder==5 and target==8 and (movement.right_settle_remaining or 0)>0 then
+        local now=Ordered.capture(sample_for_auto,holder,target)
+        local prev=movement.right_settle_previous
+        if now and prev then
+          auto_write(emu.framecount(),"approach_right_settle",holder,target,selected_pass_button,
+            "remaining="..movement.right_settle_remaining..
+            "|holder_x="..now.hx.."|holder_y="..now.hy..
+            "|target_x="..now.tx.."|target_y="..now.ty..
+            "|holder_dx="..(now.hx-prev.hx).."|holder_dy="..(now.hy-prev.hy))
+        end
+        movement.right_settle_previous=now
+        movement.right_settle_remaining=movement.right_settle_remaining-1
+        buttons={};reason="approach_right_settle"
+      elseif movement.recovery_phase=="awaiting_sample" then
         pass_chain.approach_neutral=true
       end
-      if (pass_chain.approach_frames or 0)>=approach_limit and not pass_chain.approach_neutral then
+      if reason=="approach_right_settle" then
+        -- Four neutral frames establish the residual motion baseline.
+      elseif (pass_chain.approach_frames or 0)>=approach_limit and not pass_chain.approach_neutral then
         local measurement=Feet.measure(sample_for_auto,holder,target)
         local can_extend,why=Ordered.can_extend(movement,pass_chain.approach_frames,measurement)
         if can_extend and approach_limit<Ordered.MAX_APPROACH_ABSOLUTE then
@@ -725,6 +744,17 @@ while true do
               (movement.recovery_exploratory and movement.recovery_left>0) and movement.recovery_left or Ordered.BURST_FRAMES)
             auto_write(emu.framecount(),"approach_burst_started",holder,target,selected_pass_button,
               "frames="..movement.burst_remaining.."|axis="..tostring(movement.axis))
+          end
+        end
+        if reason=="approach_step" and holder==5 and target==8 then
+          local coords=Ordered.capture(sample_for_auto,holder,target)
+          if coords then
+            auto_write(emu.framecount(),"approach_right_frame",holder,target,selected_pass_button,
+              "right="..tostring(buttons.Right and true or false)..
+              "|up="..tostring(buttons.Up and true or false)..
+              "|left="..tostring(buttons.Left and true or false)..
+              "|holder_x="..coords.hx.."|holder_y="..coords.hy..
+              "|target_x="..coords.tx.."|target_y="..coords.ty)
           end
         end
         if reason=="approach_step" then
