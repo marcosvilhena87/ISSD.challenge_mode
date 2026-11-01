@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.51",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.52",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -8,9 +8,14 @@ function M.next(_,holder,visited)
  visited=visited or {}
  if not holder or holder<2 or holder>11 then return nil,"invalid_holder" end
  for _,id in ipairs(M.ROUTE) do
+  -- A previous 6→2 pass does not prohibit 6→7: only the receiver must be new.
   if id~=holder and not visited[id] then return id,"ordered_remaining" end
  end
  return nil,"all_visited"
+end
+function M.can_relay_six_seven(holder,visited)
+ -- Six may be visited already; seven is eligible until seven itself receives.
+ return holder==6 and not (visited and visited[7])
 end
 function M.can_extend(state,frames,measurement)
  if frames>=M.MAX_APPROACH_ABSOLUTE or not measurement then return false,"absolute_limit_or_missing_measurement" end
