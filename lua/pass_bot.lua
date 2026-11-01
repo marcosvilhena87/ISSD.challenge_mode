@@ -558,6 +558,16 @@ while true do
       elseif pass_chain.approach_neutral then
         buttons={};reason="approach_neutral";pass_chain.approach_neutral=false
         local measurement=Feet.measure(sample_for_auto,holder,target)
+        local motion_feedback=Ordered.observe_motion(movement,sample_for_auto,holder,target)
+        local motion=movement.last_motion
+        if motion then
+          auto_write(emu.framecount(),"approach_motion_calibration",holder,target,selected_pass_button,
+            "result="..motion_feedback.."|direction="..tostring(motion.direction)..
+            "|holder_dx="..tostring(motion.holder_dx).."|holder_dy="..tostring(motion.holder_dy)..
+            "|receiver_dx="..tostring(motion.target_dx).."|receiver_dy="..tostring(motion.target_dy)..
+            "|projection="..tostring(motion.projection))
+        end
+        movement.burst_positions=nil
         local feedback=Ordered.observe(pass_chain.approach_state,measurement)
         if feedback=="direction_worsened" or feedback=="direction_no_progress" or feedback=="direction_improved" or feedback=="direction_partial_progress" or feedback=="direction_pending_feedback" then
           auto_write(emu.framecount(),"approach_direction_feedback",holder,target,selected_pass_button,
@@ -616,6 +626,7 @@ while true do
             movement.burst_buttons=buttons
             local initial=Feet.measure(sample_for_auto,holder,target)
             movement.burst_start=initial
+            movement.burst_positions=Ordered.capture(sample_for_auto,holder,target)
             for key,pressed in pairs(buttons) do if pressed then movement.burst_direction=key end end
             movement.burst_remaining=math.min(Ordered.BURST_FRAMES,
               (movement.approach_limit or Ordered.MAX_APPROACH)-(pass_chain.approach_frames or 0))
@@ -674,6 +685,10 @@ while true do
         autopass.direction="Up"
         auto_write(emu.framecount(),"pass_direction_override",6,2,selected_pass_button,
           "direction=Up|button=B|policy=pair_6_2_only")
+      elseif autopass.origin==4 and autopass.target==5 then
+        autopass.direction="Down"
+        auto_write(emu.framecount(),"pass_direction_override",4,5,selected_pass_button,
+          "direction=Down|button=B|policy=pair_4_5_only")
       end
       autopass.visited_before_pass={}
       for id,seen in pairs(spatial.visited) do autopass.visited_before_pass[id]=seen end
