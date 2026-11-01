@@ -99,6 +99,7 @@ local selected_pass_button=nil
 local pending_auto=false
 local selected_direction="AUTO"
 local trigger_mode="A"
+local calibration_mode="A"
 local timers=Timers.new()
 local bonus=Bonus.new()
 local completion_frame=nil
@@ -369,6 +370,14 @@ while true do
       end
     elseif cmd=="FINISH:OFF" then
       auto_finish_queued=false;finish.enabled=false;release()
+    elseif cmd=="CALIB:A" or cmd=="CALIB:B" then
+      if armed and not auto_finished then
+        print("[ISSD.pass_lv1] CALIB requires a new ARM")
+      else
+        calibration_mode=cmd:sub(7)
+        print("[ISSD.pass_lv1] pass calibration="..calibration_mode..
+          (calibration_mode=="A" and " cardinal" or " diagonal"))
+      end
     elseif cmd:match("^DIRECTION:") then
       local direction=cmd:sub(11)
       local valid={AUTO=true,NEUTRAL=true,Up=true,Down=true,Left=true,Right=true,
@@ -398,7 +407,7 @@ while true do
       -- Probe is not proof of gameplay; explicit LV.1 selection is a safety gate.
       if p.status=="candidate" and p.challenge=="PASS" and p.level==1 then
         armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();bonus=Bonus.new();completion_frame=nil;last_spatial_frame=nil;autopass=Auto.new();finish=Finish.new();finish.enabled=auto_finish_queued;auto_finish_queued=false
-        autopass.enabled=pending_auto and selected_pass_button=="B";autopass.button=selected_pass_button;autopass.start_frame=emu.framecount();autopass.direction=selected_direction;autopass.trigger_delay=trigger_mode=="B" and 12 or 0
+        autopass.enabled=pending_auto and selected_pass_button=="B";autopass.button=selected_pass_button;autopass.start_frame=emu.framecount();autopass.direction=selected_direction;autopass.trigger_delay=trigger_mode=="B" and 12 or 0;autopass.calibration_mode=calibration_mode
         pending_auto=false;auto_finished=false;previous_gate=nil
         pass_chain={active=autopass.enabled,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0,route_index=1,approach_frames=0,approach_neutral=false}
         auto_write(emu.framecount(),autopass.enabled and "auto_arm" or "observation_arm",nil,nil,selected_pass_button,"opt_in_required")
@@ -517,7 +526,6 @@ while true do
           pass_chain.approach_neutral=true
           auto_write(emu.framecount(),"approach_step",holder,target,selected_pass_button,
             "step="..pass_chain.approach_frames.."|range_limit="..Feet.MAX_RANGE)
-          log_input(emu.framecount(),"approach",reason,holder,target,buttons)
         else
           buttons={};pass_chain.active=false;autopass.enabled=false;auto_finished=true
           auto_write(emu.framecount(),"approach_aborted",holder,target,selected_pass_button,reason)
@@ -590,7 +598,7 @@ while true do
         "|displacement="..string.format("%.2f",autopass.ball_max_displacement))
     elseif reason=="pass_pulse" and autopass.last_attempt then
       local a=autopass.last_attempt
-      auto_write(emu.framecount(),"pass_pulse",a.from,a.to,a.button,"experimental_unverified|wait_frames="..tostring(autopass.wait_frames))
+      auto_write(emu.framecount(),"pass_pulse",a.from,a.to,a.button,"experimental_unverified|wait_frames="..tostring(autopass.wait_frames).."|calib="..tostring(autopass.calibration_mode))
     elseif reason=="transfer_candidate_observed" or reason=="ball_moved_without_transfer" or reason=="no_ball_motion_detected" or reason=="timeout" or reason=="completion_candidate_stop" or reason=="coordinates_lost" or reason=="no_valid_target" or reason=="no_direction_for_pass" or reason=="selector_api_mismatch" or reason=="selector_report_missing" or reason=="integration_selftest_failed" or reason=="selected_without_receiver" or reason=="invalid_handoff" or reason=="no_unvisited_receiver" or reason=="possession_gate_timeout" or reason=="retarget_limit_reached" then
       if reason=="possession_gate_timeout" then
         auto_write(emu.framecount(),"possession_gate_timeout",autopass.origin,autopass.target,selected_pass_button,
@@ -598,6 +606,10 @@ while true do
       end
       auto_write(emu.framecount(),"single_pass_result",autopass.origin,autopass.target,selected_pass_button,reason.."|direction="..selected_direction.."|max_ball_displacement="..string.format("%.2f",autopass.ball_max_displacement))
       calibration_write(emu.framecount(),reason,autopass.last_attempt,reason=="transfer_candidate_observed" and holder or nil,reason=="transfer_candidate_observed" and emu.framecount() or nil)
+      for _,point in ipairs(autopass.early_flight or {}) do
+        auto_write(point.frame,"early_flight",autopass.origin,autopass.target,selected_pass_button,
+          "calib="..tostring(autopass.calibration_mode).."|dx="..tostring(point.dx).."|dy="..tostring(point.dy).."|x="..tostring(point.x).."|y="..tostring(point.y))
+      end
       local flight=autopass.flight_samples or {}
       for _,point in ipairs(flight) do
         auto_write(point.frame,"flight_sample",autopass.origin,autopass.target,selected_pass_button,
@@ -644,7 +656,7 @@ while true do
           -- Retain the spatial visitor set, reset only the one-pass actuator.
           local next_auto=Auto.new()
           next_auto.enabled=true;next_auto.button="B";next_auto.direction=selected_direction
-          next_auto.start_frame=emu.framecount();next_auto.trigger_delay=trigger_mode=="B" and 12 or 0
+          next_auto.start_frame=emu.framecount();next_auto.trigger_delay=trigger_mode=="B" and 12 or 0;next_auto.calibration_mode=calibration_mode
           autopass=next_auto;pass_chain.next_frame=emu.framecount()+8
           auto_write(emu.framecount(),"chain_next_pending",holder,nil,selected_pass_button,"cooldown_frames=8")
         end
