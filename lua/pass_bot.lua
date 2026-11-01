@@ -17,6 +17,7 @@ package.loaded["challenge.pass_auto_v071"]=nil
 package.loaded["challenge.pass_bridge_v083"]=nil
 local Alignment=require("challenge.pass_alignment_v08")
 local Bridge=require("challenge.pass_bridge_v083")
+package.loaded["challenge.pass_possession_gate_v0812"]=nil
 package.loaded["challenge.pass_relay_v0810"]=nil
 package.loaded["challenge.pass_priority_v087"]=nil
 local Priority=require("challenge.pass_priority_v087")
@@ -382,7 +383,11 @@ while true do
       selected_pass_button=cmd:sub(9)
       autopass.enabled=false;pending_auto=false;release()
       print("[ISSD.pass_lv1] experimental pass button="..selected_pass_button.." (requires AUTO:ON and ARM)")
-    elseif cmd=="ARM" then
+    elseif cmd=="ARM" or cmd=="REARM" then
+      if cmd=="REARM" and not (armed and auto_finished and selected_pass_button=="B") then
+        print("[ISSD.pass_lv1] REARM rejected: requires completed attempt and PASSBTN:B")
+      else
+      if cmd=="REARM" then pending_auto=true;print("[ISSD.pass_lv1] REARM accepted: fresh single chain") end
       -- Probe is not proof of gameplay; explicit LV.1 selection is a safety gate.
       if p.status=="candidate" and p.challenge=="PASS" and p.level==1 then
         armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();bonus=Bonus.new();completion_frame=nil;last_spatial_frame=nil;autopass=Auto.new();finish=Finish.new();finish.enabled=false;auto_finish_queued=false
@@ -395,6 +400,7 @@ while true do
       else
         armed=false;autopass.enabled=false;finish.enabled=false;record("arm_rejected",p)
         print("[ISSD.pass_lv1] ARM rejected: PASS LV.1 candidate not observed")
+      end
       end
     elseif cmd:match("^SNAP:[A-Z0-9_]+$") then
       dump_wram(cmd:sub(6))
@@ -499,6 +505,10 @@ while true do
         c and string.format("%.2f",c.cost) or "unknown",tostring(receiver.aligned)))
     elseif reason=="alignment_correction" then
       auto_write(emu.framecount(),"alignment_correction",holder,autopass.target,selected_pass_button,"bounded_directional_pre_align")
+    elseif reason=="possession_gate_ready" or reason=="possession_gate_timeout" then
+      auto_write(emu.framecount(),reason,autopass.origin,autopass.target,selected_pass_button,
+        "distance="..tostring(autopass.gate_distance)..
+        "|streak="..tostring(autopass.gate_tracker and autopass.gate_tracker.streak))
     elseif reason=="flight_wait_extended" then
       auto_write(emu.framecount(),"flight_wait_extended",autopass.origin,autopass.target,
         selected_pass_button,"wait_frames="..tostring(autopass.wait_frames)..
@@ -507,7 +517,7 @@ while true do
     elseif reason=="pass_pulse" and autopass.last_attempt then
       local a=autopass.last_attempt
       auto_write(emu.framecount(),"pass_pulse",a.from,a.to,a.button,"experimental_unverified|wait_frames="..tostring(autopass.wait_frames))
-    elseif reason=="transfer_candidate_observed" or reason=="ball_moved_without_transfer" or reason=="no_ball_motion_detected" or reason=="timeout" or reason=="completion_candidate_stop" or reason=="coordinates_lost" or reason=="no_valid_target" or reason=="no_direction_for_pass" or reason=="selector_api_mismatch" or reason=="selector_report_missing" or reason=="integration_selftest_failed" or reason=="selected_without_receiver" or reason=="invalid_handoff" or reason=="no_unvisited_receiver" then
+    elseif reason=="transfer_candidate_observed" or reason=="ball_moved_without_transfer" or reason=="no_ball_motion_detected" or reason=="timeout" or reason=="completion_candidate_stop" or reason=="coordinates_lost" or reason=="no_valid_target" or reason=="no_direction_for_pass" or reason=="selector_api_mismatch" or reason=="selector_report_missing" or reason=="integration_selftest_failed" or reason=="selected_without_receiver" or reason=="invalid_handoff" or reason=="no_unvisited_receiver" or reason=="possession_gate_timeout" then
       auto_write(emu.framecount(),"single_pass_result",autopass.origin,autopass.target,selected_pass_button,reason.."|direction="..selected_direction.."|max_ball_displacement="..string.format("%.2f",autopass.ball_max_displacement))
       calibration_write(emu.framecount(),reason,autopass.last_attempt,reason=="transfer_candidate_observed" and holder or nil,reason=="transfer_candidate_observed" and emu.framecount() or nil)
       local flight=autopass.flight_samples or {}
@@ -567,7 +577,7 @@ while true do
   end
   -- Frame-level WRAM evidence surrounding every pass and trigger delay.
   if armed and sample_for_auto and
-      (autopass.phase=="prewait" or autopass.phase=="align" or
+      (autopass.phase=="possession_gate" or autopass.phase=="prewait" or autopass.phase=="align" or
        autopass.phase=="hold" or autopass.phase=="wait") then
     local pf=autopass.pass_frame
     if autopass.phase~="wait" or (pf and emu.framecount()-pf<=30) then
