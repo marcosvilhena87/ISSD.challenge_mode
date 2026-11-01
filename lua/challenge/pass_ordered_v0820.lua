@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.30",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.31",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -60,12 +60,48 @@ function M.step(sample,holder,target,state)
   return x.key<y.key
  end)
  local candidate=choices[1]
+ if holder==6 and target==2 and candidate.key=="Right" then
+  for _,choice in ipairs(choices) do if choice.key~="Right" then candidate=choice;break end end
+ end
+ if state and state.recovery_left and state.recovery_left>0 and state.recovery_direction then
+  for _,choice in ipairs(choices) do if choice.key==state.recovery_direction then candidate=choice;break end end
+ end
  if state then
   state.axis=candidate.axis
   state.direction=candidate.key
   state.geometry_reason=why
  end
  return {[candidate.key]=true},"approach_step",metrics
+end
+function M.interposition(sample)
+ local a,b,c=find(sample,6),find(sample,2),find(sample,3)
+ if not a or not b or not c then return nil end
+ local ux,uy=b.x-a.x,b.y-a.y
+ local den=ux*ux+uy*uy
+ if den<1 then return nil end
+ local t=((c.x-a.x)*ux+(c.y-a.y)*uy)/den
+ local px=a.x+t*ux;local py=a.y+t*uy
+ local lateral=math.sqrt((c.x-px)^2+(c.y-py)^2)
+ return {between=t>0 and t<1,offset=lateral,projection=t,blocked=t>0 and t<1 and lateral<30}
+end
+function M.recover(state,measurement,holder,target)
+ if not state or not measurement or not state.motion or (state.recovery_used or 0)>=1 then return false,"no_recovery_available" end
+ local keys={"Up","Down","Left","Right"}
+ local best=nil;local best_gain=0
+ for _,key in ipairs(keys) do
+  local v=state.motion[key]
+  if not (holder==6 and target==2 and key=="Right") and v and v.count>=1 then
+   local dx=measurement.dx-v.dx;local dy=measurement.dy-v.dy
+   local d=math.sqrt(dx*dx+dy*dy);local lat=math.min(math.abs(dx),math.abs(dy))
+   local gain=M.score(measurement)-M.score({distance=d,lateral=lat})
+   if gain>best_gain then best_gain=gain;best=key end
+  end
+ end
+ if not best then return false,"no_improving_learned_vector" end
+ state.recovery_direction=best;state.recovery_left=16
+ state.recovery_used=(state.recovery_used or 0)+1
+ state.stalled=0;state.bad_bursts=0
+ return true,best
 end
 function M.capture(sample,holder,target)
  local a,b=find(sample,holder),find(sample,target)
