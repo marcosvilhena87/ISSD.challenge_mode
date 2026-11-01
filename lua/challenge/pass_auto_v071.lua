@@ -4,7 +4,7 @@ local M={}
 function M.new()
  return {enabled=false,button="B",phase="idle",start_frame=nil,tries=0,
  target=nil,origin=nil,pass_frame=nil,ball_before=nil,ball_max_displacement=0,
- trigger_delay=0,prewait_until=nil,gate_start=nil,gate_tracker=nil,hold_frames=3,wait_frames=90,extra_wait_frames=90,extended=false,first_motion_frame=nil,flight_samples={},last_attempt=nil,direction="AUTO",align_frames=2,facing_frames=4,facing_count=0,facing_direction=nil,feet_initial=nil}
+ trigger_delay=0,prewait_until=nil,gate_start=nil,gate_tracker=nil,hold_frames=3,wait_frames=90,extra_wait_frames=90,extended=false,first_motion_frame=nil,flight_samples={},last_attempt=nil,direction="AUTO",align_frames=2,facing_frames=4,facing_count=0,facing_direction=nil,feet_initial=nil,retargets=0,max_retargets=3,retarget_wait=0}
 end
 local function find(players,id)
  for _,p in ipairs(players or {}) do if p.id==id then return p end end
@@ -25,6 +25,11 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
  if t.button~="B" then t.enabled=false;return empty,"invalid_pass_button" end
  if bonus_finished then t.enabled=false;return empty,"completion_candidate_stop" end
  if t.start_frame and frame-t.start_frame>3600 then t.enabled=false;return empty,"timeout" end
+ if t.phase=="retarget_wait" then
+  if frame<t.retarget_wait then return empty,"retarget_cooldown" end
+  t.phase="idle"
+  return empty,"retarget_ready"
+ end
  if t.phase=="wait" then
   if sample and sample.ball and t.ball_before then
    local displacement=distance(sample.ball,t.ball_before)
@@ -105,8 +110,15 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   if t.hold_count==0 then
    local safe,why=Feet.check(sample,t.origin,t.target,t.feet_initial)
    if not safe then
-    t.enabled=false;t.phase="done"
-    return empty,"feet_pass_rejected_"..why
+    t.retargets=(t.retargets or 0)+1
+    t.rejected_target=t.target
+    t.rejected_reason=why
+    if t.retargets>t.max_retargets then
+     t.enabled=false;t.phase="done"
+     return empty,"retarget_limit_reached"
+    end
+    t.phase="retarget_wait";t.retarget_wait=frame+3
+    return empty,"retarget_requested_"..why
    end
   end
   local dest=find(sample and sample.players,t.target)
