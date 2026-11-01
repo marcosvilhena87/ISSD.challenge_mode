@@ -19,15 +19,20 @@ function M.choose(sample,holder,visited,previous,consecutive,excluded)
   if not visited[id] then next_goal=id;break end
  end
  if not next_goal then return nil,"all_visited" end
- -- Prioritize the next unvisited player, never skip ahead to a later one.
- goals[next_goal]=true
+ -- The next missing player is preferred; later players are fallback only if needed.
+ local ranks={}
+ for rank,id in ipairs(order) do
+  ranks[id]=rank
+  if not visited[id] then goals[id]=true end
+ end
  local stage="ordered_next_"..tostring(next_goal)
  local best,score,details
  for id in pairs(goals) do
   if id~=holder and not (excluded and excluded[id]) and points[id] and Feet.check(sample,holder,id) then
    local direct=leg(points[holder],points[id])
    -- Strongly discourage long, hard-to-control direct passes.
-   local cost=direct+math.max(0,direct-180)*2
+   local priority_penalty=(id==next_goal) and 0 or 10000
+   local cost=direct+math.max(0,direct-180)*2+priority_penalty
    if not best or cost<score then
     best=id;score=cost;details={mode="new",immediate=direct,onward=0,total=cost}
    end
@@ -47,6 +52,9 @@ function M.choose(sample,holder,visited,previous,consecutive,excluded)
     end
     if second and first<=Feet.MAX_RANGE and second<=Feet.MAX_RANGE then
      local total=first+second+M.RELAY_PENALTY
+     if next_goal and points[next_goal] and Feet.check(sample,id,next_goal) then
+      total=total-80
+     end
      if not best or total<score then
       best=id;score=total
       details={mode="relay",immediate=first,onward=second,
