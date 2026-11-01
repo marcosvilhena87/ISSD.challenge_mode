@@ -1,36 +1,29 @@
 -- PASS v0.8.13: one opt-in X shot after 10 spatial visitors + matching bonus countdown.
--- Goalkeeper y is an unverified proxy for the center of goal, NOT a calibrated goal coordinate.
-local M={VERSION="0.8.60",MAX_GOALKEEPER_X=135,MAX_APPROACH_FRAMES=120}
+-- Goal position is derived from stadium geometry; endpoint/attack side require calibration.
+local M={VERSION="0.8.66",MAX_GOALKEEPER_X=135,MAX_APPROACH_FRAMES=120}
 function M.new()
  return {enabled=false,phase="waiting",completion_frame=nil,shot_frame=nil,shots=0,
   aim=nil,aim_reason=nil,approach_frames=0,approach_x_start=nil,approach_best=nil}
 end
 function M.geometry(sample)
- if not sample or not sample.ball or not sample.goalkeeper then return nil,"no_goalkeeper_sample" end
- local b,k=sample.ball,sample.goalkeeper
- for _,v in ipairs({b.x,b.y,k.x,k.y}) do
-  if type(v)~="number" or v~=v or math.abs(v)>4096 then return nil,"invalid_coordinate_domain" end
+ if not sample or not sample.ball or not sample.goal_reference then return nil,"no_stadium_goal_reference" end
+ local ball,goal=sample.ball,sample.goal_reference
+ for _,v in ipairs({ball.x,ball.y,goal.x,goal.y}) do
+  if type(v)~="number" or v~=v or math.abs(v)>65535 then return nil,"invalid_coordinate_domain" end
  end
- local dx,dy=k.x-b.x,k.y-b.y
- if math.abs(dx)>1024 or math.abs(dy)>512 then return nil,"goalkeeper_coordinate_mismatch" end
+ local dx,dy=goal.x-ball.x,goal.y-ball.y
+ -- No goalkeeper slot and no unbounded chase using an uncalibrated scale.
+ if math.abs(dx)>1024 or math.abs(dy)>512 then return nil,"stadium_goal_coordinate_mismatch" end
+ if dx<=0 then return nil,"stadium_attack_side_unverified" end
  return {dx=dx,dy=dy,gap=math.abs(dx)}
 end
 function M.aim(sample)
- if not sample or not sample.ball or not sample.goalkeeper then return nil,"no_goalkeeper_sample" end
- local ball,keeper=sample.ball,sample.goalkeeper
- if type(ball.x)~="number" or type(ball.y)~="number" or
-    type(keeper.x)~="number" or type(keeper.y)~="number" then
-  return nil,"invalid_goalkeeper_coordinates"
- end
  local g,why=M.geometry(sample)
  if not g then return nil,why end
- local dx,dy=g.dx,g.dy
- if math.abs(dx)<16 then return nil,"ambiguous_goal_side" end
- local buttons={}
- buttons[dx>0 and "Right" or "Left"]=true
- -- Keeper's vertical position is only a rough heuristic for goal center.
- if dy>24 then buttons.Down=true elseif dy< -24 then buttons.Up=true end
- return buttons,"goalkeeper_y_proxy"
+ if math.abs(g.dx)<16 then return nil,"ambiguous_goal_side" end
+ local buttons={Right=true}
+ if g.dy>24 then buttons.Down=true elseif g.dy< -24 then buttons.Up=true end
+ return buttons,"stadium_goal_candidate"
 end
 function M.step(t,frame,completion_frame,bonus_first_decrement,sample,stable_holder)
  if not t.enabled then return {},"disabled" end
