@@ -1,4 +1,4 @@
--- DRIBBLE Goal Evidence v4: contextual, passive, does not validate the score.
+-- Goal Evidence v4 (DRIBBLE-compatible): contextual, passive, does not validate the score.
 local M={}
 function M.new(s)
  return {arm=s.frame,base=s.goal,initial_remaining=s.remaining,

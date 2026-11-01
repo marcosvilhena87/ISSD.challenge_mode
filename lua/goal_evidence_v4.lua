@@ -1,9 +1,9 @@
 -- Context-Aware DRIBBLE Goal Evidence v4; passive, no joypad calls.
 local root="."
-local f=io.open(root.."/lua/challenge/dribble_goal_evidence_v4.lua","rb")
+local f=io.open(root.."/lua/challenge/goal_evidence_v4.lua","rb")
 if f then f:close() else root="C:/Minha_Pasta/Jogos/BizHawk-2.11.1-win-x64/Lua/SNES/ISSD.challenge_mode" end
 package.path=root.."/lua/?.lua;"..root.."/lua/?/init.lua;"..package.path
-local E=require("challenge.dribble_goal_evidence_v4")
+local E=require("challenge.goal_evidence_v4")
 local events=root.."/goal_evidence_events_v4.txt"
 local trace=root.."/goal_evidence_trace_v4.csv"
 local sessions=root.."/goal_evidence_sessions_v4.csv"

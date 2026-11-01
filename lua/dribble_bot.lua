@@ -22,7 +22,7 @@ end
 local P=require("challenge.dribble_goal_v0325")
 local Start=require("challenge.dribble_start_detection_v0327")
 local Benchmark=require("challenge.dribble_route_benchmark_v0328")
-local Goal=require("challenge.dribble_goal_evidence_v4")
+local Goal=require("challenge.goal_evidence_v4")
 local Performance=require("challenge.dribble_performance_v034")
 -- Reload mutable route modules on each runner start; BizHawk may retain package.loaded.
 local Optimization=require("challenge.dribble_route_optimization_v035")
