@@ -26,6 +26,7 @@ package.loaded["challenge.pass_priority_v087"]=nil
 package.loaded["challenge.pass_ordered_v0820"]=nil
 local Priority=require("challenge.pass_priority_v087")
 local Ordered=require("challenge.pass_ordered_v0820")
+local Early=require("challenge.pass_early_v0865")
 local Reach=require("challenge.pass_reach_v0863")
 assert(type(Ordered.observe)=="function" and type(Ordered.step)=="function",
   "v0.8.23 requires updated challenge.pass_ordered_v0820; restart main.lua")
@@ -558,6 +559,30 @@ while true do
           "|onward="..string.format("%.2f",c.onward)..
           "|total="..string.format("%.2f",c.total)..
           "|stage="..tostring(priority_stage))
+      end
+    end
+    -- 7→10: a single bounded, explicit early trial. Other pairs untouched.
+    local early_candidate=false
+    local early_distance=nil
+    if autopass.phase=="idle" and not plan and selector_reason=="approach_required"
+       and pass_chain.active and holder==7 and bridge_info and bridge_info.target==10 then
+      local eligible,early_why,m=Early.evaluate(sample_for_auto,holder,10,
+        pass_chain.approach_frames or 0,pass_chain.early_710_used)
+      if eligible then
+        plan={sequence={10},target=10,aligned=true}
+        early_candidate=true
+        early_distance=m.distance
+        pass_chain.early_710_used=true
+        -- Release continuous RIGHT; Auto.step aims, releases, then presses B.
+        pass_chain.approach_neutral=false
+        pass_chain.approach_state.burst_remaining=0
+        pass_chain.approach_state.burst_buttons=nil
+        auto_write(emu.framecount(),"early_710_trial",7,10,selected_pass_button,
+          "distance="..string.format("%.2f",m.distance)..
+          "|lateral="..string.format("%.2f",m.lateral)..
+          "|approach_frames="..tostring(pass_chain.approach_frames)..
+          "|max_distance="..Early.MAX_DISTANCE..
+          "|confidence=experimental_unverified")
       end
     end
     local reason
