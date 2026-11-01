@@ -73,11 +73,12 @@ function M.step(sample,holder,target,state)
    local px,py=dx-mx,dy-my
    local predicted=cost(math.sqrt(px*px+py*py),math.min(math.abs(px),math.abs(py)))
    local penalty=state.penalties and state.penalties[name] or 0
+   if state.pair_89_last_bad_direction==name then penalty=penalty+18 end
    local value=predicted+penalty
    if value<best_score then best,best_score=name,value end
   end
   if best then
-   state.direction=best;state.axis=best=="Up" or best=="Down" and "y" or "x"
+   state.direction=best;state.axis=(best=="Up" or best=="Down") and "y" or "x"
    state.geometry_reason="pair_8_9_measured_cardinal"
    return {[best]=true},"approach_step",metrics
   end
