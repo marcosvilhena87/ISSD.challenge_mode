@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.25",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.25",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -11,6 +11,14 @@ function M.next(_,holder,visited)
   if id~=holder and not visited[id] then return id,"ordered_remaining" end
  end
  return nil,"all_visited"
+end
+function M.can_extend(state,frames,measurement)
+ if frames>=M.MAX_APPROACH_ABSOLUTE or not measurement then return false,"absolute_limit_or_missing_measurement" end
+ if not state or type(state.initial_distance)~="number" or type(state.best_distance)~="number" then return false,"insufficient_progress_evidence" end
+ if (state.stalled or 0)>=M.STALL_WINDOW then return false,"stalled" end
+ if state.initial_distance-state.best_distance<12 then return false,"insufficient_net_progress" end
+ if measurement.distance>state.best_distance+12 then return false,"regressed" end
+ return true,"progress_verified"
 end
 function M.step(sample,holder,target,state)
  local a,b=find(sample,holder),find(sample,target)
