@@ -5,7 +5,7 @@ local function leg(a,b)
  local dx,dy=math.abs(a.x-b.x),math.abs(a.y-b.y)
  return math.sqrt(dx*dx+dy*dy)+0.25*math.max(0,math.min(dx,dy)-12)
 end
-function M.choose(sample,holder,visited,previous,consecutive)
+function M.choose(sample,holder,visited,previous,consecutive,excluded)
  local points={}
  for _,p in ipairs(sample and sample.players or {}) do
   if p.id and type(p.x)=="number" and type(p.y)=="number" then points[p.id]=p end
@@ -24,7 +24,7 @@ function M.choose(sample,holder,visited,previous,consecutive)
  end
  local best,score,details
  for id in pairs(goals) do
-  if id~=holder and points[id] and Feet.check(sample,holder,id) then
+  if id~=holder and not (excluded and excluded[id]) and points[id] and Feet.check(sample,holder,id) then
    local direct=leg(points[holder],points[id])
    -- Strongly discourage long, hard-to-control direct passes.
    local cost=direct+math.max(0,direct-180)*2
@@ -35,7 +35,7 @@ function M.choose(sample,holder,visited,previous,consecutive)
  end
  if (consecutive or 0)<M.MAX_CONSECUTIVE then
   for id=2,11 do
-   if visited[id] and id~=holder and id~=previous and points[id]
+   if visited[id] and id~=holder and id~=previous and not (excluded and excluded[id]) and points[id]
      and not (id==10 or id==11) and Feet.check(sample,holder,id) then
     local first=leg(points[holder],points[id])
     local second
