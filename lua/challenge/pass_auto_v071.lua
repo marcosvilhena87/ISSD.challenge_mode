@@ -4,10 +4,16 @@ local M={}
 function M.new()
  return {enabled=false,button="B",phase="idle",start_frame=nil,tries=0,
  target=nil,origin=nil,pass_frame=nil,ball_before=nil,ball_max_displacement=0,
- trigger_delay=0,prewait_until=nil,gate_start=nil,gate_tracker=nil,hold_frames=3,wait_frames=90,extra_wait_frames=90,extended=false,first_motion_frame=nil,flight_samples={},last_attempt=nil,direction="AUTO",align_frames=2}
+ trigger_delay=0,prewait_until=nil,gate_start=nil,gate_tracker=nil,hold_frames=3,wait_frames=90,extra_wait_frames=90,extended=false,first_motion_frame=nil,flight_samples={},last_attempt=nil,direction="AUTO",align_frames=2,facing_frames=4,facing_count=0,facing_direction=nil}
 end
 local function find(players,id)
  for _,p in ipairs(players or {}) do if p.id==id then return p end end
+end
+local function toward(a,b)
+ local dx,dy=b.x-a.x,b.y-a.y
+ -- Cardinal orientation for four frames; diagonal pass is retained in hold.
+ if math.abs(dx)>=math.abs(dy) then return dx>=0 and "Right" or "Left" end
+ return dy>=0 and "Down" or "Up"
 end
 local function distance(a,b)
  local dx,dy=a.x-b.x,a.y-b.y
@@ -53,7 +59,7 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   if ready then
    if (t.trigger_delay or 0)>0 then
     t.phase="prewait";t.prewait_until=frame+t.trigger_delay
-   else t.phase=t.next_phase or "hold" end
+   else t.phase="face" end
    return empty,"possession_gate_ready"
   end
   if frame-(t.gate_start or frame)>=120 then
@@ -63,9 +69,24 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
  end
  if t.phase=="prewait" then
   if frame<(t.prewait_until or frame) then return empty,"trigger_pre_wait" end
-  t.phase=t.next_phase or "hold"
+  t.phase="face"
   -- Deliberately no buttons on the transition frame.
   return empty,"trigger_pre_wait_complete"
+ end
+ if t.phase=="face" then
+  local dest=find(sample and sample.players,t.target)
+  local origin=find(sample and sample.players,t.origin)
+  if not dest or not origin then t.enabled=false;t.phase="done";return empty,"coordinates_lost" end
+  -- New direction is recalculated each frame; no B during orientation.
+  t.facing_direction=toward(origin,dest)
+  t.facing_count=(t.facing_count or 0)+1
+  local buttons={[t.facing_direction]=true}
+  if t.facing_count>=t.facing_frames then t.phase="face_release" end
+  return buttons,"facing_directional"
+ end
+ if t.phase=="face_release" then
+  t.phase=t.next_phase or "hold"
+  return empty,"facing_release"
  end
  if t.phase=="align" then
   local dest=find(sample and sample.players,t.target)
@@ -124,7 +145,7 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   t.origin=holder;t.target=target
   t.next_phase=(plan and plan.aligned==false) and "align" or "hold"
   t.phase="possession_gate";t.gate_start=frame;t.gate_tracker=nil
-  t.hold_count=0;t.align_count=0
+  t.hold_count=0;t.align_count=0;t.facing_count=0
   t.ball_before={x=sample.ball.x,y=sample.ball.y}
   return empty,"target_selected"
  end
