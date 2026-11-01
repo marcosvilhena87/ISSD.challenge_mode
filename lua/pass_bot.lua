@@ -550,7 +550,7 @@ while true do
           movement.burst_remaining=0;movement.burst_buttons=nil
           pass_chain.approach_neutral=false
         else
-          local recovered,dir=Ordered.recover(movement,measurement)
+          local recovered,dir=Ordered.recover(movement,measurement,holder,target)
           if recovered and (pass_chain.approach_frames or 0)<Ordered.MAX_APPROACH_ABSOLUTE then
             movement.approach_limit=math.min(approach_limit+16,Ordered.MAX_APPROACH_ABSOLUTE)
             movement.burst_remaining=0;movement.burst_buttons=nil
@@ -588,7 +588,7 @@ while true do
         elseif feedback=="no_direction_improves" then
           auto_write(emu.framecount(),"approach_no_improvement",holder,target,selected_pass_button,
             "bad_bursts="..tostring(movement.bad_bursts))
-          local recovered,dir=Ordered.recover(movement,measurement)
+          local recovered,dir=Ordered.recover(movement,measurement,holder,target)
           if recovered and (pass_chain.approach_frames or 0)<Ordered.MAX_APPROACH_ABSOLUTE then
             movement.approach_limit=math.min(math.max(movement.approach_limit or Ordered.MAX_APPROACH,pass_chain.approach_frames+16),Ordered.MAX_APPROACH_ABSOLUTE)
             auto_write(emu.framecount(),"approach_recovery_started",holder,target,selected_pass_button,
