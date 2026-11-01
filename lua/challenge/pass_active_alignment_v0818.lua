@@ -34,6 +34,7 @@ function M.step(state,frame,sample,from,to)
  if reason=="missing_geometry" or reason=="too_close" or reason=="ball_not_at_feet" then
   return {},"alignment_unrecoverable_"..reason,metrics
  end
+ if (state.steps or 0)>=M.MAX_STEP_FRAMES then return {},"alignment_timeout",metrics end
  if frame-(state.started or frame)>=M.MAX_FRAMES then return {},"alignment_timeout",metrics end
  if state.previous_lateral and metrics and metrics.lateral>state.previous_lateral+3 then
   return {},"alignment_regressed",metrics
