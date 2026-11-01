@@ -4,7 +4,7 @@ local M={}
 function M.new()
  return {enabled=false,button="B",phase="idle",start_frame=nil,tries=0,
  target=nil,origin=nil,pass_frame=nil,ball_before=nil,ball_max_displacement=0,
- trigger_delay=0,prewait_until=nil,gate_start=nil,gate_tracker=nil,hold_frames=3,wait_frames=90,extra_wait_frames=90,extended=false,first_motion_frame=nil,flight_samples={},last_attempt=nil,direction="AUTO",align_frames=2,facing_frames=4,facing_count=0,facing_direction=nil,feet_initial=nil,retargets=0,max_retargets=3,retarget_wait=0,active_alignment=nil,relax_level=0}
+ trigger_delay=0,prewait_until=nil,gate_start=nil,gate_tracker=nil,hold_frames=3,wait_frames=90,extra_wait_frames=90,extended=false,first_motion_frame=nil,flight_samples={},last_attempt=nil,direction="AUTO",align_frames=2,facing_frames=4,facing_count=0,facing_direction=nil,feet_initial=nil,retargets=0,max_retargets=3,retarget_wait=0,active_alignment=nil,relax_level=0,calibration_mode="A",launch_ball=nil,early_flight={}}
 end
 local function find(players,id)
  for _,p in ipairs(players or {}) do if p.id==id then return p end end
@@ -32,6 +32,10 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
  end
  if t.phase=="wait" then
   if sample and sample.ball and t.ball_before then
+   if #t.early_flight<18 then
+    local base=t.launch_ball or t.ball_before
+    t.early_flight[#t.early_flight+1]={frame=frame,dx=sample.ball.x-base.x,dy=sample.ball.y-base.y,x=sample.ball.x,y=sample.ball.y}
+   end
    local displacement=distance(sample.ball,t.ball_before)
    t.ball_max_displacement=math.max(t.ball_max_displacement,displacement)
    if not t.first_motion_frame and displacement>=8 then t.first_motion_frame=frame end
@@ -149,7 +153,9 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   local dx,dy=dest.x-origin.x,dest.y-origin.y
   local buttons={}
   local direction=t.direction or "AUTO"
-  if direction=="AUTO" then
+  if direction=="AUTO" and t.calibration_mode=="A" then
+   buttons[toward(origin,dest)]=true
+  elseif direction=="AUTO" then
    if dx>12 then buttons.Right=true elseif dx< -12 then buttons.Left=true end
    if dy>12 then buttons.Down=true elseif dy< -12 then buttons.Up=true end
    if not (buttons.Left or buttons.Right or buttons.Up or buttons.Down) then
@@ -162,6 +168,10 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   -- B is valid only when a control-pad direction is pressed in the SAME frame.
   if not (buttons.Left or buttons.Right or buttons.Up or buttons.Down) then
    t.enabled=false;t.phase="done";return {},"no_direction_for_pass"
+  end
+  if t.hold_count==0 and sample and sample.ball then
+   t.launch_ball={x=sample.ball.x,y=sample.ball.y}
+   t.early_flight={}
   end
   buttons.B=true
   t.hold_count=t.hold_count+1
