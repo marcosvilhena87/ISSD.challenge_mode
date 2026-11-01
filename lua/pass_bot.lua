@@ -1272,6 +1272,19 @@ while true do
     end
   end
   if armed and finish.enabled then
+    if completion_frame and not finish.geometry_audited then
+      finish.geometry_audited=true
+      local b=sample_for_auto and sample_for_auto.ball
+      local g=sample_for_auto and sample_for_auto.goalkeeper
+      local dx=b and g and g.x-b.x
+      local dy=b and g and g.y-b.y
+      auto_write(emu.framecount(),"finish_goalkeeper_wram_audit",spatial.holder,nil,"OBSERVE",
+        "ball_addr=0x042A/0x042C|keeper_addr=0x052A/0x052C"..
+        "|ball_x="..tostring(b and b.x).."|ball_y="..tostring(b and b.y)..
+        "|keeper_x="..tostring(g and g.x).."|keeper_y="..tostring(g and g.y)..
+        "|dx="..tostring(dx).."|dy="..tostring(dy)..
+        "|source=signed16_player_slot_1|goal_reference=unverified")
+    end
     local shot,reason=Finish.step(finish,emu.framecount(),completion_frame,bonus.first_decrement_frame,sample_for_auto,spatial.holder)
     if reason=="shoot_pulse" or reason=="completion_and_bonus_observed" or reason=="finish_window_expired" or reason=="shot_blocked_too_far" or reason=="goalkeeper_coordinate_mismatch" or reason=="invalid_coordinate_domain" then
       finish_write(emu.framecount(),reason)
