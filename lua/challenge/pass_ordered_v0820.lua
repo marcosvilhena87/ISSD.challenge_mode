@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.29",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.30",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -46,6 +46,11 @@ function M.step(sample,holder,target,state)
   local x,y=dx-vx,dy-vy
   local projected=cost(math.sqrt(x*x+y*y),math.min(math.abs(x),math.abs(y)))
   local penalty=state and state.penalties and state.penalties[key] or 0
+  local learned=state and state.motion and state.motion[key]
+  if learned and learned.count>=2 then
+   local nx=dx-learned.dx;local ny=dy-learned.dy
+   projected=cost(math.sqrt(nx*nx+ny*ny),math.min(math.abs(nx),math.abs(ny)))
+  end
   -- The preferred axis is learned from real observed movement; stale routes
   -- are not allowed to overwrite feedback.
   choices[#choices+1]={key=key,score=projected+penalty,axis=vx~=0 and "x" or "y"}
@@ -61,6 +66,37 @@ function M.step(sample,holder,target,state)
   state.geometry_reason=why
  end
  return {[candidate.key]=true},"approach_step",metrics
+end
+function M.capture(sample,holder,target)
+ local a,b=find(sample,holder),find(sample,target)
+ if not a or not b then return nil end
+ return {hx=a.x,hy=a.y,tx=b.x,ty=b.y}
+end
+function M.observe_motion(state,sample,holder,target)
+ local before=state.burst_positions
+ local now=M.capture(sample,holder,target)
+ if not before or not now or not state.burst_direction then return "motion_unavailable" end
+ local hx=now.hx-before.hx;local hy=now.hy-before.hy
+ local tx=now.tx-before.tx;local ty=now.ty-before.ty
+ local direction=state.burst_direction
+ local expected={Right={1,0},Left={-1,0},Down={0,1},Up={0,-1}}
+ local ex=expected[direction]
+ if not ex then return "motion_unavailable" end
+ local projection=hx*ex[1]+hy*ex[2]
+ state.last_motion={holder_dx=hx,holder_dy=hy,target_dx=tx,target_dy=ty,projection=projection,direction=direction}
+ state.motion=state.motion or {}
+ if math.abs(hx)+math.abs(hy)<0.5 then return "motion_delayed_or_still" end
+ local old=state.motion[direction] or {dx=0,dy=0,count=0}
+ local n=math.min(old.count+1,8)
+ old.dx=(old.dx*old.count+hx)/(old.count+1)
+ old.dy=(old.dy*old.count+hy)/(old.count+1)
+ old.count=n;state.motion[direction]=old
+ if projection< -0.5 then
+  state.penalties=state.penalties or {}
+  state.penalties[direction]=(state.penalties[direction] or 0)+12
+  return "motion_opposite"
+ end
+ return "motion_calibrated"
 end
 function M.observe(state,metrics)
  if not metrics then return "no_metrics" end
