@@ -46,7 +46,7 @@ function M.choose(sample,holder,visited,previous,consecutive,excluded)
       if not second or d<second then second=d end
      end
     end
-    if second and first<=200 and second<=200 then
+    if second and first<=Feet.MAX_RANGE and second<=Feet.MAX_RANGE then
      local total=first+second+M.RELAY_PENALTY
      if not best or total<score then
       best=id;score=total

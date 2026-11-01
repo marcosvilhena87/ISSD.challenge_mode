@@ -24,6 +24,7 @@ package.loaded["challenge.pass_feet_v0815"]=nil
 package.loaded["challenge.pass_relay_v0810"]=nil
 package.loaded["challenge.pass_priority_v087"]=nil
 local Priority=require("challenge.pass_priority_v087")
+local Feet=require("challenge.pass_feet_v0815")
 Auto=require("challenge.pass_auto_v071")
 local Finish=require("challenge.pass_finish_v07")
 local Commands=require("challenge.dribble_commands_v035")
@@ -458,7 +459,22 @@ while true do
     local holder=spatial.holder
     local plan,selector_reason,bridge_info,priority_stage
     if holder and integration_ok then
+      -- Start at strict geometry on each fresh attempt, relax only if no route.
+      Feet.set_level(autopass.relax_level or 0)
       plan,selector_reason,bridge_info,priority_stage=Priority.resolve(Bridge,Alignment,sample_for_auto,holder,spatial.visited,pass_chain.previous,pass_chain.consecutive_relays,autopass.retargets>0 and {[autopass.rejected_target]=true} or nil)
+      if autopass.phase=="idle" and not plan and selector_reason=="no_reachable_target" then
+        while not plan and (autopass.relax_level or 0)<Feet.MAX_LEVEL do
+          autopass.relax_level=(autopass.relax_level or 0)+1
+          local range,lateral=Feet.set_level(autopass.relax_level)
+          auto_write(emu.framecount(),"limits_expanded",holder,nil,selected_pass_button,
+            "level="..autopass.relax_level.."|range="..range.."|lateral="..lateral)
+          plan,selector_reason,bridge_info,priority_stage=Priority.resolve(Bridge,Alignment,sample_for_auto,holder,spatial.visited,pass_chain.previous,pass_chain.consecutive_relays,autopass.retargets>0 and {[autopass.rejected_target]=true} or nil)
+        end
+        if not plan then
+          auto_write(emu.framecount(),"limits_exhausted",holder,nil,selected_pass_button,
+            "level="..tostring(autopass.relax_level).."|range="..Feet.MAX_RANGE.."|lateral="..Feet.MAX_LATERAL)
+        end
+      end
     elseif not integration_ok then selector_reason="integration_selftest_failed"
     else selector_reason="no_stable_holder" end
     local report=bridge_info and bridge_info.report
