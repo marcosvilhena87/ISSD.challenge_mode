@@ -598,6 +598,15 @@ while true do
             "|projection="..tostring(motion.projection))
         end
         movement.burst_positions=nil
+        if holder==5 and target==8 then
+          local right_status,right_delta=Ordered.guard_right(movement,measurement,motion_feedback=="motion_unavailable" and nil or motion)
+          if right_status then
+            auto_write(emu.framecount(),"approach_right_feedback",holder,target,selected_pass_button,
+              "result="..right_status.."|distance_change="..tostring(right_delta)..
+              "|projection="..tostring(motion and motion.projection)..
+              "|suspended="..tostring(movement.right_suspended))
+          end
+        end
         local diagonal_result,growth,lateral_growth=Ordered.guard_diagonal(movement,measurement)
         if diagonal_result then
           auto_write(emu.framecount(),"approach_diagonal_feedback",holder,target,selected_pass_button,

@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.35",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.36",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -72,7 +72,8 @@ function M.step(sample,holder,target,state)
   return x.key<y.key
  end)
  local candidate=choices[1]
- if holder==5 and target==8 and (not state or (state.right_bursts or 0)<2) then
+ if holder==5 and target==8 and (not state or not state.right_suspended) and
+   (not state or (state.right_bursts or 0)<2 or (state.right_progress_streak or 0)>0) then
   for _,choice in ipairs(choices) do if choice.key=="Right" then candidate=choice;break end end
  end
  if holder==6 and (target==2 or target==3) and candidate.key=="Right" then
@@ -105,7 +106,8 @@ function M.recover(state,measurement,holder,target)
  local best=nil;local best_gain=0
  for _,key in ipairs(keys) do
   local v=state.motion and state.motion[key]
-  if not (holder==6 and (target==2 or target==3) and key=="Right") and v and v.count>=1 then
+  if not (holder==6 and (target==2 or target==3) and key=="Right") and
+    not (holder==5 and target==8 and key=="Right" and state.right_suspended) and v and v.count>=1 then
    local dx=measurement.dx-v.dx;local dy=measurement.dy-v.dy
    local d=math.sqrt(dx*dx+dy*dy);local lat=math.min(math.abs(dx),math.abs(dy))
    local gain=M.score(measurement)-M.score({distance=d,lateral=lat})
@@ -115,7 +117,8 @@ function M.recover(state,measurement,holder,target)
  if not best then
   -- Probe an alternative direction briefly; validate on the next neutral sample.
   for _,key in ipairs(keys) do
-   if not (holder==6 and target==2 and key=="Right") and key~=state.direction and key~=state.last_still_direction and (not state.motion or not state.motion[key] or state.motion[key].dx*({Right=1,Left=-1,Up=0,Down=0})[key]+state.motion[key].dy*({Up=-1,Down=1,Right=0,Left=0})[key]>=0) then
+   if not (holder==6 and (target==2 or target==3) and key=="Right") and
+    not (holder==5 and target==8 and key=="Right" and state.right_suspended) and key~=state.direction and key~=state.last_still_direction and (not state.motion or not state.motion[key] or state.motion[key].dx*({Right=1,Left=-1,Up=0,Down=0})[key]+state.motion[key].dy*({Up=-1,Down=1,Right=0,Left=0})[key]>=0) then
     best=key;break
    end
   end
@@ -147,6 +150,31 @@ function M.guard_diagonal(state,metrics)
   if state.diagonal_still>=2 then state.diagonal_disabled=true;return "diagonal_still",growth,lateral_growth end
  else state.diagonal_still=0 end
  return "diagonal_observed",growth,lateral_growth
+end
+-- Pair-specific feedback: RIGHT is preferred but never repeated blindly.
+function M.guard_right(state,metrics,motion)
+ if not state or not metrics or state.burst_direction~="Right" then return nil end
+ if not state.burst_start then return nil end
+ local distance_change=metrics.distance-state.burst_start.distance
+ local actual_projection=motion and motion.projection or nil
+ state.last_right_distance_change=distance_change
+ if distance_change>2 or (actual_projection and actual_projection< -0.5) then
+  state.right_suspended=true
+  state.right_progress_streak=0
+  state.penalties=state.penalties or {}
+  state.penalties.Right=(state.penalties.Right or 0)+24
+  return "right_regressed",distance_change
+ end
+ if distance_change< -0.5 then
+  state.right_progress_streak=(state.right_progress_streak or 0)+1
+  return "right_progress",distance_change
+ end
+ state.right_still=(state.right_still or 0)+1
+ if state.right_still>=2 then
+  state.right_suspended=true
+  return "right_still",distance_change
+ end
+ return "right_pending",distance_change
 end
 function M.capture(sample,holder,target)
  local a,b=find(sample,holder),find(sample,target)
