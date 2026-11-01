@@ -969,6 +969,7 @@ while true do
           buttons,reason=Ordered.step(sample_for_auto,holder,target,movement)
           if reason=="approach_step" then
             movement.burst_buttons=buttons
+            movement.target=target
             local initial=Feet.measure(sample_for_auto,holder,target)
             movement.burst_start=initial
             movement.burst_positions=Ordered.capture(sample_for_auto,holder,target)
