@@ -5,7 +5,7 @@ local function leg(a,b)
  local dx,dy=math.abs(a.x-b.x),math.abs(a.y-b.y)
  return math.sqrt(dx*dx+dy*dy)+0.25*math.max(0,math.min(dx,dy)-12)
 end
-function M.choose(sample,holder,visited,previous,consecutive)
+function M.choose(sample,holder,visited,previous,consecutive,excluded)
  local points={}
  for _,p in ipairs(sample and sample.players or {}) do
   if p.id and type(p.x)=="number" and type(p.y)=="number" then points[p.id]=p end
