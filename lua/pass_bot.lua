@@ -656,9 +656,11 @@ while true do
           local delta=measurement.distance-movement.burst_start.distance
           local lateral_delta=measurement.lateral-movement.burst_start.lateral
           if delta>1.5 then
+            movement.pair_89_last_bad_direction=movement.burst_direction
             movement.pair_89_regression=(movement.pair_89_regression or 0)+1
             movement.pair_89_total_growth=(movement.pair_89_total_growth or 0)+delta
           elseif delta< -0.5 or lateral_delta< -1 then
+            movement.pair_89_last_bad_direction=nil
             movement.pair_89_regression=0
           end
           auto_write(emu.framecount(),"approach_89_feedback",holder,target,selected_pass_button,
