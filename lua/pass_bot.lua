@@ -537,7 +537,10 @@ while true do
       local target=bridge_info and bridge_info.target
       local movement=pass_chain.approach_state
       local approach_limit=movement.approach_limit or Ordered.MAX_APPROACH
-      if (pass_chain.approach_frames or 0)>=approach_limit then
+      if movement.recovery_phase=="awaiting_sample" then
+        pass_chain.approach_neutral=true
+      end
+      if (pass_chain.approach_frames or 0)>=approach_limit and not pass_chain.approach_neutral then
         local measurement=Feet.measure(sample_for_auto,holder,target)
         local can_extend,why=Ordered.can_extend(movement,pass_chain.approach_frames,measurement)
         if can_extend and approach_limit<Ordered.MAX_APPROACH_ABSOLUTE then
@@ -593,6 +596,9 @@ while true do
         end
         movement.burst_positions=nil
         local feedback=Ordered.observe(pass_chain.approach_state,measurement)
+        if movement.recovery_phase=="awaiting_sample" then
+          movement.recovery_phase="evaluated"
+        end
         if movement.recovery_probe_failed then
           auto_write(emu.framecount(),"approach_probe_failed",holder,target,selected_pass_button,
             "gain="..tostring(movement.recovery_probe_gain))
@@ -601,6 +607,7 @@ while true do
           auto_write(emu.framecount(),"approach_probe_result",holder,target,selected_pass_button,
             "gain="..tostring(movement.recovery_probe_gain))
           movement.recovery_exploratory=false
+          movement.approach_limit=math.min(math.max(movement.approach_limit or Ordered.MAX_APPROACH,pass_chain.approach_frames+16),Ordered.MAX_APPROACH_ABSOLUTE)
         end
         if feedback=="direction_worsened" or feedback=="direction_no_progress" or feedback=="direction_improved" or feedback=="direction_partial_progress" or feedback=="direction_pending_feedback" then
           auto_write(emu.framecount(),"approach_direction_feedback",holder,target,selected_pass_button,
@@ -669,14 +676,20 @@ while true do
             movement.burst_positions=Ordered.capture(sample_for_auto,holder,target)
             for key,pressed in pairs(buttons) do if pressed then movement.burst_direction=key end end
             movement.burst_remaining=math.min(Ordered.BURST_FRAMES,
-              (movement.approach_limit or Ordered.MAX_APPROACH)-(pass_chain.approach_frames or 0))
+              (movement.approach_limit or Ordered.MAX_APPROACH)-(pass_chain.approach_frames or 0),
+              (movement.recovery_exploratory and movement.recovery_left>0) and movement.recovery_left or Ordered.BURST_FRAMES)
             auto_write(emu.framecount(),"approach_burst_started",holder,target,selected_pass_button,
               "frames="..movement.burst_remaining.."|axis="..tostring(movement.axis))
           end
         end
         if reason=="approach_step" then
           pass_chain.approach_frames=pass_chain.approach_frames+1
-          if (movement.recovery_left or 0)>0 then movement.recovery_left=movement.recovery_left-1 end
+          if (movement.recovery_left or 0)>0 then
+            movement.recovery_left=movement.recovery_left-1
+            if movement.recovery_exploratory and movement.recovery_left==0 then
+              movement.recovery_phase="awaiting_sample"
+            end
+          end
           movement.burst_remaining=movement.burst_remaining-1
           pass_chain.approach_neutral=movement.burst_remaining==0
           auto_write(emu.framecount(),"approach_step",holder,target,selected_pass_button,
@@ -694,6 +707,12 @@ while true do
       buttons={};reason=selector_reason or "invalid_handoff";autopass.enabled=false
       pass_chain.active=false;auto_finished=true
       auto_write(emu.framecount(),"feet_route_blocked",holder,nil,selected_pass_button,reason)
+    end
+    if armed and holder==6 and buttons.Right and not buttons.B and
+        ((bridge_info and bridge_info.target==3) or autopass.target==3) then
+      buttons.Right=nil
+      auto_write(emu.framecount(),"first_pass_right_suppressed",6,3,selected_pass_button,
+        "pre_pass_right_blocked")
     end
     if buttons.B or buttons.Up or buttons.Down or buttons.Left or buttons.Right or
        reason=="target_selected" or reason=="no_valid_target" or reason=="no_direction_for_pass" or reason=="selector_api_mismatch" or reason=="selector_report_missing" or reason=="integration_selftest_failed" or reason=="selected_without_receiver" or reason=="invalid_handoff" or reason=="no_unvisited_receiver" then
