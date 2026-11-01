@@ -177,6 +177,10 @@ local function candidate_write(frame,holder,reason,report,selected)
  end
  assert(h:close())
 end
+local gates_csv=root.."/csv/pass_runtime_gates_v084.csv"
+local gh=assert(io.open(gates_csv,"ab"))
+if gh:seek("end")==0 then assert(gh:write("session,frame,gate,armed,enabled,finished,has_sample,holder,phase,probe_status,reason\n")) end
+gh:close()
 local auto_csv=root.."/csv/pass_auto_v06.csv"
 local af=assert(io.open(auto_csv,"ab"))
 if af:seek("end")==0 then assert(af:write("session,frame,event,from_player,to_player,button,reason\n")) end
@@ -232,6 +236,18 @@ end
 local armed=false
 local previous=nil
 local auto_finished=false
+local previous_gate=nil
+local function gate_write(frame,gate,reason,p,sample)
+ local signature=table.concat({gate,tostring(armed),tostring(autopass.enabled),
+  tostring(auto_finished),tostring(sample~=nil),tostring(spatial.holder),
+  tostring(autopass.phase),tostring(reason)},"|")
+ if signature==previous_gate then return end
+ previous_gate=signature
+ local h=assert(io.open(gates_csv,"ab"))
+ assert(h:write(csv({session,frame,gate,armed and 1 or 0,autopass.enabled and 1 or 0,
+  auto_finished and 1 or 0,sample and 1 or 0,spatial.holder,autopass.phase,p.status,reason},11)))
+ assert(h:close())
+end
 local function release() joypad.set({},1) end
 local function record(event,p)
   local raw=p.raw or {}
@@ -342,7 +358,7 @@ while true do
       if p.status=="candidate" and p.challenge=="PASS" and p.level==1 then
         armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();bonus=Bonus.new();completion_frame=nil;last_spatial_frame=nil;autopass=Auto.new();finish=Finish.new();finish.enabled=false;auto_finish_queued=false
         autopass.enabled=pending_auto and selected_pass_button=="B";autopass.button=selected_pass_button;autopass.start_frame=emu.framecount();autopass.direction=selected_direction
-        pending_auto=false;auto_finished=false
+        pending_auto=false;auto_finished=false;previous_gate=nil
         auto_write(emu.framecount(),autopass.enabled and "auto_arm" or "observation_arm",nil,nil,selected_pass_button,"opt_in_required")
         record("armed_candidate_only",p)
         print("[ISSD.pass_lv1] armed for observation; PASS LV.1 identity remains unconfirmed")
@@ -360,6 +376,15 @@ while true do
   end)
   -- Experimental control is explicitly opt-in; no RAM writes, no auto shot.
   local buttons={}
+  local gate="ready"
+  local gate_reason="ready"
+  if not armed then gate="blocked";gate_reason="not_armed"
+  elseif not autopass.enabled then gate="blocked";gate_reason="auto_disabled"
+  elseif auto_finished then gate="blocked";gate_reason="already_finished"
+  elseif not sample_for_auto then gate="blocked";gate_reason="missing_spatial_sample"
+  elseif not integration_ok then gate="blocked";gate_reason="integration_selftest_failed"
+  elseif not spatial.holder then gate="waiting";gate_reason="no_stable_holder" end
+  gate_write(emu.framecount(),gate,gate_reason,p,sample_for_auto)
   if armed and autopass.enabled and not auto_finished and sample_for_auto then
     local holder=spatial.holder
     local plan,selector_reason,bridge_info
@@ -394,8 +419,15 @@ while true do
       auto_write(emu.framecount(),"target_rejected",holder,nil,selected_pass_button,diagnostic)
     end
     if reason=="target_selected" and receiver then
+      local c
+      for _,candidate in ipairs(report and report.candidates or {}) do
+       if candidate.id==receiver.id then c=candidate;break end
+      end
       auto_write(emu.framecount(),"receiver_selected",holder,receiver.id,selected_pass_button,
-       string.format("distance=%.2f|misalignment=%.2f|cost=%.2f|aligned=%s",receiver.distance,receiver.misalignment,receiver.cost,tostring(receiver.aligned)))
+       string.format("distance=%s|misalignment=%s|cost=%s|aligned=%s",
+        c and string.format("%.2f",c.distance) or "unknown",
+        c and string.format("%.2f",c.misalignment) or "unknown",
+        c and string.format("%.2f",c.cost) or "unknown",tostring(receiver.aligned)))
     elseif reason=="alignment_correction" then
       auto_write(emu.framecount(),"alignment_correction",holder,autopass.target,selected_pass_button,"bounded_directional_pre_align")
     elseif reason=="pass_pulse" and autopass.last_attempt then
