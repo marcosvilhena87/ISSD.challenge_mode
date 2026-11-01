@@ -1,5 +1,5 @@
 -- v0.8.15: conservative feet-pass geometry. Coordinates do not prove kick trajectory.
-local M={VERSION="0.8.15",MAX_RANGE=190,MAX_LATERAL=72,MAX_DRIFT=32}
+local M={VERSION="0.8.44",MIN_PASS_DISTANCE=24,MAX_RANGE=190,MAX_LATERAL=72,MAX_DRIFT=32}
 M.BASE_RANGE=190;M.BASE_LATERAL=72
 M.RANGE_STEP=25;M.LATERAL_STEP=12;M.MAX_LEVEL=4
 function M.set_level(level)
@@ -18,8 +18,8 @@ function M.measure(sample,from,to)
  local distance=math.sqrt(dx*dx+dy*dy)
  local lateral=math.min(math.abs(dx),math.abs(dy))
  return {distance=distance,lateral=lateral,dx=dx,dy=dy,
-  valid=distance<=M.MAX_RANGE and lateral<=M.MAX_LATERAL},
-  distance>M.MAX_RANGE and "too_far" or (lateral>M.MAX_LATERAL and "diagonal_risk" or "feet_candidate")
+  valid=distance>=M.MIN_PASS_DISTANCE and distance<=M.MAX_RANGE and lateral<=M.MAX_LATERAL},
+  distance<M.MIN_PASS_DISTANCE and "too_close" or (distance>M.MAX_RANGE and "too_far" or (lateral>M.MAX_LATERAL and "diagonal_risk" or "feet_candidate"))
 end
 function M.check(sample,from,to,initial)
  local now,reason=M.measure(sample,from,to)
