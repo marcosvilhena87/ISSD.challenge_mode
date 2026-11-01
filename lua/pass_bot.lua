@@ -635,15 +635,17 @@ while true do
         auto_write(emu.framecount(),"relay_outcome",autopass.origin,holder,selected_pass_button,
           "repeat="..tostring(repeated and true or false).."|consecutive="..pass_chain.consecutive_relays)
         pass_chain.previous=autopass.origin
-        if holder==Ordered.ROUTE[(pass_chain.route_index or 1)+1] then
+        if holder==autopass.target then
           pass_chain.route_index=pass_chain.route_index+1
           pass_chain.approach_frames=0;pass_chain.approach_neutral=false
           auto_write(emu.framecount(),"route_advanced",autopass.origin,holder,selected_pass_button,
             "index="..pass_chain.route_index.."/10")
         else
           auto_write(emu.framecount(),"route_deviation",autopass.origin,holder,selected_pass_button,
-            "expected="..tostring(Ordered.ROUTE[(pass_chain.route_index or 1)+1]))
-          pass_chain.active=false;autopass.enabled=false;auto_finished=true
+            "expected="..tostring(autopass.target).."|observed="..tostring(holder).."|recovery=continue")
+          pass_chain.approach_frames=0;pass_chain.approach_neutral=false
+          auto_write(emu.framecount(),"route_recovered",autopass.origin,holder,selected_pass_button,
+            "next="..tostring(Ordered.next(pass_chain.route_index,holder,spatial.visited)))
         end
         local visits=0;for id in pairs(spatial.visited) do if type(id)=="number" and id>=2 and id<=11 then visits=visits+1 end end
         auto_write(emu.framecount(),"chain_transfer_candidate",autopass.origin,holder,selected_pass_button,
