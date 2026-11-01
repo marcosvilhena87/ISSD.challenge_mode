@@ -559,12 +559,13 @@ while true do
         buttons={};reason="approach_neutral";pass_chain.approach_neutral=false
         local measurement=Feet.measure(sample_for_auto,holder,target)
         local feedback=Ordered.observe(pass_chain.approach_state,measurement)
-        if feedback=="direction_worsened" or feedback=="direction_no_progress" or feedback=="direction_improved" then
+        if feedback=="direction_worsened" or feedback=="direction_no_progress" or feedback=="direction_improved" or feedback=="direction_partial_progress" or feedback=="direction_pending_feedback" then
           auto_write(emu.framecount(),"approach_direction_feedback",holder,target,selected_pass_button,
             "result="..feedback.."|gain="..tostring(movement.last_gain)..
             "|bad_bursts="..tostring(movement.bad_bursts or 0)..
             "|distance="..tostring(measurement and measurement.distance)..
-            "|lateral="..tostring(measurement and measurement.lateral))
+            "|lateral="..tostring(measurement and measurement.lateral)..
+            "|distance_gain="..tostring(movement.last_distance_gain).."|lateral_gain="..tostring(movement.last_lateral_gain))
         elseif feedback=="no_direction_improves" then
           auto_write(emu.framecount(),"approach_no_improvement",holder,target,selected_pass_button,
             "bad_bursts="..tostring(movement.bad_bursts))
