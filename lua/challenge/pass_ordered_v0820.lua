@@ -106,7 +106,8 @@ function M.recover(state,measurement,holder,target)
  local best=nil;local best_gain=0
  for _,key in ipairs(keys) do
   local v=state.motion and state.motion[key]
-  if not (holder==6 and (target==2 or target==3) and key=="Right") and v and v.count>=1 then
+  if not (holder==6 and (target==2 or target==3) and key=="Right") and
+    not (holder==5 and target==8 and key=="Right" and state.right_suspended) and v and v.count>=1 then
    local dx=measurement.dx-v.dx;local dy=measurement.dy-v.dy
    local d=math.sqrt(dx*dx+dy*dy);local lat=math.min(math.abs(dx),math.abs(dy))
    local gain=M.score(measurement)-M.score({distance=d,lateral=lat})
@@ -116,7 +117,8 @@ function M.recover(state,measurement,holder,target)
  if not best then
   -- Probe an alternative direction briefly; validate on the next neutral sample.
   for _,key in ipairs(keys) do
-   if not (holder==6 and target==2 and key=="Right") and key~=state.direction and key~=state.last_still_direction and (not state.motion or not state.motion[key] or state.motion[key].dx*({Right=1,Left=-1,Up=0,Down=0})[key]+state.motion[key].dy*({Up=-1,Down=1,Right=0,Left=0})[key]>=0) then
+   if not (holder==6 and (target==2 or target==3) and key=="Right") and
+    not (holder==5 and target==8 and key=="Right" and state.right_suspended) and key~=state.direction and key~=state.last_still_direction and (not state.motion or not state.motion[key] or state.motion[key].dx*({Right=1,Left=-1,Up=0,Down=0})[key]+state.motion[key].dy*({Up=-1,Down=1,Right=0,Left=0})[key]>=0) then
     best=key;break
    end
   end
