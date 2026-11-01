@@ -101,7 +101,7 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   t.phase="hold";return empty,"pre_up_release"
  end
  if t.phase=="pre_down" then
-  -- Only for 4->5: two Down-only frames, followed by neutral release.
+  -- 4->5: face the actual receiver for two frames, never assume Down.
   if not sample or not sample.ball or holder~=4 then
    t.enabled=false;t.phase="done";return empty,"pre_down_possession_lost"
   end
@@ -111,12 +111,16 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   if bx*bx+by*by>18*18 then
    t.enabled=false;t.phase="done";return empty,"pre_down_ball_not_at_feet"
   end
+  local dest=find(sample.players,5)
+  if not dest then t.enabled=false;t.phase="done";return empty,"pre_down_receiver_missing" end
+  t.facing_direction=toward(origin,dest)
   t.pre_down_frames=(t.pre_down_frames or 0)+1
   if t.pre_down_frames>=2 then t.phase="pre_down_release" end
-  return {Down=true},"pre_down_step"
+  return {[t.facing_direction]=true},"pre_down_step"
  end
  if t.phase=="pre_down_release" then
-  t.phase="face";return empty,"pre_down_release"
+  -- Two orientation frames plus neutral frame replace the four-frame general facing phase.
+  t.phase="hold";return empty,"pre_down_release"
  end
  if t.phase=="face" then
   local dest=find(sample and sample.players,t.target)
