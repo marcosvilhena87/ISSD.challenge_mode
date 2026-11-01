@@ -18,6 +18,7 @@ package.loaded["challenge.pass_bridge_v083"]=nil
 local Alignment=require("challenge.pass_alignment_v08")
 local Bridge=require("challenge.pass_bridge_v083")
 package.loaded["challenge.pass_possession_gate_v0812"]=nil
+package.loaded["challenge.pass_active_alignment_v0818"]=nil
 package.loaded["challenge.pass_alignment_ball_v0817"]=nil
 package.loaded["challenge.pass_feet_v0815"]=nil
 package.loaded["challenge.pass_relay_v0810"]=nil
@@ -523,6 +524,10 @@ while true do
         c and string.format("%.2f",c.distance) or "unknown",
         c and string.format("%.2f",c.misalignment) or "unknown",
         c and string.format("%.2f",c.cost) or "unknown",tostring(receiver.aligned)))
+    elseif reason=="active_alignment_started" or reason=="active_alignment_ready"
+      or (type(reason)=="string" and reason:match("^alignment_adjust_")) then
+      auto_write(emu.framecount(),reason,autopass.origin,autopass.target,selected_pass_button,
+        "correction_steps="..tostring(autopass.active_alignment and autopass.active_alignment.steps or 0).."|no_B=true")
     elseif reason=="facing_directional" then
       auto_write(emu.framecount(),"facing_directional",autopass.origin,autopass.target,selected_pass_button,
         "direction="..tostring(autopass.facing_direction)..
@@ -611,7 +616,7 @@ while true do
   end
   -- Frame-level WRAM evidence surrounding every pass and trigger delay.
   if armed and sample_for_auto and
-      (autopass.phase=="retarget_wait" or autopass.phase=="possession_gate" or autopass.phase=="prewait" or autopass.phase=="face" or autopass.phase=="face_release" or autopass.phase=="align" or
+      (autopass.phase=="active_align" or autopass.phase=="retarget_wait" or autopass.phase=="possession_gate" or autopass.phase=="prewait" or autopass.phase=="face" or autopass.phase=="face_release" or autopass.phase=="align" or
        autopass.phase=="hold" or autopass.phase=="wait") then
     local pf=autopass.pass_frame
     if autopass.phase~="wait" or (pf and emu.framecount()-pf<=30) then

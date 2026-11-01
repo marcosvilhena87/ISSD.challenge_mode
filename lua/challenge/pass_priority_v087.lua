@@ -8,7 +8,7 @@ function M.resolve(bridge,selector,sample,holder,visited,previous,consecutive,ex
  if target then
   local ok=Feet.check(sample,holder,target)
   local aligned=BallLine.check(sample,holder,target)
-  ok=ok and aligned
+  -- Alignment is corrected after selecting a feet-safe receiver.
   if not ok then
    -- Do not send an unbounded speculative pass into empty space.
    return nil,"unsafe_pass_geometry",{reason="unsafe_pass_geometry",report=nil},stage

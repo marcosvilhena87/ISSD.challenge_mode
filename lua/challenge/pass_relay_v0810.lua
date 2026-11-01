@@ -25,7 +25,7 @@ function M.choose(sample,holder,visited,previous,consecutive,excluded)
  end
  local best,score,details
  for id in pairs(goals) do
-  if id~=holder and not (excluded and excluded[id]) and points[id] and Feet.check(sample,holder,id) and BallLine.check(sample,holder,id) then
+  if id~=holder and not (excluded and excluded[id]) and points[id] and Feet.check(sample,holder,id) then
    local direct=leg(points[holder],points[id])
    -- Strongly discourage long, hard-to-control direct passes.
    local cost=direct+math.max(0,direct-180)*2
