@@ -1,12 +1,16 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.54",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.55",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
 function M.next(_,holder,visited)
  visited=visited or {}
  if not holder or holder<2 or holder>11 then return nil,"invalid_holder" end
+ -- If the ball is at 9 and 7 has not received, 9→7 is the primary route.
+ if holder==9 and not visited[7] then return 7,"primary_9_to_7" end
+ -- 6→7 is fallback only after a genuine return of possession to 6.
+ if holder==6 and visited[9] and not visited[7] then return 7,"fallback_6_to_7" end
  for _,id in ipairs(M.ROUTE) do
   -- A previous 6→2 pass does not prohibit 6→7: only the receiver must be new.
   if id~=holder and not visited[id] then return id,"ordered_remaining" end
