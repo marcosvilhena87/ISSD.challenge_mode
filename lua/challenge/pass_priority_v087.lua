@@ -1,31 +1,22 @@
--- v0.8.10: route to new participants; visited players allowed only as costly relays.
-local Relay=require("challenge.pass_relay_v0810")
+-- v0.8.20 strict requested sequence; no fallback to arbitrary teammate.
+local Ordered=require("challenge.pass_ordered_v0820")
 local Feet=require("challenge.pass_feet_v0815")
-local BallLine=require("challenge.pass_alignment_ball_v0817")
-local M={VERSION="0.8.15"}
-function M.resolve(bridge,selector,sample,holder,visited,previous,consecutive,excluded)
- local target,choice,detail,stage=Relay.choose(sample,holder,visited,previous,consecutive,excluded)
- if target then
-  local ok=Feet.check(sample,holder,target)
-  local aligned=BallLine.check(sample,holder,target)
-  -- Alignment is corrected after selecting a feet-safe receiver.
-  if not ok then
-   -- Do not send an unbounded speculative pass into empty space.
-   return nil,"unsafe_pass_geometry",{reason="unsafe_pass_geometry",report=nil},stage
-  end
+local M={VERSION="0.8.20"}
+function M.resolve(bridge,selector,sample,holder,visited,previous,consecutive,excluded,route_index)
+ local target,why=Ordered.next(route_index,holder)
+ if not target then return nil,why,{reason=why,report=nil},"ordered" end
+ local safe,reason,geometry=Feet.check(sample,holder,target)
+ if not safe then
+  return nil,"approach_required",{reason=reason,target=target,geometry=geometry,report=nil},"ordered"
  end
- if not target then return nil,choice,{reason=choice,report=nil},stage end
- -- Validate the chosen handoff with the existing selector-to-controller bridge.
- local excluded={}
- for id=2,11 do if id~=target then excluded[id]=true end end
- local plan,reason,info=bridge.resolve(selector,sample,holder,excluded)
+ local exclusion={}
+ for id=2,11 do if id~=target then exclusion[id]=true end end
+ local plan,bridge_reason,info=bridge.resolve(selector,sample,holder,exclusion)
  if info then
-  info.route_score=detail and detail.total
-  info.route_evaluated=detail and {{id=target,immediate=detail.immediate,
-   onward=detail.onward,total=detail.total}} or nil
-  info.relay_mode=detail and detail.mode or "unknown"
-  info.relay_penalty=detail and detail.penalty or 0
+  info.route_score=geometry and geometry.distance
+  info.route_evaluated=geometry and {{id=target,immediate=geometry.distance,onward=0,total=geometry.distance}} or nil
+  info.relay_mode="ordered"
  end
- return plan,reason,info,stage
+ return plan,bridge_reason,info,"ordered"
 end
 return M
