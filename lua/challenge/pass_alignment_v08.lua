@@ -1,5 +1,5 @@
 -- PASS v0.8.2: geometric candidate selection with auditable exclusions.
-local M={}
+local M={VERSION="0.8.3",API=3}
 local function valid(p)
  return p and type(p.x)=="number" and type(p.y)=="number"
   and p.x==p.x and p.y==p.y
