@@ -559,12 +559,13 @@ while true do
         buttons={};reason="approach_neutral";pass_chain.approach_neutral=false
         local measurement=Feet.measure(sample_for_auto,holder,target)
         local feedback=Ordered.observe(pass_chain.approach_state,measurement)
-        if feedback=="direction_worsened" or feedback=="direction_no_progress" or feedback=="direction_improved" then
+        if feedback=="direction_worsened" or feedback=="direction_no_progress" or feedback=="direction_improved" or feedback=="direction_partial_progress" or feedback=="direction_pending_feedback" then
           auto_write(emu.framecount(),"approach_direction_feedback",holder,target,selected_pass_button,
             "result="..feedback.."|gain="..tostring(movement.last_gain)..
             "|bad_bursts="..tostring(movement.bad_bursts or 0)..
             "|distance="..tostring(measurement and measurement.distance)..
-            "|lateral="..tostring(measurement and measurement.lateral))
+            "|lateral="..tostring(measurement and measurement.lateral)..
+            "|distance_gain="..tostring(movement.last_distance_gain).."|lateral_gain="..tostring(movement.last_lateral_gain))
         elseif feedback=="no_direction_improves" then
           auto_write(emu.framecount(),"approach_no_improvement",holder,target,selected_pass_button,
             "bad_bursts="..tostring(movement.bad_bursts))
@@ -667,6 +668,13 @@ while true do
       auto_write(emu.framecount(),"target_rejected",holder,nil,selected_pass_button,diagnostic)
     end
     if reason=="target_selected" and receiver then
+      -- Per-pass experiment: apply UP+B only to 6 -> 2.
+      -- Do not change selected_direction or subsequent pass settings.
+      if autopass.origin==6 and autopass.target==2 then
+        autopass.direction="Up"
+        auto_write(emu.framecount(),"pass_direction_override",6,2,selected_pass_button,
+          "direction=Up|button=B|policy=pair_6_2_only")
+      end
       autopass.visited_before_pass={}
       for id,seen in pairs(spatial.visited) do autopass.visited_before_pass[id]=seen end
       local c
