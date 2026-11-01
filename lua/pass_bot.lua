@@ -550,10 +550,19 @@ while true do
           movement.burst_remaining=0;movement.burst_buttons=nil
           pass_chain.approach_neutral=false
         else
+          local recovered,dir=Ordered.recover(movement,measurement)
+          if recovered and (pass_chain.approach_frames or 0)<Ordered.MAX_APPROACH_ABSOLUTE then
+            movement.approach_limit=math.min(approach_limit+16,Ordered.MAX_APPROACH_ABSOLUTE)
+            movement.burst_remaining=0;movement.burst_buttons=nil
+            pass_chain.approach_neutral=false;buttons={};reason="approach_recovery_neutral"
+            auto_write(emu.framecount(),"approach_recovery_started",holder,target,selected_pass_button,
+              "direction="..dir.."|limit="..movement.approach_limit.."|cause="..why)
+          else
           reason="approach_timeout";buttons={};autopass.enabled=false
           pass_chain.active=false;auto_finished=true
           auto_write(emu.framecount(),"approach_timeout",holder,target,selected_pass_button,
             "limit="..approach_limit.."|absolute="..Ordered.MAX_APPROACH_ABSOLUTE.."|reason="..why)
+          end
         end
       elseif pass_chain.approach_neutral then
         buttons={};reason="approach_neutral";pass_chain.approach_neutral=false
@@ -579,7 +588,14 @@ while true do
         elseif feedback=="no_direction_improves" then
           auto_write(emu.framecount(),"approach_no_improvement",holder,target,selected_pass_button,
             "bad_bursts="..tostring(movement.bad_bursts))
-          buttons={};autopass.enabled=false;pass_chain.active=false;auto_finished=true
+          local recovered,dir=Ordered.recover(movement,measurement)
+          if recovered and (pass_chain.approach_frames or 0)<Ordered.MAX_APPROACH_ABSOLUTE then
+            movement.approach_limit=math.min(math.max(movement.approach_limit or Ordered.MAX_APPROACH,pass_chain.approach_frames+16),Ordered.MAX_APPROACH_ABSOLUTE)
+            auto_write(emu.framecount(),"approach_recovery_started",holder,target,selected_pass_button,
+              "direction="..dir.."|cause=no_improvement")
+          else
+            buttons={};autopass.enabled=false;pass_chain.active=false;auto_finished=true
+          end
         end
         if feedback=="axis_switched" then
           auto_write(emu.framecount(),"approach_axis_switched",holder,target,selected_pass_button,
@@ -636,6 +652,7 @@ while true do
         end
         if reason=="approach_step" then
           pass_chain.approach_frames=pass_chain.approach_frames+1
+          if (movement.recovery_left or 0)>0 then movement.recovery_left=movement.recovery_left-1 end
           movement.burst_remaining=movement.burst_remaining-1
           pass_chain.approach_neutral=movement.burst_remaining==0
           auto_write(emu.framecount(),"approach_step",holder,target,selected_pass_button,
@@ -823,6 +840,15 @@ while true do
       trigger_write(emu.framecount(),trigger_mode,autopass.phase,"frame_sample",
         spatial.holder,autopass.target,sample_for_auto,buttons)
     end
+  end
+  if armed and buttons.Right and not buttons.B and ((holder==6 and autopass.target==2) or (holder==6 and bridge_info and bridge_info.target==2)) then
+    buttons.Right=nil
+    auto_write(emu.framecount(),"interposition_right_suppressed",6,2,selected_pass_button,"avoid_rightward_step_before_up_b")
+  end
+  if armed and holder==6 and bridge_info and bridge_info.target==2 and emu.framecount()%10==0 then
+    local blocker=Ordered.interposition(sample_for_auto)
+    if blocker then auto_write(emu.framecount(),"interposition_6_3_2",6,2,selected_pass_button,
+      "between="..tostring(blocker.between).."|offset="..tostring(blocker.offset).."|blocked="..tostring(blocker.blocked)) end
   end
   if buttons.X then log_input(emu.framecount(),"finish","shoot_pulse",spatial.holder,nil,buttons) end
   joypad.set(buttons,1)
