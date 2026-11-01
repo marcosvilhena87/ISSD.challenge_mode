@@ -920,7 +920,24 @@ while true do
         if movement.recovery_probe_failed then
           auto_write(emu.framecount(),"approach_probe_failed",holder,target,selected_pass_button,
             "gain="..tostring(movement.recovery_probe_gain))
-          buttons={};autopass.enabled=false;pass_chain.active=false;auto_finished=true
+          if holder==6 and target==7 and movement.pair_67_diagonal_disabled
+              and (movement.pair_67_cardinal_flip or 0)==0
+              and (pass_chain.approach_frames or 0)+16<Ordered.MAX_APPROACH_ABSOLUTE then
+            movement.pair_67_cardinal_flip=1
+            movement.recovery_probe_failed=false
+            movement.recovery_exploratory=false
+            movement.recovery_phase=nil
+            movement.recovery_probe_gain=nil
+            movement.approach_limit=math.min(
+              math.max(movement.approach_limit or Ordered.MAX_APPROACH,
+                (pass_chain.approach_frames or 0)+16),Ordered.MAX_APPROACH_ABSOLUTE)
+            movement.burst_remaining=0;movement.burst_buttons=nil
+            buttons={}
+            auto_write(emu.framecount(),"approach_67_cardinal_retry",holder,target,selected_pass_button,
+              "flip=1|budget=16|limit="..tostring(movement.approach_limit))
+          else
+            buttons={};autopass.enabled=false;pass_chain.active=false;auto_finished=true
+          end
         elseif movement.recovery_exploratory and movement.recovery_left==0 and movement.recovery_probe_gain then
           auto_write(emu.framecount(),"approach_probe_result",holder,target,selected_pass_button,
             "gain="..tostring(movement.recovery_probe_gain))
@@ -1241,7 +1258,7 @@ while true do
   end
   if armed and finish.enabled then
     local shot,reason=Finish.step(finish,emu.framecount(),completion_frame,bonus.first_decrement_frame,sample_for_auto,spatial.holder)
-    if reason=="shoot_pulse" or reason=="completion_and_bonus_observed" or reason=="finish_window_expired" or reason=="shot_blocked_too_far" then
+    if reason=="shoot_pulse" or reason=="completion_and_bonus_observed" or reason=="finish_window_expired" or reason=="shot_blocked_too_far" or reason=="goalkeeper_coordinate_mismatch" or reason=="invalid_coordinate_domain" then
       finish_write(emu.framecount(),reason)
       auto_write(emu.framecount(),"finish_"..reason,spatial.holder,nil,"X",
         "aim="..tostring(finish.aim_reason).."|direction="..tostring(finish.aim and (finish.aim.Left and "Left" or "Right"))..
