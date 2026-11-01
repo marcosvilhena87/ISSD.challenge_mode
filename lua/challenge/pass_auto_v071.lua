@@ -4,7 +4,7 @@ local M={}
 function M.new()
  return {enabled=false,button="B",phase="idle",start_frame=nil,tries=0,
  target=nil,origin=nil,pass_frame=nil,ball_before=nil,ball_max_displacement=0,
- hold_frames=3,wait_frames=90,last_attempt=nil,direction="AUTO",align_frames=2}
+ hold_frames=3,wait_frames=90,extra_wait_frames=90,extended=false,first_motion_frame=nil,flight_samples={},last_attempt=nil,direction="AUTO",align_frames=2}
 end
 local function find(players,id)
  for _,p in ipairs(players or {}) do if p.id==id then return p end end
@@ -21,13 +21,25 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
  if t.start_frame and frame-t.start_frame>3600 then t.enabled=false;return empty,"timeout" end
  if t.phase=="wait" then
   if sample and sample.ball and t.ball_before then
-   t.ball_max_displacement=math.max(t.ball_max_displacement,distance(sample.ball,t.ball_before))
+   local displacement=distance(sample.ball,t.ball_before)
+   t.ball_max_displacement=math.max(t.ball_max_displacement,displacement)
+   if not t.first_motion_frame and displacement>=8 then t.first_motion_frame=frame end
+   if frame%10==0 then
+    local target=find(sample.players,t.target)
+    local target_distance=target and distance(sample.ball,target) or nil
+    t.flight_samples[#t.flight_samples+1]={frame=frame,x=sample.ball.x,y=sample.ball.y,
+      displacement=displacement,target_distance=target_distance}
+   end
   end
   if holder and holder~=t.origin then
    t.enabled=false;t.phase="done"
    return empty,"transfer_candidate_observed"
   end
   if frame-(t.pass_frame or frame)>=t.wait_frames then
+   if not t.extended and t.ball_max_displacement>=8 then
+    t.extended=true;t.wait_frames=t.wait_frames+t.extra_wait_frames
+    return empty,"flight_wait_extended"
+   end
    t.enabled=false;t.phase="done"
    return empty,t.ball_max_displacement>=8 and "ball_moved_without_transfer" or "no_ball_motion_detected"
   end
@@ -86,6 +98,7 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   local dest=find(sample.players,target)
   local range=distance(origin,dest)
   t.wait_frames=range<=150 and 90 or (range<=300 and 150 or 210)
+  t.extended=false;t.first_motion_frame=nil;t.flight_samples={}
   t.origin=holder;t.target=target;t.phase=(plan and plan.aligned==false) and "align" or "hold";t.hold_count=0;t.align_count=0
   t.ball_before={x=sample.ball.x,y=sample.ball.y}
   return empty,"target_selected"
