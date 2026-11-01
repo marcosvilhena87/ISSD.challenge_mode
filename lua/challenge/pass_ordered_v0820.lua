@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.39",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.40",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -180,10 +180,23 @@ function M.guard_right(state,metrics,motion)
   end
   return "right_tolerated",distance_change
  end
- if distance_change< -0.5 then
+ if distance_change< -0.5 or
+    (math.abs(actual_projection or 0)<0.5 and
+     (metrics.lateral < state.burst_start.lateral-0.5 or distance_change< -0.1)) then
+  state.right_still=0
   state.right_small_negative=0;state.right_cumulative_regression=0
   state.right_progress_streak=(state.right_progress_streak or 0)+1
-  return "right_progress",distance_change
+  return (math.abs(actual_projection or 0)<0.5) and "right_lateral_progress" or "right_progress",distance_change
+ end
+ -- Horizontal stillness is diagnosed only after a sustained burst and
+ -- neutral follow-up, not merely by tiny horizontal displacement.
+ if actual_projection and math.abs(actual_projection)<0.5 then
+  state.right_still=(state.right_still or 0)+1
+  if state.right_still>=3 then
+   state.right_suspended=true;state.right_block_reason="persistent_horizontal_still"
+   return "right_still",distance_change
+  end
+  return "right_horizontal_still_pending",distance_change
  end
  state.right_still=(state.right_still or 0)+1
  if state.right_still>=2 then
