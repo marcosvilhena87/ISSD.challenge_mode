@@ -835,7 +835,10 @@ while true do
     if reason=="target_selected" and receiver then
       -- Per-pass experiment: apply UP+B only to 6 -> 2.
       -- Do not change selected_direction or subsequent pass settings.
-      if autopass.origin==6 and autopass.target==2 then
+      if autopass.origin==6 and autopass.target==3 then
+        auto_write(emu.framecount(),"pass_direction_override",6,3,selected_pass_button,
+          "policy=pair_6_3_only|pre_up=2|release=1|pass=B_only")
+      elseif autopass.origin==6 and autopass.target==2 then
         autopass.direction="Up"
         auto_write(emu.framecount(),"pass_direction_override",6,2,selected_pass_button,
           "direction=Up|button=B|policy=pair_6_2_only")
@@ -859,6 +862,9 @@ while true do
       or (type(reason)=="string" and reason:match("^alignment_adjust_")) then
       auto_write(emu.framecount(),reason,autopass.origin,autopass.target,selected_pass_button,
         "correction_steps="..tostring(autopass.active_alignment and autopass.active_alignment.steps or 0).."|no_B=true")
+    elseif reason=="pre_up_step" or reason=="pre_up_release" then
+      auto_write(emu.framecount(),reason,autopass.origin,autopass.target,selected_pass_button,
+        "steps="..tostring(autopass.pre_up_frames or 0).."|next=B_only")
     elseif reason=="pre_down_step" or reason=="pre_down_release" then
       auto_write(emu.framecount(),reason,autopass.origin,autopass.target,selected_pass_button,
         "steps="..tostring(autopass.pre_down_frames or 0).."|next=Down+B")
