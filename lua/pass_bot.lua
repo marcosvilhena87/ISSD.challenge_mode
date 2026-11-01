@@ -609,6 +609,25 @@ while true do
             "|target_x="..coords.tx.."|target_y="..coords.ty)
         end
         movement.right_followup_left=movement.right_followup_left-1
+      elseif pass_chain.approach_neutral and holder==6 and target==7 and
+          movement.pair_67_settle_left==nil and movement.burst_positions then
+        local now=Ordered.capture(sample_for_auto,holder,target)
+        local before=movement.burst_positions
+        if now and math.abs(now.hx-before.hx)+math.abs(now.hy-before.hy)<0.5 then
+          movement.pair_67_settle_left=2
+          buttons={};reason="approach_67_settle"
+          auto_write(emu.framecount(),"approach_67_delayed_motion",holder,target,selected_pass_button,
+            "neutral_frames=2|direction="..tostring(movement.burst_direction))
+        else
+          movement.pair_67_settle_left=0
+        end
+      elseif pass_chain.approach_neutral and holder==6 and target==7 and
+          (movement.pair_67_settle_left or 0)>0 then
+        -- Do not assess a temporarily still carrier until two neutral samples.
+        buttons={};reason="approach_67_settle"
+        movement.pair_67_settle_left=movement.pair_67_settle_left-1
+        auto_write(emu.framecount(),"approach_67_neutral_wait",holder,target,selected_pass_button,
+          "remaining="..tostring(movement.pair_67_settle_left))
       elseif pass_chain.approach_neutral then
         buttons={};reason="approach_neutral";pass_chain.approach_neutral=false
         local measurement=Feet.measure(sample_for_auto,holder,target)
@@ -639,7 +658,8 @@ while true do
               movement.last_still_direction=k
               movement.penalties=movement.penalties or {}
               movement.penalties[k]=(movement.penalties[k] or 0)+18
-              auto_write(emu.framecount(),"approach_direction_still",holder,target,selected_pass_button,"direction="..k)
+              auto_write(emu.framecount(),"approach_direction_still",holder,target,selected_pass_button,
+                "direction="..k)
             end
           end
         elseif motion_feedback=="motion_calibrated" then
@@ -653,6 +673,7 @@ while true do
             "|projection="..tostring(motion.projection))
         end
         movement.burst_positions=nil
+        movement.pair_67_settle_left=nil
         if holder==5 and target==8 then
           local right_status,right_delta=Ordered.guard_right(movement,measurement,motion_feedback=="motion_unavailable" and nil or motion)
           if right_status then
@@ -1095,6 +1116,13 @@ while true do
           auto_write(emu.framecount(),"route_deviation",autopass.origin,holder,selected_pass_button,
             "expected="..tostring(autopass.target).."|observed="..tostring(holder).."|recovery=continue")
           pass_chain.approach_frames=0;pass_chain.approach_neutral=false
+          pass_chain.approach_state={}
+          if Ordered.can_relay_six_seven(holder,spatial.visited) then
+            auto_write(emu.framecount(),"route_67_continuity",holder,7,selected_pass_button,
+              "player_6_previously_visited="..tostring(spatial.visited[6] and true or false)..
+              "|player_2_visited="..tostring(spatial.visited[2] and true or false)..
+              "|player_7_visited=false|eligible=true")
+          end
           auto_write(emu.framecount(),"route_recovered",autopass.origin,holder,selected_pass_button,
             "next="..tostring(Ordered.next(pass_chain.route_index,holder,spatial.visited)))
         end
