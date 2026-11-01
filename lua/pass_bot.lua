@@ -567,6 +567,9 @@ while true do
         local measurement=Feet.measure(sample_for_auto,holder,target)
         local can_extend,why=Ordered.can_extend(movement,pass_chain.approach_frames,measurement)
         if can_extend and approach_limit<Ordered.MAX_APPROACH_ABSOLUTE then
+          if why=="pair_67_recent_up_progress" then
+            movement.pair_67_extension_count=(movement.pair_67_extension_count or 0)+1
+          end
           if why=="recent_progress_verified" then
             movement.recent_extension_count=(movement.recent_extension_count or 0)+1
           end
@@ -707,6 +710,22 @@ while true do
               "carrier_stall="..tostring(movement.pair_89_carrier_stall or 0)..
               "|cumulative_growth="..tostring(movement.pair_89_total_growth))
           end
+        end
+        if holder==6 and target==7 and measurement and movement.burst_start then
+          local gain=movement.burst_start.distance-measurement.distance
+          local lateral_gain=movement.burst_start.lateral-measurement.lateral
+          if movement.burst_direction=="Up" and (gain>0.5 or lateral_gain>0.5) then
+            movement.pair_67_up_streak=(movement.pair_67_up_streak or 0)+1
+            movement.pair_67_last_gain=math.max(gain,lateral_gain)
+            movement.pair_67_last_distance=measurement.distance
+          elseif movement.burst_direction=="Up" then
+            movement.pair_67_up_streak=0
+            movement.pair_67_last_gain=0
+          end
+          auto_write(emu.framecount(),"approach_67_up_feedback",holder,target,selected_pass_button,
+            "direction="..tostring(movement.burst_direction)..
+            "|distance_gain="..tostring(gain).."|lateral_gain="..tostring(lateral_gain)..
+            "|up_streak="..tostring(movement.pair_67_up_streak or 0))
         end
         local feedback=Ordered.observe(pass_chain.approach_state,measurement)
         if movement.recovery_phase=="awaiting_sample" then

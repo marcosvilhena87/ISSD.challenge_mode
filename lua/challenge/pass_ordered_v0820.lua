@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.46",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.47",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -15,6 +15,12 @@ end
 function M.can_extend(state,frames,measurement)
  if frames>=M.MAX_APPROACH_ABSOLUTE or not measurement then return false,"absolute_limit_or_missing_measurement" end
  if not state or type(state.initial_distance)~="number" or type(state.best_distance)~="number" then return false,"insufficient_progress_evidence" end
+ if state and state.pair_67_up_streak and state.pair_67_up_streak>=2
+    and (state.pair_67_extension_count or 0)<2
+    and (state.pair_67_last_gain or 0)>0.5
+    and measurement.distance<=(state.pair_67_last_distance or measurement.distance)+1 then
+  return true,"pair_67_recent_up_progress"
+ end
  if state and state.recent_progress and state.recent_progress>=2 and
    measurement.distance<=state.best_distance+12 and
    (state.stalled or 0)<M.STALL_WINDOW and
@@ -79,6 +85,12 @@ function M.step(sample,holder,target,state)
  local dx,dy=metrics.dx,metrics.dy
  local forecast=(holder==8 and target==9) and M.receiver_prediction(state,sample,holder,target,state and state.current_frame) or nil
  if forecast then dx,dy=forecast.dx,forecast.dy end
+ -- Only 6→7: maintain UP while recent neutral feedback proves progress.
+ if holder==6 and target==7 and state and (state.pair_67_up_streak or 0)>=2
+   and state.pair_67_last_gain and state.pair_67_last_gain>0.5 then
+  state.axis="y";state.direction="Up";state.geometry_reason="pair_67_recent_up_progress"
+  return {Up=true},"approach_step",metrics
+ end
  -- Screen coordinates: positive X goes right; positive Y goes down.
  if holder==5 and target==8 and state and not state.right_suspended and dx>20 and
     (state.recovery_left or 0)==0 then
