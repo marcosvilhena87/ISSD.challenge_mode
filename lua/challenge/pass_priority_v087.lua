@@ -2,7 +2,7 @@
 local Relay=require("challenge.pass_relay_v0810")
 local Feet=require("challenge.pass_feet_v0815")
 local M={VERSION="0.8.15"}
-function M.resolve(bridge,selector,sample,holder,visited,previous,consecutive)
+function M.resolve(bridge,selector,sample,holder,visited,previous,consecutive,excluded)
  local target,choice,detail,stage=Relay.choose(sample,holder,visited,previous,consecutive)
  if target then
   local ok=Feet.check(sample,holder,target)
