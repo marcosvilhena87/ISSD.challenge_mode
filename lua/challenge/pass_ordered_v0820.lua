@@ -167,11 +167,11 @@ function M.guard_right(state,metrics,motion)
  end
  if distance_change>0 or (actual_projection and actual_projection<0) then
   state.right_small_negative=(state.right_small_negative or 0)+1
-  if state.right_small_negative>=4 and (state.right_cumulative_regression or 0)>12 then
+  state.right_cumulative_regression=(state.right_cumulative_regression or 0)+math.max(0,distance_change)
+  if state.right_small_negative>=4 and state.right_cumulative_regression>12 then
    state.right_suspended=true;state.right_block_reason="repeated_regression"
    return "right_repeated_regression",distance_change
   end
-  state.right_cumulative_regression=(state.right_cumulative_regression or 0)+math.max(0,distance_change)
   return "right_tolerated",distance_change
  end
  if distance_change< -0.5 then
