@@ -22,9 +22,10 @@ function M.resolve(selector,sample,holder,visited)
  return plan,"plan_valid",info
 end
 function M.selftest(selector,auto)
+ -- Synthetic test geometry must respect Feet.MIN_PASS_DISTANCE (24 WRAM units).
  local players={}
- for id=2,11 do players[#players+1]={id=id,x=id*20,y=0} end
- local sample={ball={x=120,y=0},players=players}
+ for id=2,11 do players[#players+1]={id=id,x=id*40,y=0} end
+ local sample={ball={x=240,y=0},players=players}
  local plan,reason,info=M.resolve(selector,sample,6,{})
  assert(reason=="plan_valid" and plan and plan.target~=6,"selector-to-plan failed: "..tostring(reason))
  assert(info.report.eligible==9,"expected nine eligible outfield receivers")
