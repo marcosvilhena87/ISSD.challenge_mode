@@ -610,6 +610,18 @@ while true do
         end
         movement.right_followup_left=movement.right_followup_left-1
       elseif pass_chain.approach_neutral and holder==6 and target==7 and
+          movement.pair_67_settle_left==nil and movement.burst_positions then
+        local now=Ordered.capture(sample_for_auto,holder,target)
+        local before=movement.burst_positions
+        if now and math.abs(now.hx-before.hx)+math.abs(now.hy-before.hy)<0.5 then
+          movement.pair_67_settle_left=2
+          buttons={};reason="approach_67_settle"
+          auto_write(emu.framecount(),"approach_67_delayed_motion",holder,target,selected_pass_button,
+            "neutral_frames=2|direction="..tostring(movement.burst_direction))
+        else
+          movement.pair_67_settle_left=0
+        end
+      elseif pass_chain.approach_neutral and holder==6 and target==7 and
           (movement.pair_67_settle_left or 0)>0 then
         -- Do not assess a temporarily still carrier until two neutral samples.
         buttons={};reason="approach_67_settle"
@@ -637,27 +649,11 @@ while true do
         end
         local motion_feedback=Ordered.observe_motion(movement,sample_for_auto,holder,target)
         local motion=movement.last_motion
-        if holder==6 and target==7 and motion_feedback=="motion_delayed_or_still" then
-          movement.pair_67_settle_left=2
-          movement.pair_67_delayed_samples=(movement.pair_67_delayed_samples or 0)+1
-          -- Recheck after neutral frames before penalizing directions.
-          auto_write(emu.framecount(),"approach_67_delayed_motion",holder,target,selected_pass_button,
-            "samples="..tostring(movement.pair_67_delayed_samples).."|neutral_frames=2")
-        end
-        if motion_feedback=="motion_delayed_or_still" and not (holder==6 and target==7 and
-             (movement.pair_67_delayed_samples or 0)<2) then
+        if motion_feedback=="motion_delayed_or_still" then
+
           movement.still_counts=movement.still_counts or {}
           local k=movement.burst_direction
-          if k then
-            movement.still_counts[k]=(movement.still_counts[k] or 0)+1
-            if movement.still_counts[k]>=3 then
-              movement.last_still_direction=k
-              movement.penalties=movement.penalties or {}
-              movement.penalties[k]=(movement.penalties[k] or 0)+18
-              auto_write(emu.framecount(),"approach_direction_still",holder,target,selected_pass_button,"direction="..k)
-            end
-          end
-        elseif motion_feedback=="motion_calibrated" then
+          if k        elseif motion_feedback=="motion_calibrated" then
           movement.still_counts={}
         end
         if motion then
@@ -668,6 +664,7 @@ while true do
             "|projection="..tostring(motion.projection))
         end
         movement.burst_positions=nil
+        movement.pair_67_settle_left=nil
         if holder==5 and target==8 then
           local right_status,right_delta=Ordered.guard_right(movement,measurement,motion_feedback=="motion_unavailable" and nil or motion)
           if right_status then
