@@ -18,6 +18,7 @@ package.loaded["challenge.pass_bridge_v083"]=nil
 local Alignment=require("challenge.pass_alignment_v08")
 local Bridge=require("challenge.pass_bridge_v083")
 package.loaded["challenge.pass_possession_gate_v0812"]=nil
+package.loaded["challenge.pass_feet_v0815"]=nil
 package.loaded["challenge.pass_relay_v0810"]=nil
 package.loaded["challenge.pass_priority_v087"]=nil
 local Priority=require("challenge.pass_priority_v087")
@@ -482,10 +483,16 @@ while true do
       buttons,reason=Auto.step(autopass,emu.framecount(),sample_for_auto,holder,spatial.visited,plan,completion_frame~=nil)
     else
       buttons={};reason=selector_reason or "invalid_handoff";autopass.enabled=false
+      pass_chain.active=false;auto_finished=true
+      auto_write(emu.framecount(),"feet_route_blocked",holder,nil,selected_pass_button,reason)
     end
     if buttons.B or buttons.Up or buttons.Down or buttons.Left or buttons.Right or
        reason=="target_selected" or reason=="no_valid_target" or reason=="no_direction_for_pass" or reason=="selector_api_mismatch" or reason=="selector_report_missing" or reason=="integration_selftest_failed" or reason=="selected_without_receiver" or reason=="invalid_handoff" or reason=="no_unvisited_receiver" then
       log_input(emu.framecount(),phase_before,reason,holder,autopass.target,buttons)
+    end
+    if type(reason)=="string" and reason:match("^feet_pass_rejected_") then
+      auto_write(emu.framecount(),"feet_pass_rejected",autopass.origin,autopass.target,selected_pass_button,reason)
+      pass_chain.active=false;autopass.enabled=false;auto_finished=true
     end
     if reason=="no_valid_target" then
       local diagnostic=string.format("selector=%s|players=%d|eligible=%d|excluded_visited=%d|excluded_invalid=%d",
