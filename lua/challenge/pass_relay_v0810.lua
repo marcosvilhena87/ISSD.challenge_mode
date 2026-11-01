@@ -35,7 +35,7 @@ function M.choose(sample,holder,visited,previous,consecutive,excluded)
  end
  if (consecutive or 0)<M.MAX_CONSECUTIVE then
   for id=2,11 do
-   if visited[id] and id~=holder and id~=previous and points[id]
+   if visited[id] and id~=holder and id~=previous and not (excluded and excluded[id]) and points[id]
      and not (id==10 or id==11) and Feet.check(sample,holder,id) then
     local first=leg(points[holder],points[id])
     local second
