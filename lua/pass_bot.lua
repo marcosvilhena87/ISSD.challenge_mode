@@ -1160,6 +1160,22 @@ while true do
       pass_chain.active=false;auto_finished=true
       auto_write(emu.framecount(),"feet_route_blocked",holder,nil,selected_pass_button,reason)
     end
+    if holder==4 and autopass.target==5 and reason=="pre_down_step" then
+      local src,dst=nil,nil
+      for _,v in ipairs(sample_for_auto and sample_for_auto.players or {}) do
+        if v.id==4 then src=v elseif v.id==5 then dst=v end
+      end
+      if src and dst then
+        auto_write(emu.framecount(),"facing_45_target_step",4,5,selected_pass_button,
+          "dx="..tostring(dst.x-src.x).."|dy="..tostring(dst.y-src.y)..
+          "|direction="..tostring(autopass.facing_direction)..
+          "|frame="..tostring(autopass.pre_down_frames or 0)..
+          "|button_B=false")
+      end
+    elseif holder==4 and autopass.target==5 and reason=="pre_down_release" then
+      auto_write(emu.framecount(),"facing_45_release",4,5,selected_pass_button,
+        "neutral=true|next=hold")
+    end
     if armed and holder==6 and buttons.Right and not buttons.B and
         ((bridge_info and bridge_info.target==3) or autopass.target==3) then
       buttons.Right=nil
