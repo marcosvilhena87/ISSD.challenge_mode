@@ -164,7 +164,19 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
    local safe,why=Feet.check(sample,t.origin,t.target,t.feet_initial)
    if safe then
     local BallLine=require("challenge.pass_alignment_ball_v0817")
-    safe,why=BallLine.check(sample,t.origin,t.target)
+    local aligned,alignment_reason=BallLine.check(sample,t.origin,t.target)
+    if t.origin==6 and t.target==3 and
+      (alignment_reason=="ball_behind_carrier" or alignment_reason=="ball_off_pass_axis") then
+      -- This pair is a deliberate UP-facing experiment. The ball must
+      -- remain at the carrier's feet, but do not rotate automatically.
+      local origin=find(sample and sample.players,t.origin)
+      local ball=sample and sample.ball
+      if not origin or not ball or distance(origin,ball)>18 then
+       safe=false;why="ball_not_at_feet"
+      end
+    else
+      safe=aligned;why=alignment_reason
+    end
    end
    if not safe and (why=="ball_behind_carrier" or why=="ball_off_pass_axis") and not (t.origin==6 and t.target==3) then
     t.phase="active_align"
