@@ -567,6 +567,9 @@ while true do
         local measurement=Feet.measure(sample_for_auto,holder,target)
         local can_extend,why=Ordered.can_extend(movement,pass_chain.approach_frames,measurement)
         if can_extend and approach_limit<Ordered.MAX_APPROACH_ABSOLUTE then
+          if why=="pair_89_receiver_escape_progress" then
+            movement.pair_89_extension_count=(movement.pair_89_extension_count or 0)+1
+          end
           if why=="pair_710_recent_right_progress" then
             movement.pair_710_extension_count=(movement.pair_710_extension_count or 0)+1
           end
@@ -707,13 +710,19 @@ while true do
           local escape=m and m.receiver_away or 0
           local closing=m and m.relative_closing or 0
           if carrier>0.5 then
+            movement.pair_89_last_carrier=carrier
+            movement.pair_89_carrier_progress_streak=math.min(4,(movement.pair_89_carrier_progress_streak or 0)+1)
             movement.pair_89_carrier_stall=0
             movement.pair_89_last_bad_direction=nil
           elseif delta>1.5 then
+            movement.pair_89_carrier_progress_streak=0
             movement.pair_89_carrier_stall=(movement.pair_89_carrier_stall or 0)+1
             movement.pair_89_last_bad_direction=movement.burst_direction
           end
-          if delta>1.5 then
+          local receiver_caused=carrier>0.5 and escape>carrier and delta>1.5
+          if receiver_caused then
+            movement.pair_89_escape_growth=(movement.pair_89_escape_growth or 0)+delta
+          elseif delta>1.5 then
             movement.pair_89_total_growth=(movement.pair_89_total_growth or 0)+delta
           elseif delta< -0.5 then
             movement.pair_89_total_growth=math.max(0,(movement.pair_89_total_growth or 0)+delta)
@@ -725,7 +734,12 @@ while true do
             "|closing="..tostring(closing)..
             "|distance_delta="..tostring(delta)..
             "|lateral_delta="..tostring(lateral_delta)..
-            "|carrier_stall="..tostring(movement.pair_89_carrier_stall or 0))
+            "|carrier_stall="..tostring(movement.pair_89_carrier_stall or 0)..
+            "|receiver_caused="..tostring(receiver_caused)..
+            "|escape_growth="..tostring(movement.pair_89_escape_growth or 0)..
+            "|carrier_progress_streak="..tostring(movement.pair_89_carrier_progress_streak or 0))
+          -- Receiver-driven separation is logged but does not consume the
+          -- carrier-failure growth budget. The global approach cap remains.
           if (movement.pair_89_carrier_stall or 0)>=2 or
              (movement.pair_89_total_growth or 0)>65 then
             buttons={};autopass.enabled=false;pass_chain.active=false;auto_finished=true

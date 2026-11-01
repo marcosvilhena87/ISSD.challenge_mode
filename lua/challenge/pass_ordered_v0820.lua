@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.53",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.54",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -20,6 +20,12 @@ end
 function M.can_extend(state,frames,measurement)
  if frames>=M.MAX_APPROACH_ABSOLUTE or not measurement then return false,"absolute_limit_or_missing_measurement" end
  if not state or type(state.initial_distance)~="number" or type(state.best_distance)~="number" then return false,"insufficient_progress_evidence" end
+ if state and (state.pair_89_carrier_progress_streak or 0)>=2
+   and (state.pair_89_extension_count or 0)<2
+   and (state.pair_89_carrier_stall or 0)==0
+   and (state.pair_89_last_carrier or 0)>0.5 then
+  return true,"pair_89_receiver_escape_progress"
+ end
  if state and (state.pair_710_right_streak or 0)>=2
    and (state.pair_710_extension_count or 0)<2
    and (state.pair_710_last_carrier or 0)>0.5
