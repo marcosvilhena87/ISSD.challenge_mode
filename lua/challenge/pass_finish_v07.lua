@@ -1,9 +1,19 @@
 -- PASS v0.8.13: one opt-in X shot after 10 spatial visitors + matching bonus countdown.
 -- Goalkeeper y is an unverified proxy for the center of goal, NOT a calibrated goal coordinate.
-local M={VERSION="0.8.59",MAX_GOALKEEPER_X=135,MAX_APPROACH_FRAMES=120}
+local M={VERSION="0.8.60",MAX_GOALKEEPER_X=135,MAX_APPROACH_FRAMES=120}
 function M.new()
  return {enabled=false,phase="waiting",completion_frame=nil,shot_frame=nil,shots=0,
   aim=nil,aim_reason=nil,approach_frames=0,approach_x_start=nil,approach_best=nil}
+end
+function M.geometry(sample)
+ if not sample or not sample.ball or not sample.goalkeeper then return nil,"no_goalkeeper_sample" end
+ local b,k=sample.ball,sample.goalkeeper
+ for _,v in ipairs({b.x,b.y,k.x,k.y}) do
+  if type(v)~="number" or v~=v or math.abs(v)>4096 then return nil,"invalid_coordinate_domain" end
+ end
+ local dx,dy=k.x-b.x,k.y-b.y
+ if math.abs(dx)>1024 or math.abs(dy)>512 then return nil,"goalkeeper_coordinate_mismatch" end
+ return {dx=dx,dy=dy,gap=math.abs(dx)}
 end
 function M.aim(sample)
  if not sample or not sample.ball or not sample.goalkeeper then return nil,"no_goalkeeper_sample" end
@@ -12,7 +22,9 @@ function M.aim(sample)
     type(keeper.x)~="number" or type(keeper.y)~="number" then
   return nil,"invalid_goalkeeper_coordinates"
  end
- local dx,dy=keeper.x-ball.x,keeper.y-ball.y
+ local g,why=M.geometry(sample)
+ if not g then return nil,why end
+ local dx,dy=g.dx,g.dy
  if math.abs(dx)<16 then return nil,"ambiguous_goal_side" end
  local buttons={}
  buttons[dx>0 and "Right" or "Left"]=true
@@ -34,9 +46,9 @@ function M.step(t,frame,completion_frame,bonus_first_decrement,sample,stable_hol
   if not stable_holder then return {},"await_stable_holder" end
   local aim,why=M.aim(sample)
   if not aim then t.enabled=false;return {},why end
-  local dx=sample.goalkeeper.x-sample.ball.x
-  local dy=sample.goalkeeper.y-sample.ball.y
-  local gap=math.abs(dx)
+  local geometry,geometry_reason=M.geometry(sample)
+  if not geometry then t.enabled=false;return {},geometry_reason end
+  local dx,dy,gap=geometry.dx,geometry.dy,geometry.gap
   t.approach_x_start=t.approach_x_start or gap
   t.approach_best=math.min(t.approach_best or gap,gap)
   if gap>M.MAX_GOALKEEPER_X then
