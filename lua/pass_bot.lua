@@ -535,19 +535,32 @@ while true do
               "level="..autopass.relax_level.."|range="..range.."|lateral="..lateral.."|cause=approach_stall")
           end
         end
+        -- Relax limits incrementally if geometry remains invalid despite movement.
+        if (pass_chain.approach_frames or 0)>0
+            and pass_chain.approach_frames%20==0
+            and movement.last_expansion_step~=pass_chain.approach_frames
+            and (autopass.relax_level or 0)<Feet.MAX_LEVEL then
+          movement.last_expansion_step=pass_chain.approach_frames
+          autopass.relax_level=autopass.relax_level+1
+          local range,lateral=Feet.set_level(autopass.relax_level)
+          auto_write(emu.framecount(),"limits_expanded",holder,target,selected_pass_button,
+            "level="..autopass.relax_level.."|range="..range.."|lateral="..lateral.."|cause=approach_duration")
+        end
         auto_write(emu.framecount(),"approach_progress",holder,target,selected_pass_button,
           "distance="..tostring(measurement and measurement.distance)..
           "|initial="..tostring(pass_chain.approach_state.initial_distance)..
           "|best="..tostring(pass_chain.approach_state.best_distance)..
+          "|lateral="..tostring(measurement and measurement.lateral)..
+          "|best_lateral="..tostring(pass_chain.approach_state.best_lateral)..
           "|stalled="..tostring(pass_chain.approach_state.stalled or 0))
       else
         local movement=pass_chain.approach_state
         -- Keep a direction continuously for up to four frames; check safety on
         -- every frame and sample progress once per burst on the neutral frame.
         if (movement.burst_remaining or 0)>0 and movement.burst_buttons then
-          local _,check=Ordered.step(sample_for_auto,holder,target,movement)
+          local new_buttons,check=Ordered.step(sample_for_auto,holder,target,movement)
           if check=="approach_step" then
-            buttons=movement.burst_buttons;reason="approach_step"
+            buttons=new_buttons;reason="approach_step"
           else
             buttons={};reason=check;movement.burst_remaining=0
           end
