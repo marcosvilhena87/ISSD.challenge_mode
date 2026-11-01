@@ -385,7 +385,19 @@ while true do
   elseif not integration_ok then gate="blocked";gate_reason="integration_selftest_failed"
   elseif not spatial.holder then gate="waiting";gate_reason="no_stable_holder" end
   gate_write(emu.framecount(),gate,gate_reason,p,sample_for_auto)
-  if armed and autopass.enabled and not auto_finished and sample_for_auto then
+  -- v0.8.5: lack of a stable holder is a transient wait, not a terminal failure.
+  -- Timeout is measured from ARM and never emits controller input.
+  local holder_pending=armed and autopass.enabled and not auto_finished
+    and autopass.phase=="idle" and not spatial.holder
+  if holder_pending and autopass.start_frame
+      and emu.framecount()-autopass.start_frame>=180 then
+    autopass.enabled=false;auto_finished=true
+    auto_write(emu.framecount(),"single_pass_result",nil,nil,selected_pass_button,"holder_detection_timeout")
+    calibration_write(emu.framecount(),"holder_detection_timeout",nil,nil,nil)
+    print("[ISSD.pass_lv1] single-pass result: holder_detection_timeout")
+  end
+  if armed and autopass.enabled and not auto_finished and sample_for_auto
+      and (spatial.holder or autopass.phase~="idle") then
     local holder=spatial.holder
     local plan,selector_reason,bridge_info
     if holder and integration_ok then
