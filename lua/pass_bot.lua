@@ -536,11 +536,25 @@ while true do
         and pass_chain.active and holder then
       local target=bridge_info and bridge_info.target
       local movement=pass_chain.approach_state
-      if (pass_chain.approach_frames or 0)>=Ordered.MAX_APPROACH then
-        reason="approach_timeout";buttons={};autopass.enabled=false
-        pass_chain.active=false;auto_finished=true
-        auto_write(emu.framecount(),"approach_timeout",holder,target,selected_pass_button,
-          "max_frames="..Ordered.MAX_APPROACH)
+      local approach_limit=movement.approach_limit or Ordered.MAX_APPROACH
+      if (pass_chain.approach_frames or 0)>=approach_limit then
+        local measurement=Feet.measure(sample_for_auto,holder,target)
+        local can_extend,why=Ordered.can_extend(movement,pass_chain.approach_frames,measurement)
+        if can_extend and approach_limit<Ordered.MAX_APPROACH_ABSOLUTE then
+          movement.approach_limit=math.min(approach_limit+Ordered.EXTEND_FRAMES,Ordered.MAX_APPROACH_ABSOLUTE)
+          auto_write(emu.framecount(),"approach_extended",holder,target,selected_pass_button,
+            "old_limit="..approach_limit.."|new_limit="..movement.approach_limit..
+            "|distance="..tostring(measurement and measurement.distance)..
+            "|best="..tostring(movement.best_distance).."|reason="..why)
+          buttons={};reason="approach_extension_neutral"
+          movement.burst_remaining=0;movement.burst_buttons=nil
+          pass_chain.approach_neutral=false
+        else
+          reason="approach_timeout";buttons={};autopass.enabled=false
+          pass_chain.active=false;auto_finished=true
+          auto_write(emu.framecount(),"approach_timeout",holder,target,selected_pass_button,
+            "limit="..approach_limit.."|absolute="..Ordered.MAX_APPROACH_ABSOLUTE.."|reason="..why)
+        end
       elseif pass_chain.approach_neutral then
         buttons={};reason="approach_neutral";pass_chain.approach_neutral=false
         local measurement=Feet.measure(sample_for_auto,holder,target)
@@ -589,7 +603,7 @@ while true do
           if reason=="approach_step" then
             movement.burst_buttons=buttons
             movement.burst_remaining=math.min(Ordered.BURST_FRAMES,
-              Ordered.MAX_APPROACH-(pass_chain.approach_frames or 0))
+              (movement.approach_limit or Ordered.MAX_APPROACH)-(pass_chain.approach_frames or 0))
             auto_write(emu.framecount(),"approach_burst_started",holder,target,selected_pass_button,
               "frames="..movement.burst_remaining.."|axis="..tostring(movement.axis))
           end
