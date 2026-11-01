@@ -23,8 +23,11 @@ package.loaded["challenge.pass_alignment_ball_v0817"]=nil
 package.loaded["challenge.pass_feet_v0815"]=nil
 package.loaded["challenge.pass_relay_v0810"]=nil
 package.loaded["challenge.pass_priority_v087"]=nil
+package.loaded["challenge.pass_ordered_v0820"]=nil
 local Priority=require("challenge.pass_priority_v087")
 local Ordered=require("challenge.pass_ordered_v0820")
+assert(type(Ordered.observe)=="function" and type(Ordered.step)=="function",
+  "v0.8.23 requires updated challenge.pass_ordered_v0820; restart main.lua")
 local Feet=require("challenge.pass_feet_v0815")
 Auto=require("challenge.pass_auto_v071")
 local Finish=require("challenge.pass_finish_v07")
