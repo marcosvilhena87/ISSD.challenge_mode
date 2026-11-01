@@ -4,7 +4,7 @@ local M={}
 function M.new()
  return {enabled=false,button="B",phase="idle",start_frame=nil,tries=0,
  target=nil,origin=nil,pass_frame=nil,ball_before=nil,ball_max_displacement=0,
- trigger_delay=0,prewait_until=nil,gate_start=nil,gate_tracker=nil,hold_frames=3,wait_frames=90,extra_wait_frames=90,extended=false,first_motion_frame=nil,flight_samples={},last_attempt=nil,direction="AUTO",align_frames=2,facing_frames=4,facing_count=0,facing_direction=nil}
+ trigger_delay=0,prewait_until=nil,gate_start=nil,gate_tracker=nil,hold_frames=3,wait_frames=90,extra_wait_frames=90,extended=false,first_motion_frame=nil,flight_samples={},last_attempt=nil,direction="AUTO",align_frames=2,facing_frames=4,facing_count=0,facing_direction=nil,feet_initial=nil}
 end
 local function find(players,id)
  for _,p in ipairs(players or {}) do if p.id==id then return p end end
@@ -101,6 +101,14 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   return buttons,"alignment_correction"
  end
  if t.phase=="hold" then
+  local Feet=require("challenge.pass_feet_v0815")
+  if t.hold_count==0 then
+   local safe,why=Feet.check(sample,t.origin,t.target,t.feet_initial)
+   if not safe then
+    t.enabled=false;t.phase="done"
+    return empty,"feet_pass_rejected_"..why
+   end
+  end
   local dest=find(sample and sample.players,t.target)
   local origin=find(sample and sample.players,t.origin)
   if not dest or not origin then t.enabled=false;return empty,"coordinates_lost" end
@@ -143,6 +151,8 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   t.wait_frames=range<=150 and 90 or (range<=300 and 150 or 210)
   t.extended=false;t.first_motion_frame=nil;t.flight_samples={}
   t.origin=holder;t.target=target
+  local Feet=require("challenge.pass_feet_v0815")
+  t.feet_initial=Feet.measure(sample,holder,target)
   t.next_phase=(plan and plan.aligned==false) and "align" or "hold"
   t.phase="possession_gate";t.gate_start=frame;t.gate_tracker=nil
   t.hold_count=0;t.align_count=0;t.facing_count=0

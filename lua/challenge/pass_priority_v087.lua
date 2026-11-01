@@ -1,8 +1,16 @@
 -- v0.8.10: route to new participants; visited players allowed only as costly relays.
 local Relay=require("challenge.pass_relay_v0810")
-local M={VERSION="0.8.10"}
+local Feet=require("challenge.pass_feet_v0815")
+local M={VERSION="0.8.15"}
 function M.resolve(bridge,selector,sample,holder,visited,previous,consecutive)
  local target,choice,detail,stage=Relay.choose(sample,holder,visited,previous,consecutive)
+ if target then
+  local ok=Feet.check(sample,holder,target)
+  if not ok then
+   -- Do not send an unbounded speculative pass into empty space.
+   return nil,"unsafe_pass_geometry",{reason="unsafe_pass_geometry",report=nil},stage
+  end
+ end
  if not target then return nil,choice,{reason=choice,report=nil},stage end
  -- Validate the chosen handoff with the existing selector-to-controller bridge.
  local excluded={}
