@@ -783,6 +783,19 @@ while true do
             movement.pair_710_right_streak=0
             movement.pair_710_last_carrier=carrier
           end
+          if movement.burst_direction=="Right" then
+            if carrier>0.5 then
+              movement.pair_710_right_stalls=0
+            else
+              movement.pair_710_right_stalls=(movement.pair_710_right_stalls or 0)+1
+            end
+          end
+          auto_write(emu.framecount(),"approach_710_steering_feedback",holder,target,selected_pass_button,
+            "direction="..tostring(movement.burst_direction)..
+            "|holder_toward="..tostring(carrier)..
+            "|receiver_away="..tostring(escape)..
+            "|right_stalls="..tostring(movement.pair_710_right_stalls or 0)..
+            "|vertical_count="..tostring(movement.pair_710_vertical_count or 0))
           auto_write(emu.framecount(),"approach_710_relative_feedback",holder,target,selected_pass_button,
             "direction="..tostring(movement.burst_direction)..
             "|holder_toward="..tostring(carrier)..
