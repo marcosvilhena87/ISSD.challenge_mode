@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.55",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.56",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -20,6 +20,18 @@ end
 function M.can_relay_six_seven(holder,visited)
  -- Six may be visited already; seven is eligible until seven itself receives.
  return holder==6 and not (visited and visited[7])
+end
+function M.goalward_checkpoint(state,frames,measurement)
+ -- A checkpoint only extends a per-stage deadline, NEVER the absolute cap.
+ if not state or not measurement or type(measurement.distance)~="number" then return false,"missing_measurement" end
+ if (state.pair_710_checkpoints or 0)>=2 then return false,"checkpoint_budget" end
+ if frames>=M.MAX_APPROACH_ABSOLUTE then return false,"absolute_limit" end
+ if (state.pair_710_last_carrier or 0)<=0.5 or (state.pair_710_right_streak or 0)<2 then
+  return false,"carrier_not_advancing"
+ end
+ local baseline=state.pair_710_checkpoint_distance or state.initial_distance
+ if not baseline or baseline-measurement.distance<25 then return false,"insufficient_stage_gain" end
+ return true,"goalward_receiver_stage_progress"
 end
 function M.can_extend(state,frames,measurement)
  if frames>=M.MAX_APPROACH_ABSOLUTE or not measurement then return false,"absolute_limit_or_missing_measurement" end
