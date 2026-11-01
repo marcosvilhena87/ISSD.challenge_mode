@@ -844,6 +844,20 @@ while true do
           local escape=m and m.receiver_away or 0
           local closing=m and m.relative_closing or 0
           local gain=movement.burst_start.distance-measurement.distance
+          -- Recent geometric progress is separate from the carrier's own motion.
+          movement.pair_710_net_samples=movement.pair_710_net_samples or {}
+          local net=movement.pair_710_net_samples
+          net[#net+1]=gain
+          if #net>4 then table.remove(net,1) end
+          local recent_net=0
+          for _,v in ipairs(net) do recent_net=recent_net+v end
+          movement.pair_710_recent_net_gain=recent_net
+          auto_write(emu.framecount(),"approach_710_net_progress",holder,target,selected_pass_button,
+            "carrier_toward="..tostring(carrier)..
+            "|receiver_away="..tostring(escape)..
+            "|net_gain_burst="..tostring(gain)..
+            "|net_gain_recent="..tostring(recent_net)..
+            "|distance="..tostring(measurement.distance))
           if movement.burst_direction=="Right" and carrier>0.5 then
             movement.pair_710_right_streak=math.min(4,(movement.pair_710_right_streak or 0)+1)
             movement.pair_710_last_carrier=carrier
