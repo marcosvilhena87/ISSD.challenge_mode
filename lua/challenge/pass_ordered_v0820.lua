@@ -88,7 +88,6 @@ function M.step(sample,holder,target,state)
  -- A persistently regressing 6→7 direction is excluded for the next
  -- two decisions; orientation follows real receiver displacement.
  if holder==6 and target==7 and state and state.pair_67_avoid_left and state.pair_67_avoid_left>0 then
-  state.pair_67_avoid_left=state.pair_67_avoid_left-1
   local blocked=state.pair_67_avoid_direction
   state.penalties=state.penalties or {}
   if blocked then state.penalties[blocked]=math.max(state.penalties[blocked] or 0,36) end
@@ -169,6 +168,13 @@ function M.step(sample,holder,target,state)
   return x.key<y.key
  end)
  local candidate=choices[1]
+ if holder==6 and target==7 and state and (state.pair_67_avoid_left or 0)>0 then
+  for _,choice in ipairs(choices) do
+   if choice.key~=state.pair_67_avoid_direction then candidate=choice;break end
+  end
+  state.pair_67_avoid_left=state.pair_67_avoid_left-1
+  if state.pair_67_avoid_left==0 then state.pair_67_avoid_direction=nil end
+ end
  if holder==5 and target==8 and dx>0 and (not state or not state.right_suspended) then
   for _,choice in ipairs(choices) do if choice.key=="Right" then candidate=choice;break end end
  end
