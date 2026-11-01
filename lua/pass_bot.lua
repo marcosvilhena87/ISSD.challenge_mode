@@ -544,6 +544,9 @@ while true do
         local measurement=Feet.measure(sample_for_auto,holder,target)
         local can_extend,why=Ordered.can_extend(movement,pass_chain.approach_frames,measurement)
         if can_extend and approach_limit<Ordered.MAX_APPROACH_ABSOLUTE then
+          if why=="recent_progress_verified" then
+            movement.recent_extension_count=(movement.recent_extension_count or 0)+1
+          end
           movement.approach_limit=math.min(approach_limit+Ordered.EXTEND_FRAMES,Ordered.MAX_APPROACH_ABSOLUTE)
           auto_write(emu.framecount(),"approach_extended",holder,target,selected_pass_button,
             "old_limit="..approach_limit.."|new_limit="..movement.approach_limit..
@@ -608,6 +611,12 @@ while true do
             "gain="..tostring(movement.recovery_probe_gain))
           movement.recovery_exploratory=false
           movement.approach_limit=math.min(math.max(movement.approach_limit or Ordered.MAX_APPROACH,pass_chain.approach_frames+16),Ordered.MAX_APPROACH_ABSOLUTE)
+        end
+        if holder==5 and target==8 and (movement.recent_progress or 0)>=2 then
+          auto_write(emu.framecount(),"approach_recent_progress",holder,target,selected_pass_button,
+            "distance="..tostring(measurement and measurement.distance)..
+            "|streak="..tostring(movement.recent_progress)..
+            "|direction="..tostring(movement.burst_direction))
         end
         if feedback=="direction_worsened" or feedback=="direction_no_progress" or feedback=="direction_improved" or feedback=="direction_partial_progress" or feedback=="direction_pending_feedback" then
           auto_write(emu.framecount(),"approach_direction_feedback",holder,target,selected_pass_button,
@@ -765,6 +774,9 @@ while true do
       or (type(reason)=="string" and reason:match("^alignment_adjust_")) then
       auto_write(emu.framecount(),reason,autopass.origin,autopass.target,selected_pass_button,
         "correction_steps="..tostring(autopass.active_alignment and autopass.active_alignment.steps or 0).."|no_B=true")
+    elseif reason=="pre_down_step" or reason=="pre_down_release" then
+      auto_write(emu.framecount(),reason,autopass.origin,autopass.target,selected_pass_button,
+        "steps="..tostring(autopass.pre_down_frames or 0).."|next=Down+B")
     elseif reason=="facing_directional" then
       auto_write(emu.framecount(),"facing_directional",autopass.origin,autopass.target,selected_pass_button,
         "direction="..tostring(autopass.facing_direction)..
