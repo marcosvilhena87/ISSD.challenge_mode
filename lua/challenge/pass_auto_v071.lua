@@ -109,6 +109,10 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   local Feet=require("challenge.pass_feet_v0815")
   if t.hold_count==0 then
    local safe,why=Feet.check(sample,t.origin,t.target,t.feet_initial)
+   if safe then
+    local BallLine=require("challenge.pass_alignment_ball_v0817")
+    safe,why=BallLine.check(sample,t.origin,t.target)
+   end
    if not safe then
     t.retargets=(t.retargets or 0)+1
     t.rejected_target=t.target

@@ -18,6 +18,7 @@ package.loaded["challenge.pass_bridge_v083"]=nil
 local Alignment=require("challenge.pass_alignment_v08")
 local Bridge=require("challenge.pass_bridge_v083")
 package.loaded["challenge.pass_possession_gate_v0812"]=nil
+package.loaded["challenge.pass_alignment_ball_v0817"]=nil
 package.loaded["challenge.pass_feet_v0815"]=nil
 package.loaded["challenge.pass_relay_v0810"]=nil
 package.loaded["challenge.pass_priority_v087"]=nil

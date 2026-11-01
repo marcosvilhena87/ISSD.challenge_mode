@@ -1,5 +1,6 @@
 -- v0.8.10: permit visited teammates only as penalized two-leg relays.
 local Feet=require("challenge.pass_feet_v0815")
+local BallLine=require("challenge.pass_alignment_ball_v0817")
 local M={VERSION="0.8.15",RELAY_PENALTY=100,MAX_CONSECUTIVE=2}
 local function leg(a,b)
  local dx,dy=math.abs(a.x-b.x),math.abs(a.y-b.y)
@@ -24,7 +25,7 @@ function M.choose(sample,holder,visited,previous,consecutive,excluded)
  end
  local best,score,details
  for id in pairs(goals) do
-  if id~=holder and not (excluded and excluded[id]) and points[id] and Feet.check(sample,holder,id) then
+  if id~=holder and not (excluded and excluded[id]) and points[id] and Feet.check(sample,holder,id) and BallLine.check(sample,holder,id) then
    local direct=leg(points[holder],points[id])
    -- Strongly discourage long, hard-to-control direct passes.
    local cost=direct+math.max(0,direct-180)*2
