@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.33",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.34",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -15,6 +15,12 @@ end
 function M.can_extend(state,frames,measurement)
  if frames>=M.MAX_APPROACH_ABSOLUTE or not measurement then return false,"absolute_limit_or_missing_measurement" end
  if not state or type(state.initial_distance)~="number" or type(state.best_distance)~="number" then return false,"insufficient_progress_evidence" end
+ if state and state.recent_progress and state.recent_progress>=2 and
+   measurement.distance<=state.best_distance+12 and
+   (state.stalled or 0)<M.STALL_WINDOW and
+   state.recent_extension_count~=nil and state.recent_extension_count<2 then
+  return true,"recent_progress_verified"
+ end
  if (state.stalled or 0)>=M.STALL_WINDOW then return false,"stalled" end
  if state.initial_distance-state.best_distance<12 then return false,"insufficient_net_progress" end
  if measurement.distance>state.best_distance+12 then return false,"regressed" end
@@ -200,6 +206,9 @@ function M.observe(state,metrics)
   state.burst_direction=nil
  end
  if state.previous_distance then
+  if state.previous_distance-d>0.5 then
+   state.recent_progress=math.min(3,(state.recent_progress or 0)+1)
+  else state.recent_progress=0 end
   if d>=state.previous_distance-0.5 and lateral>=(state.previous_lateral or lateral)-0.5 then
    state.stalled=(state.stalled or 0)+1
   else state.stalled=0 end
