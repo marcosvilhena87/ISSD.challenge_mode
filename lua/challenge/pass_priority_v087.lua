@@ -1,9 +1,9 @@
--- v0.8.20 strict requested sequence; no fallback to arbitrary teammate.
+-- v0.8.20 preferred sequence with unexpected-receiver adaptation.
 local Ordered=require("challenge.pass_ordered_v0820")
 local Feet=require("challenge.pass_feet_v0815")
 local M={VERSION="0.8.20"}
 function M.resolve(bridge,selector,sample,holder,visited,previous,consecutive,excluded,route_index)
- local target,why=Ordered.next(route_index,holder)
+ local target,why=Ordered.next(route_index,holder,visited)
  if not target then return nil,why,{reason=why,report=nil},"ordered" end
  local safe,reason,geometry=Feet.check(sample,holder,target)
  if not safe then
