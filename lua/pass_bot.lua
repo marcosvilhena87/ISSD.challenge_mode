@@ -788,14 +788,29 @@ while true do
           local motion=movement.last_motion
           local moved=motion and (math.abs(motion.holder_dx)+math.abs(motion.holder_dy)) or 0
           movement.pair_67_diagonal_trials=(movement.pair_67_diagonal_trials or 0)+1
-          if (d>2 and l>2) or
-             ((movement.pair_67_diagonal_trials or 0)>=2 and moved<0.5) then
+          -- A single diagonal can appear to regress because receiver 7
+          -- moves concurrently. Keep UP+RIGHT as preferred solution until
+          -- persistent regression is measured over at least three bursts.
+          if d>2 and l>2 then
+            movement.pair_67_diagonal_regressions=(movement.pair_67_diagonal_regressions or 0)+1
+          else
+            movement.pair_67_diagonal_regressions=0
+          end
+          if moved<0.5 then
+            movement.pair_67_diagonal_stalls=(movement.pair_67_diagonal_stalls or 0)+1
+          else
+            movement.pair_67_diagonal_stalls=0
+          end
+          if (movement.pair_67_diagonal_regressions or 0)>=3
+             or (movement.pair_67_diagonal_stalls or 0)>=3 then
             movement.pair_67_diagonal_disabled=true
           end
           auto_write(emu.framecount(),"approach_67_diagonal_feedback",holder,target,selected_pass_button,
             "distance_growth="..tostring(d).."|lateral_growth="..tostring(l)..
             "|holder_motion="..tostring(moved)..
             "|trials="..tostring(movement.pair_67_diagonal_trials)..
+            "|regressions="..tostring(movement.pair_67_diagonal_regressions or 0)..
+            "|stalls="..tostring(movement.pair_67_diagonal_stalls or 0)..
             "|disabled="..tostring(movement.pair_67_diagonal_disabled or false))
         end
         if holder==6 and target==7 and measurement and movement.burst_start then
