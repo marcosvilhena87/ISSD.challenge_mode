@@ -31,11 +31,21 @@ function M.selftest(selector,auto)
  local t=auto.new();t.enabled=true;t.button="B";t.direction="AUTO";t.start_frame=0
  local keys,state=auto.step(t,1,sample,6,{},plan,false)
  assert(state=="target_selected" and t.target==plan.target,"Auto.step rejected selected receiver")
- for frame=2,4 do
-  keys,state=auto.step(t,frame,sample,6,{},plan,false)
-  assert(keys.B and (keys.Up or keys.Down or keys.Left or keys.Right),
-   "B and control-pad must be simultaneous")
+ local pulses=0
+ local ready=false
+ local last_state=state
+ for frame=2,24 do
+  keys,last_state=auto.step(t,frame,sample,6,{},plan,false)
+  if last_state=="possession_gate_ready" then ready=true end
+  if keys.B then
+   assert(keys.Up or keys.Down or keys.Left or keys.Right,
+    "B and control-pad must be simultaneous")
+   pulses=pulses+1
+  end
+  if last_last_state=="pass_pulse" then break end
  end
+ assert(ready,"possession gate never became ready")
+ assert(pulses==3,"expected exactly three B+direction frames")
  assert(t.tries==1 and state=="pass_pulse","expected exactly one pass pulse")
  return {holder=6,eligible=info.report.eligible,target=plan.target,
   selector_version=selector.VERSION}
