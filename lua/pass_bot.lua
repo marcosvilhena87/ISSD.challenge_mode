@@ -461,7 +461,8 @@ while true do
       auto_write(emu.framecount(),"target_rejected",holder,nil,selected_pass_button,diagnostic)
     end
     if reason=="target_selected" and receiver then
-      autopass.target_was_visited=spatial.visited[receiver.id] and true or false
+      autopass.visited_before_pass={}
+      for id,seen in pairs(spatial.visited) do autopass.visited_before_pass[id]=seen end
       local c
       for _,candidate in ipairs(report and report.candidates or {}) do
        if candidate.id==receiver.id then c=candidate;break end
@@ -503,15 +504,11 @@ while true do
       local completed_displacement=autopass.ball_max_displacement
       if reason=="transfer_candidate_observed" and pass_chain.active then
         pass_chain.passes=pass_chain.passes+1
-        if spatial.visited[holder] and holder~=autopass.origin then
-          -- Spatial visited is already updated by Spatial.step; inspect whether
-          -- this was a previously visited receiver via a saved pre-pass snapshot.
-          if autopass.target_was_visited then
-            pass_chain.consecutive_relays=pass_chain.consecutive_relays+1
-          else
-            pass_chain.consecutive_relays=0
-          end
-        end
+        local repeated=autopass.visited_before_pass and autopass.visited_before_pass[holder]
+        if repeated then pass_chain.consecutive_relays=pass_chain.consecutive_relays+1
+        else pass_chain.consecutive_relays=0 end
+        auto_write(emu.framecount(),"relay_outcome",autopass.origin,holder,selected_pass_button,
+          "repeat="..tostring(repeated and true or false).."|consecutive="..pass_chain.consecutive_relays)
         pass_chain.previous=autopass.origin
         local visits=0;for id in pairs(spatial.visited) do if type(id)=="number" and id>=2 and id<=11 then visits=visits+1 end end
         auto_write(emu.framecount(),"chain_transfer_candidate",autopass.origin,holder,selected_pass_button,
