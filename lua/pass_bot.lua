@@ -739,9 +739,13 @@ while true do
               for key,pressed in pairs(buttons) do if pressed then movement.burst_direction=key end end
             end
             movement.burst_remaining=math.min(
-              (holder==5 and target==8 and not movement.right_suspended and buttons.Right) and 2 or Ordered.BURST_FRAMES,
+              (holder==5 and target==8 and not movement.right_suspended and buttons.Right) and 8 or Ordered.BURST_FRAMES,
               (movement.approach_limit or Ordered.MAX_APPROACH)-(pass_chain.approach_frames or 0),
               (movement.recovery_exploratory and movement.recovery_left>0) and movement.recovery_left or Ordered.BURST_FRAMES)
+            auto_write(emu.framecount(),"approach_coordinate_decision",holder,target,selected_pass_button,
+              "dx="..tostring(initial and initial.dx).."|dy="..tostring(initial and initial.dy)..
+              "|direction="..tostring(movement.burst_direction)..
+              "|frames="..tostring(movement.burst_remaining))
             auto_write(emu.framecount(),"approach_burst_started",holder,target,selected_pass_button,
               "frames="..movement.burst_remaining.."|axis="..tostring(movement.axis))
           end

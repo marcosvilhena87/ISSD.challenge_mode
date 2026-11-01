@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.38",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.39",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -45,12 +45,18 @@ function M.step(sample,holder,target,state)
  if safe then return {},"target_in_range",metrics end
  if why~="too_far" and why~="diagonal_risk" then return {},why,metrics end
  local dx,dy=metrics.dx,metrics.dy
- if holder==8 and target==9 and state and not state.diagonal_disabled and
-   (state.diagonal_trials or 0)<3 and
-   (state.recovery_left or 0)==0 then
-  state.axis="xy";state.direction="Up_Right";state.geometry_reason=why
+ -- Screen coordinates: positive X goes right; positive Y goes down.
+ if holder==5 and target==8 and state and not state.right_suspended and dx>20 and
+    (state.recovery_left or 0)==0 then
+  state.axis="x";state.direction="Right";state.geometry_reason="coordinate_right"
+  return {Right=true},"approach_step",metrics
+ end
+ if holder==8 and target==9 and dx>10 and dy< -10 and state and not state.diagonal_disabled and
+   (state.diagonal_trials or 0)<3 and (state.recovery_left or 0)==0 then
+  state.axis="xy";state.direction="Up_Right";state.geometry_reason="coordinate_diagonal"
   return {Up=true,Right=true},"approach_step",metrics
  end
+
  local choices={}
  for _,entry in ipairs(KEYS) do
   local key,vx,vy=entry[1],entry[2],entry[3]
@@ -72,7 +78,7 @@ function M.step(sample,holder,target,state)
   return x.key<y.key
  end)
  local candidate=choices[1]
- if holder==5 and target==8 and (not state or not state.right_suspended) then
+ if holder==5 and target==8 and dx>0 and (not state or not state.right_suspended) then
   for _,choice in ipairs(choices) do if choice.key=="Right" then candidate=choice;break end end
  end
  if holder==6 and (target==2 or target==3) and candidate.key=="Right" then
