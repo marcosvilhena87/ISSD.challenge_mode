@@ -1,5 +1,13 @@
 -- v0.8.15: conservative feet-pass geometry. Coordinates do not prove kick trajectory.
 local M={VERSION="0.8.15",MAX_RANGE=190,MAX_LATERAL=72,MAX_DRIFT=32}
+M.BASE_RANGE=190;M.BASE_LATERAL=72
+M.RANGE_STEP=25;M.LATERAL_STEP=12;M.MAX_LEVEL=4
+function M.set_level(level)
+ level=math.max(0,math.min(M.MAX_LEVEL,math.floor(level or 0)))
+ M.MAX_RANGE=M.BASE_RANGE+M.RANGE_STEP*level
+ M.MAX_LATERAL=M.BASE_LATERAL+M.LATERAL_STEP*level
+ return M.MAX_RANGE,M.MAX_LATERAL
+end
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
