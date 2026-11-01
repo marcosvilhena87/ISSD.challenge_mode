@@ -430,7 +430,16 @@ while true do
       auto_write(emu.framecount(),"handoff_diagnostic",holder,
        bridge_info and bridge_info.receiver_id,selected_pass_button,
        "module="..tostring(Alignment.VERSION).."|selector="..tostring(bridge_info and bridge_info.reason or selector_reason)..
-       "|receiver="..tostring(bridge_info and bridge_info.receiver_id).."|plan="..tostring(plan and plan.target).."|priority_stage="..tostring(priority_stage))
+       "|receiver="..tostring(bridge_info and bridge_info.receiver_id).."|plan="..tostring(plan and plan.target).."|priority_stage="..tostring(priority_stage).."|route_score="..tostring(bridge_info and bridge_info.route_score).."|route_version=0.8.9")
+    end
+    if autopass.phase=="idle" and bridge_info and bridge_info.route_evaluated then
+      for rank,c in ipairs(bridge_info.route_evaluated) do
+        auto_write(emu.framecount(),"route_candidate",holder,c.id,selected_pass_button,
+          "rank="..rank.."|immediate="..string.format("%.2f",c.immediate)..
+          "|onward="..string.format("%.2f",c.onward)..
+          "|total="..string.format("%.2f",c.total)..
+          "|stage="..tostring(priority_stage))
+      end
     end
     local reason
     local phase_before=autopass.phase
