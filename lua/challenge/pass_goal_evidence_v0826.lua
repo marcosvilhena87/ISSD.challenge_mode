@@ -1,6 +1,6 @@
 -- PASS v0.8.26: passive use of shared v4 counter evidence, no DRIBBLE context assumptions.
 local Core=require("challenge.goal_evidence_v4")
-local M={WINDOW=300}
+local M={VERSION="0.8.57",WINDOW=300,SAMPLE_EVERY=30}
 function M.read(read8,read16,frame)
  local function safe(fn,addr)
   local ok,v=pcall(fn,addr,"WRAM")
@@ -14,6 +14,14 @@ function M.new(sample)
  if not sample or type(sample.goal)~="number" then return nil end
  return {core=Core.new(sample),shot=nil,complete=nil,bonus=nil,baseline=sample.goal,
   last=sample.goal,observed=0,increment_after_shot=0,contextual=0,closed=false}
+end
+function M.mark_shot(st,s)
+ if not st or not s or type(s.goal)~="number" then return false end
+ st.shot=s.frame;st.baseline=s.goal;st.last=s.goal
+ st.core=Core.new(s)
+ Core.marker(st.core,"SHOT_STARTED",s.frame)
+ st.observed=0;st.closed=false;st.increment_after_shot=0;st.contextual=0
+ return true
 end
 function M.step(st,s)
  if not st or st.closed or not s or type(s.goal)~="number" then return nil end
@@ -35,6 +43,7 @@ end
 function M.classify(st)
  if not st or not st.shot then return "no_shot_unverified" end
  if st.core.byte_mismatch>0 or st.core.reset_count>0 then return "counter_conflict_unverified" end
+ if st.increment_after_shot>1 then return "multiple_increments_unverified" end
  if st.contextual==1 and st.increment_after_shot==1 then return "pass_contextual_goal_candidate" end
  if st.increment_after_shot>0 then return "increment_not_validated_for_pass" end
  return st.closed and "no_increment_in_window" or "awaiting_post_shot_observation"
