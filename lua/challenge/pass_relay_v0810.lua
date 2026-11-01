@@ -1,5 +1,6 @@
 -- v0.8.10: permit visited teammates only as penalized two-leg relays.
-local M={VERSION="0.8.10",RELAY_PENALTY=100,MAX_CONSECUTIVE=2}
+local Feet=require("challenge.pass_feet_v0815")
+local M={VERSION="0.8.15",RELAY_PENALTY=100,MAX_CONSECUTIVE=2}
 local function leg(a,b)
  local dx,dy=math.abs(a.x-b.x),math.abs(a.y-b.y)
  return math.sqrt(dx*dx+dy*dy)+0.25*math.max(0,math.min(dx,dy)-12)
@@ -23,7 +24,7 @@ function M.choose(sample,holder,visited,previous,consecutive)
  end
  local best,score,details
  for id in pairs(goals) do
-  if id~=holder and points[id] then
+  if id~=holder and points[id] and Feet.check(sample,holder,id) then
    local direct=leg(points[holder],points[id])
    -- Strongly discourage long, hard-to-control direct passes.
    local cost=direct+math.max(0,direct-180)*2
@@ -35,11 +36,11 @@ function M.choose(sample,holder,visited,previous,consecutive)
  if (consecutive or 0)<M.MAX_CONSECUTIVE then
   for id=2,11 do
    if visited[id] and id~=holder and id~=previous and points[id]
-     and not (id==10 or id==11) then
+     and not (id==10 or id==11) and Feet.check(sample,holder,id) then
     local first=leg(points[holder],points[id])
     local second
     for goal in pairs(goals) do
-     if points[goal] and goal~=id then
+     if points[goal] and goal~=id and Feet.check(sample,id,goal) then
       local d=leg(points[id],points[goal])
       if not second or d<second then second=d end
      end
