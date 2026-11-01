@@ -291,7 +291,7 @@ end
 local armed=false
 local previous=nil
 local auto_finished=false
-local pass_chain={active=false,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0,route_index=1,approach_frames=0,approach_neutral=false,approach_state={}}
+local pass_chain={active=false,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0,route_index=1,nine_to_eight_done=false,approach_frames=0,approach_neutral=false,approach_state={}}
 local previous_gate=nil
 local function gate_write(frame,gate,reason,p,sample)
  local signature=table.concat({gate,tostring(armed),tostring(autopass.enabled),
@@ -432,7 +432,7 @@ while true do
         armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();bonus=Bonus.new();completion_frame=nil;last_spatial_frame=nil;autopass=Auto.new();finish=Finish.new();goal_monitor=GoalEvidence.new(GoalEvidence.read(memory.read_u8,memory.read_u16_le,emu.framecount()));finish.enabled=auto_finish_queued;auto_finish_queued=false
         autopass.enabled=pending_auto and selected_pass_button=="B";autopass.button=selected_pass_button;autopass.start_frame=emu.framecount();autopass.direction=selected_direction;autopass.trigger_delay=trigger_mode=="B" and 12 or 0;autopass.calibration_mode=calibration_mode
         pending_auto=false;auto_finished=false;previous_gate=nil
-        pass_chain={active=autopass.enabled,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0,route_index=1,approach_frames=0,approach_neutral=false,approach_state={}}
+        pass_chain={active=autopass.enabled,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0,route_index=1,nine_to_eight_done=false,approach_frames=0,approach_neutral=false,approach_state={}}
         auto_write(emu.framecount(),autopass.enabled and "auto_arm" or "observation_arm",nil,nil,selected_pass_button,"opt_in_required")
         record("armed_candidate_only",p)
         print("[ISSD.pass_lv1] armed for observation; PASS LV.1 identity remains unconfirmed")
@@ -494,7 +494,7 @@ while true do
     if holder and integration_ok then
       -- Start at strict geometry on each fresh attempt, relax only if no route.
       Feet.set_level(autopass.relax_level or 0)
-      plan,selector_reason,bridge_info,priority_stage=Priority.resolve(Bridge,Alignment,sample_for_auto,holder,spatial.visited,pass_chain.previous,pass_chain.consecutive_relays,autopass.retargets>0 and {[autopass.rejected_target]=true} or nil,pass_chain.route_index)
+      plan,selector_reason,bridge_info,priority_stage=Priority.resolve(Bridge,Alignment,sample_for_auto,holder,spatial.visited,pass_chain.previous,pass_chain.consecutive_relays,autopass.retargets>0 and {[autopass.rejected_target]=true} or nil,pass_chain.route_index,pass_chain.nine_to_eight_done)
       -- Adaptive thresholds remain defined, but ordered mode approaches the exact
       -- requested player rather than broadening the search to another target.
       if false then
@@ -970,6 +970,11 @@ while true do
         auto_write(emu.framecount(),"relay_outcome",autopass.origin,holder,selected_pass_button,
           "repeat="..tostring(repeated and true or false).."|consecutive="..pass_chain.consecutive_relays)
         pass_chain.previous=autopass.origin
+        if autopass.origin==9 and holder==8 and autopass.target==8 then
+          pass_chain.nine_to_eight_done=true
+          auto_write(emu.framecount(),"route_9_to_8_completed",9,8,selected_pass_button,
+            "repeat_receiver=true|distinct_player_count_unchanged=true")
+        end
         if holder==autopass.target then
           pass_chain.route_index=pass_chain.route_index+1
           pass_chain.approach_frames=0;pass_chain.approach_neutral=false;pass_chain.approach_state={}
@@ -980,7 +985,7 @@ while true do
             "expected="..tostring(autopass.target).."|observed="..tostring(holder).."|recovery=continue")
           pass_chain.approach_frames=0;pass_chain.approach_neutral=false
           auto_write(emu.framecount(),"route_recovered",autopass.origin,holder,selected_pass_button,
-            "next="..tostring(Ordered.next(pass_chain.route_index,holder,spatial.visited)))
+            "next="..tostring(Ordered.next(pass_chain.route_index,holder,spatial.visited,pass_chain.nine_to_eight_done)))
         end
         local visits=0;for id in pairs(spatial.visited) do if type(id)=="number" and id>=2 and id<=11 then visits=visits+1 end end
         auto_write(emu.framecount(),"chain_transfer_candidate",autopass.origin,holder,selected_pass_button,
