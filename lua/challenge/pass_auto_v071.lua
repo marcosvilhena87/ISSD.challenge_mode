@@ -4,7 +4,7 @@ local M={}
 function M.new()
  return {enabled=false,button="B",phase="idle",start_frame=nil,tries=0,
  target=nil,origin=nil,pass_frame=nil,ball_before=nil,ball_max_displacement=0,
- trigger_delay=0,prewait_until=nil,gate_start=nil,gate_tracker=nil,hold_frames=3,wait_frames=90,extra_wait_frames=90,extended=false,first_motion_frame=nil,flight_samples={},last_attempt=nil,direction="AUTO",align_frames=2,facing_frames=4,facing_count=0,facing_direction=nil,feet_initial=nil,retargets=0,max_retargets=3,retarget_wait=0,active_alignment=nil,relax_level=0,calibration_mode="A",launch_ball=nil,early_flight={}}
+ trigger_delay=0,prewait_until=nil,gate_start=nil,gate_tracker=nil,hold_frames=3,wait_frames=90,extra_wait_frames=90,extended=false,first_motion_frame=nil,flight_samples={},last_attempt=nil,direction="AUTO",align_frames=2,facing_frames=4,facing_count=0,facing_direction=nil,feet_initial=nil,retargets=0,max_retargets=3,retarget_wait=0,active_alignment=nil,relax_level=0,calibration_mode="A",launch_ball=nil,early_flight={},pre_down_frames=0,pre_down_active=false}
 end
 local function find(players,id)
  for _,p in ipairs(players or {}) do if p.id==id then return p end end
@@ -68,7 +68,7 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   if ready then
    if (t.trigger_delay or 0)>0 then
     t.phase="prewait";t.prewait_until=frame+t.trigger_delay
-   else t.phase="face" end
+   else t.phase=(t.origin==4 and t.target==5) and "pre_down" or "face" end
    return empty,"possession_gate_ready"
   end
   if frame-(t.gate_start or frame)>=120 then
@@ -78,9 +78,27 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
  end
  if t.phase=="prewait" then
   if frame<(t.prewait_until or frame) then return empty,"trigger_pre_wait" end
-  t.phase="face"
+  t.phase=(t.origin==4 and t.target==5) and "pre_down" or "face"
   -- Deliberately no buttons on the transition frame.
   return empty,"trigger_pre_wait_complete"
+ end
+ if t.phase=="pre_down" then
+  -- Only for 4->5: two Down-only frames, followed by neutral release.
+  if not sample or not sample.ball or holder~=4 then
+   t.enabled=false;t.phase="done";return empty,"pre_down_possession_lost"
+  end
+  local origin=find(sample.players,4)
+  if not origin then t.enabled=false;t.phase="done";return empty,"coordinates_lost" end
+  local bx,by=sample.ball.x-origin.x,sample.ball.y-origin.y
+  if bx*bx+by*by>18*18 then
+   t.enabled=false;t.phase="done";return empty,"pre_down_ball_not_at_feet"
+  end
+  t.pre_down_frames=(t.pre_down_frames or 0)+1
+  if t.pre_down_frames>=2 then t.phase="pre_down_release" end
+  return {Down=true},"pre_down_step"
+ end
+ if t.phase=="pre_down_release" then
+  t.phase="face";return empty,"pre_down_release"
  end
  if t.phase=="face" then
   local dest=find(sample and sample.players,t.target)
@@ -199,7 +217,7 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   t.feet_initial=Feet.measure(sample,holder,target)
   t.next_phase=(plan and plan.aligned==false) and "align" or "hold"
   t.phase="possession_gate";t.gate_start=frame;t.gate_tracker=nil
-  t.hold_count=0;t.align_count=0;t.facing_count=0
+  t.hold_count=0;t.align_count=0;t.facing_count=0;t.pre_down_frames=0
   t.ball_before={x=sample.ball.x,y=sample.ball.y}
   return empty,"target_selected"
  end
