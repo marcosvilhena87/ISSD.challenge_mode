@@ -536,7 +536,11 @@ while true do
         and pass_chain.active and holder then
       local target=bridge_info and bridge_info.target
       local movement=pass_chain.approach_state
+      movement.current_frame=emu.framecount()
       local approach_limit=movement.approach_limit or Ordered.MAX_APPROACH
+      if holder==8 and target==9 and not movement.receiver_last then
+        Ordered.observe_receiver(movement,sample_for_auto,emu.framecount(),holder,target)
+      end
       if holder==5 and target==8 and movement.right_settle_remaining==nil then
         movement.right_settle_remaining=4
         movement.right_settle_previous=Ordered.capture(sample_for_auto,holder,target)
@@ -602,6 +606,22 @@ while true do
       elseif pass_chain.approach_neutral then
         buttons={};reason="approach_neutral";pass_chain.approach_neutral=false
         local measurement=Feet.measure(sample_for_auto,holder,target)
+        if holder==8 and target==9 then
+          local obs=Ordered.observe_receiver(movement,sample_for_auto,emu.framecount(),holder,target)
+          local forecast=Ordered.receiver_prediction(movement,sample_for_auto,holder,target,emu.framecount())
+          if obs then
+            auto_write(emu.framecount(),"approach_89_neutral_velocity",holder,target,selected_pass_button,
+              "valid="..tostring(obs.valid).."|vx="..tostring(obs.vx).."|vy="..tostring(obs.vy)..
+              "|reason="..tostring(obs.reason))
+          end
+          if forecast then
+            auto_write(emu.framecount(),"approach_89_predicted_target",holder,target,selected_pass_button,
+              "predicted_x="..tostring(forecast.predicted_x)..
+              "|predicted_y="..tostring(forecast.predicted_y)..
+              "|dx="..tostring(forecast.dx).."|dy="..tostring(forecast.dy)..
+              "|horizon="..tostring(forecast.horizon))
+          end
+        end
         local motion_feedback=Ordered.observe_motion(movement,sample_for_auto,holder,target)
         local motion=movement.last_motion
         if motion_feedback=="motion_delayed_or_still" then

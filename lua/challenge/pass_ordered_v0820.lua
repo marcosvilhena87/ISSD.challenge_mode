@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.44",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.46",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -36,6 +36,38 @@ function M.score(metrics)
  if not metrics then return math.huge end
  return cost(metrics.distance,metrics.lateral)
 end
+-- Short-horizon receiver forecast. Only neutral observations update velocity;
+-- stale or erratic estimates are discarded rather than extrapolated.
+function M.observe_receiver(state,sample,frame,holder,target)
+ if not state or holder~=8 or target~=9 then return nil end
+ local a,b=find(sample,holder),find(sample,target)
+ if not a or not b or type(frame)~="number" then return nil end
+ local prev=state.receiver_last
+ state.receiver_last={x=b.x,y=b.y,frame=frame}
+ if not prev then return nil end
+ local dt=frame-prev.frame
+ if dt<1 or dt>12 then state.receiver_velocity=nil;return nil end
+ local vx,vy=(b.x-prev.x)/dt,(b.y-prev.y)/dt
+ if math.abs(vx)>12 or math.abs(vy)>12 then
+  state.receiver_velocity=nil;return {valid=false,reason="velocity_outlier",vx=vx,vy=vy}
+ end
+ local old=state.receiver_velocity
+ if old then vx=(old.vx+vx)/2;vy=(old.vy+vy)/2 end
+ state.receiver_velocity={vx=vx,vy=vy,frame=frame}
+ return {valid=true,vx=vx,vy=vy,holder_x=a.x,holder_y=a.y,receiver_x=b.x,receiver_y=b.y}
+end
+function M.receiver_prediction(state,sample,holder,target,frame)
+ if not state or holder~=8 or target~=9 then return nil end
+ local a,b=find(sample,holder),find(sample,target)
+ local v=state.receiver_velocity
+ if not a or not b or not v or not frame or frame-v.frame>12 then return nil end
+ local horizon=4
+ local offx=math.max(-24,math.min(24,v.vx*horizon))
+ local offy=math.max(-24,math.min(24,v.vy*horizon))
+ return {dx=b.x+offx-a.x,dy=b.y+offy-a.y,
+  predicted_x=b.x+offx,predicted_y=b.y+offy,
+  vx=v.vx,vy=v.vy,horizon=horizon}
+end
 function M.step(sample,holder,target,state)
  local a,b=find(sample,holder),find(sample,target)
  if not a or not b or not sample.ball then return {},"missing_geometry" end
@@ -45,6 +77,8 @@ function M.step(sample,holder,target,state)
  if safe then return {},"target_in_range",metrics end
  if why~="too_far" and why~="diagonal_risk" then return {},why,metrics end
  local dx,dy=metrics.dx,metrics.dy
+ local forecast=(holder==8 and target==9) and M.receiver_prediction(state,sample,holder,target,state and state.current_frame) or nil
+ if forecast then dx,dy=forecast.dx,forecast.dy end
  -- Screen coordinates: positive X goes right; positive Y goes down.
  if holder==5 and target==8 and state and not state.right_suspended and dx>20 and
     (state.recovery_left or 0)==0 then
