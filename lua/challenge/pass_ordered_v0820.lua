@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.40",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.43",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -57,6 +57,31 @@ function M.step(sample,holder,target,state)
   return {Up=true,Right=true},"approach_step",metrics
  end
 
+ -- 8→9: limit movement to directions justified by geometry or measured
+ -- displacement. A direction contrary to the target is accepted only when
+ -- WRAM demonstrates that it reduces the distance.
+ if holder==8 and target==9 and state then
+  local options={{"Up",0,-1},{"Right",1,0}}
+  if dx< -4 then options[#options+1]={"Left",-1,0} end
+  if dy>4 then options[#options+1]={"Down",0,1} end
+  local best,best_score=nil,math.huge
+  for _,entry in ipairs(options) do
+   local name,vx,vy=entry[1],entry[2],entry[3]
+   local learned=state.motion and state.motion[name]
+   local mx,my=vx,vy
+   if learned and learned.count>=1 then mx,my=learned.dx,learned.dy end
+   local px,py=dx-mx,dy-my
+   local predicted=cost(math.sqrt(px*px+py*py),math.min(math.abs(px),math.abs(py)))
+   local penalty=state.penalties and state.penalties[name] or 0
+   local value=predicted+penalty
+   if value<best_score then best,best_score=name,value end
+  end
+  if best then
+   state.direction=best;state.axis=best=="Up" or best=="Down" and "y" or "x"
+   state.geometry_reason="pair_8_9_measured_cardinal"
+   return {[best]=true},"approach_step",metrics
+  end
+ end
  local choices={}
  for _,entry in ipairs(KEYS) do
   local key,vx,vy=entry[1],entry[2],entry[3]
@@ -106,6 +131,7 @@ function M.interposition(sample)
  return {between=t>0 and t<1,offset=lateral,projection=t,blocked=t>0 and t<1 and lateral<30}
 end
 function M.recover(state,measurement,holder,target)
+ if holder==8 and target==9 then return false,"pair_8_9_no_blind_recovery" end
  if not state or not measurement or (state.recovery_used or 0)>=1 then return false,"no_recovery_available" end
  local keys={"Up","Down","Left","Right"}
  local best=nil;local best_gain=0
