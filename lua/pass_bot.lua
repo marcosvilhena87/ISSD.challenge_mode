@@ -567,6 +567,9 @@ while true do
         local measurement=Feet.measure(sample_for_auto,holder,target)
         local can_extend,why=Ordered.can_extend(movement,pass_chain.approach_frames,measurement)
         if can_extend and approach_limit<Ordered.MAX_APPROACH_ABSOLUTE then
+          if why=="pair_710_recent_right_progress" then
+            movement.pair_710_extension_count=(movement.pair_710_extension_count or 0)+1
+          end
           if why=="pair_67_recent_up_progress" then
             movement.pair_67_extension_count=(movement.pair_67_extension_count or 0)+1
           end
@@ -765,6 +768,28 @@ while true do
             "|receiver_away="..tostring(escape).."|closing="..tostring(closing)..
             "|distance_growth="..tostring(dd).."|lateral_growth="..tostring(dl)..
             "|both_regressing="..tostring(dd>1.5 and dl>1.5))
+        end
+        if holder==7 and target==10 and measurement and movement.burst_start then
+          local m=movement.last_motion
+          local carrier=m and m.holder_toward or 0
+          local escape=m and m.receiver_away or 0
+          local closing=m and m.relative_closing or 0
+          local gain=movement.burst_start.distance-measurement.distance
+          if movement.burst_direction=="Right" and carrier>0.5 then
+            movement.pair_710_right_streak=math.min(4,(movement.pair_710_right_streak or 0)+1)
+            movement.pair_710_last_carrier=carrier
+            movement.pair_710_last_distance=measurement.distance
+          elseif movement.burst_direction=="Right" then
+            movement.pair_710_right_streak=0
+            movement.pair_710_last_carrier=carrier
+          end
+          auto_write(emu.framecount(),"approach_710_relative_feedback",holder,target,selected_pass_button,
+            "direction="..tostring(movement.burst_direction)..
+            "|holder_toward="..tostring(carrier)..
+            "|receiver_away="..tostring(escape)..
+            "|closing="..tostring(closing)..
+            "|distance_gain="..tostring(gain)..
+            "|right_streak="..tostring(movement.pair_710_right_streak or 0))
         end
         local feedback=Ordered.observe(pass_chain.approach_state,measurement)
         if movement.recovery_phase=="awaiting_sample" then
