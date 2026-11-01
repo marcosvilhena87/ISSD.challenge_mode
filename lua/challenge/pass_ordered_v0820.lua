@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.50",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.51",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -103,6 +103,26 @@ function M.step(sample,holder,target,state)
    and state.pair_67_last_gain and state.pair_67_last_gain>0.5 then
   state.axis="y";state.direction="Up";state.geometry_reason="pair_67_recent_up_progress"
   return {Up=true},"approach_step",metrics
+ end
+ -- 7→10: horizontal geometry governs the initial decision, without
+ -- requiring two successful RIGHT bursts before RIGHT can even be tried.
+ if holder==7 and target==10 and state and dx>20 then
+  local vertical_needed=math.abs(dy)>math.max(90,math.abs(dx)*0.8)
+  local correction=(dy>0) and "Down" or "Up"
+  local correction_good=state.motion and state.motion[correction] and state.motion[correction].count>=1
+  local vertical_budget=state.pair_710_vertical_count or 0
+  local right_stalls=state.pair_710_right_stalls or 0
+  local key="Right"
+  if vertical_needed and correction_good and vertical_budget<1 then key=correction end
+  if right_stalls>=2 and correction_good and vertical_budget<2 then key=correction end
+  if key=="Right" then
+   state.pair_710_vertical_count=0
+  else
+   state.pair_710_vertical_count=vertical_budget+1
+  end
+  state.direction=key;state.axis=(key=="Right") and "x" or "y"
+  state.geometry_reason=(key=="Right") and "pair_710_coordinate_right" or "pair_710_limited_vertical_correction"
+  return {[key]=true},"approach_step",metrics
  end
  -- 7→10: favor RIGHT only while the carrier actually advances toward
  -- the receiver; receiver escape alone does not revoke this preference.
