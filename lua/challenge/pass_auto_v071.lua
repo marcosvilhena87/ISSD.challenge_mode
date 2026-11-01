@@ -4,7 +4,7 @@ local M={}
 function M.new()
  return {enabled=false,button="B",phase="idle",start_frame=nil,tries=0,
  target=nil,origin=nil,pass_frame=nil,ball_before=nil,ball_max_displacement=0,
- trigger_delay=0,prewait_until=nil,gate_start=nil,gate_tracker=nil,hold_frames=3,wait_frames=90,extra_wait_frames=90,extended=false,first_motion_frame=nil,flight_samples={},last_attempt=nil,direction="AUTO",align_frames=2,facing_frames=4,facing_count=0,facing_direction=nil,feet_initial=nil,retargets=0,max_retargets=3,retarget_wait=0,active_alignment=nil,relax_level=0,calibration_mode="A",launch_ball=nil,early_flight={},pre_down_frames=0,pre_down_active=false}
+ trigger_delay=0,prewait_until=nil,gate_start=nil,gate_tracker=nil,hold_frames=3,wait_frames=90,extra_wait_frames=90,extended=false,first_motion_frame=nil,flight_samples={},last_attempt=nil,direction="AUTO",align_frames=2,facing_frames=4,facing_count=0,facing_direction=nil,feet_initial=nil,retargets=0,max_retargets=3,retarget_wait=0,active_alignment=nil,relax_level=0,calibration_mode="A",launch_ball=nil,early_flight={},pre_down_frames=0,pre_down_active=false,pre_up_frames=0}
 end
 local function find(players,id)
  for _,p in ipairs(players or {}) do if p.id==id then return p end end
@@ -68,7 +68,7 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   if ready then
    if (t.trigger_delay or 0)>0 then
     t.phase="prewait";t.prewait_until=frame+t.trigger_delay
-   else t.phase=(t.origin==4 and t.target==5) and "pre_down" or "face" end
+   else t.phase=(t.origin==4 and t.target==5) and "pre_down" or ((t.origin==6 and t.target==3) and "pre_up" or "face") end
    return empty,"possession_gate_ready"
   end
   if frame-(t.gate_start or frame)>=120 then
@@ -78,9 +78,27 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
  end
  if t.phase=="prewait" then
   if frame<(t.prewait_until or frame) then return empty,"trigger_pre_wait" end
-  t.phase=(t.origin==4 and t.target==5) and "pre_down" or "face"
+  t.phase=(t.origin==4 and t.target==5) and "pre_down" or ((t.origin==6 and t.target==3) and "pre_up" or "face")
   -- Deliberately no buttons on the transition frame.
   return empty,"trigger_pre_wait_complete"
+ end
+ if t.phase=="pre_up" then
+  -- Only 6->3: orient up for two frames, then release before neutral B.
+  if not sample or not sample.ball or holder~=6 then
+   t.enabled=false;t.phase="done";return empty,"pre_up_possession_lost"
+  end
+  local origin=find(sample.players,6)
+  if not origin then t.enabled=false;t.phase="done";return empty,"coordinates_lost" end
+  local bx,by=sample.ball.x-origin.x,sample.ball.y-origin.y
+  if bx*bx+by*by>18*18 then
+   t.enabled=false;t.phase="done";return empty,"pre_up_ball_not_at_feet"
+  end
+  t.pre_up_frames=(t.pre_up_frames or 0)+1
+  if t.pre_up_frames>=2 then t.phase="pre_up_release" end
+  return {Up=true},"pre_up_step"
+ end
+ if t.phase=="pre_up_release" then
+  t.phase="hold";return empty,"pre_up_release"
  end
  if t.phase=="pre_down" then
   -- Only for 4->5: two Down-only frames, followed by neutral release.
@@ -183,8 +201,10 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   elseif direction~="NEUTRAL" then
    for key in direction:gmatch("[^_]+") do buttons[key]=true end
   end
-  -- B is valid only when a control-pad direction is pressed in the SAME frame.
-  if not (buttons.Left or buttons.Right or buttons.Up or buttons.Down) then
+  -- 6->3 is the sole diagnostic exception: release UP, then B alone.
+  if t.origin==6 and t.target==3 then buttons={} end
+  -- Other passes still require a direction together with B.
+  if not (buttons.Left or buttons.Right or buttons.Up or buttons.Down) and not (t.origin==6 and t.target==3) then
    t.enabled=false;t.phase="done";return {},"no_direction_for_pass"
   end
   if t.hold_count==0 and sample and sample.ball then
@@ -217,7 +237,7 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   t.feet_initial=Feet.measure(sample,holder,target)
   t.next_phase=(plan and plan.aligned==false) and "align" or "hold"
   t.phase="possession_gate";t.gate_start=frame;t.gate_tracker=nil
-  t.hold_count=0;t.align_count=0;t.facing_count=0;t.pre_down_frames=0
+  t.hold_count=0;t.align_count=0;t.facing_count=0;t.pre_down_frames=0;t.pre_up_frames=0
   t.ball_before={x=sample.ball.x,y=sample.ball.y}
   return empty,"target_selected"
  end
