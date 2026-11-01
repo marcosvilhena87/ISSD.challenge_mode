@@ -24,6 +24,7 @@ package.loaded["challenge.pass_feet_v0815"]=nil
 package.loaded["challenge.pass_relay_v0810"]=nil
 package.loaded["challenge.pass_priority_v087"]=nil
 local Priority=require("challenge.pass_priority_v087")
+local Ordered=require("challenge.pass_ordered_v0820")
 local Feet=require("challenge.pass_feet_v0815")
 Auto=require("challenge.pass_auto_v071")
 local Finish=require("challenge.pass_finish_v07")
@@ -266,7 +267,7 @@ end
 local armed=false
 local previous=nil
 local auto_finished=false
-local pass_chain={active=false,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0}
+local pass_chain={active=false,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0,route_index=1,approach_frames=0,approach_neutral=false}
 local previous_gate=nil
 local function gate_write(frame,gate,reason,p,sample)
  local signature=table.concat({gate,tostring(armed),tostring(autopass.enabled),
@@ -461,8 +462,8 @@ while true do
     if holder and integration_ok then
       -- Start at strict geometry on each fresh attempt, relax only if no route.
       Feet.set_level(autopass.relax_level or 0)
-      plan,selector_reason,bridge_info,priority_stage=Priority.resolve(Bridge,Alignment,sample_for_auto,holder,spatial.visited,pass_chain.previous,pass_chain.consecutive_relays,autopass.retargets>0 and {[autopass.rejected_target]=true} or nil)
-      if autopass.phase=="idle" and not plan and selector_reason=="no_reachable_target" then
+      plan,selector_reason,bridge_info,priority_stage=Priority.resolve(Bridge,Alignment,sample_for_auto,holder,spatial.visited,pass_chain.previous,pass_chain.consecutive_relays,autopass.retargets>0 and {[autopass.rejected_target]=true} or nil,pass_chain.route_index)
+      if false and autopass.phase=="idle" and not plan and selector_reason=="no_reachable_target" then
         while not plan and (autopass.relax_level or 0)<Feet.MAX_LEVEL do
           autopass.relax_level=(autopass.relax_level or 0)+1
           local range,lateral=Feet.set_level(autopass.relax_level)
@@ -497,7 +498,30 @@ while true do
     end
     local reason
     local phase_before=autopass.phase
-    if integration_ok and (autopass.phase~="idle" or plan) then
+    if autopass.phase=="idle" and not plan and selector_reason=="approach_required"
+        and pass_chain.active and holder then
+      local target=bridge_info and bridge_info.target
+      if pass_chain.approach_frames>=Ordered.MAX_APPROACH then
+        reason="approach_timeout";buttons={};autopass.enabled=false
+        pass_chain.active=false;auto_finished=true
+        auto_write(emu.framecount(),"approach_timeout",holder,target,selected_pass_button,
+          "max_frames="..Ordered.MAX_APPROACH)
+      elseif pass_chain.approach_neutral then
+        buttons={};reason="approach_neutral";pass_chain.approach_neutral=false
+      else
+        buttons,reason=Ordered.step(sample_for_auto,holder,target)
+        if reason=="approach_step" then
+          pass_chain.approach_frames=pass_chain.approach_frames+1
+          pass_chain.approach_neutral=true
+          auto_write(emu.framecount(),"approach_step",holder,target,selected_pass_button,
+            "step="..pass_chain.approach_frames.."|range_limit="..Feet.MAX_RANGE)
+          log_input(emu.framecount(),"approach",reason,holder,target,buttons)
+        else
+          buttons={};pass_chain.active=false;autopass.enabled=false;auto_finished=true
+          auto_write(emu.framecount(),"approach_aborted",holder,target,selected_pass_button,reason)
+        end
+      end
+    elseif integration_ok and (autopass.phase~="idle" or plan) then
       buttons,reason=Auto.step(autopass,emu.framecount(),sample_for_auto,holder,spatial.visited,plan,completion_frame~=nil)
     else
       buttons={};reason=selector_reason or "invalid_handoff";autopass.enabled=false
@@ -597,10 +621,20 @@ while true do
         auto_write(emu.framecount(),"relay_outcome",autopass.origin,holder,selected_pass_button,
           "repeat="..tostring(repeated and true or false).."|consecutive="..pass_chain.consecutive_relays)
         pass_chain.previous=autopass.origin
+        if holder==Ordered.ROUTE[(pass_chain.route_index or 1)+1] then
+          pass_chain.route_index=pass_chain.route_index+1
+          pass_chain.approach_frames=0;pass_chain.approach_neutral=false
+          auto_write(emu.framecount(),"route_advanced",autopass.origin,holder,selected_pass_button,
+            "index="..pass_chain.route_index.."/10")
+        else
+          auto_write(emu.framecount(),"route_deviation",autopass.origin,holder,selected_pass_button,
+            "expected="..tostring(Ordered.ROUTE[(pass_chain.route_index or 1)+1]))
+          pass_chain.active=false;autopass.enabled=false;auto_finished=true
+        end
         local visits=0;for id in pairs(spatial.visited) do if type(id)=="number" and id>=2 and id<=11 then visits=visits+1 end end
         auto_write(emu.framecount(),"chain_transfer_candidate",autopass.origin,holder,selected_pass_button,
           "observed="..tostring(holder).."|planned="..tostring(autopass.target).."|visited="..visits.."/10|passes="..pass_chain.passes)
-        if visits>=10 or pass_chain.passes>=pass_chain.limit then
+        if not pass_chain.active or visits>=10 or pass_chain.passes>=pass_chain.limit then
           pass_chain.active=false;autopass.enabled=false;auto_finished=true
           auto_write(emu.framecount(),visits>=10 and "chain_complete_candidate" or "chain_limit_stop",
             nil,holder,selected_pass_button,"visited="..visits.."/10|passes="..pass_chain.passes.."|no_auto_shot")
