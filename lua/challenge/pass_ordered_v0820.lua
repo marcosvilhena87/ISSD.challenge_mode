@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.47",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.48",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -103,6 +103,17 @@ function M.step(sample,holder,target,state)
   return {Up=true,Right=true},"approach_step",metrics
  end
 
+ -- Generic improvement lock: keep a recent good cardinal direction for a
+ -- short, bounded period rather than oscillating because of old penalties.
+ -- Pair-specific steering above this point retains priority.
+ if state and state.last_good_direction and (state.good_direction_streak or 0)>=2
+    and (state.good_direction_lock or 0)>0 then
+  local key=state.last_good_direction
+  state.good_direction_lock=state.good_direction_lock-1
+  state.direction=key;state.axis=(key=="Up" or key=="Down") and "y" or "x"
+  state.geometry_reason="recent_combined_progress"
+  return {[key]=true},"approach_step",metrics
+ end
  -- 8→9: limit movement to directions justified by geometry or measured
  -- displacement. A direction contrary to the target is accepted only when
  -- WRAM demonstrates that it reduces the distance.
@@ -336,6 +347,17 @@ function M.observe(state,metrics)
   state.tried[key]=true
   state.last_distance_gain=delta_distance
   state.last_lateral_gain=delta_lateral
+  local combined_gain=delta_distance+math.max(-6,math.min(6,delta_lateral))*0.4
+  if combined_gain>0.75 and delta_distance> -1.5 and delta_lateral> -5 then
+   if state.last_good_direction==key then
+    state.good_direction_streak=math.min(4,(state.good_direction_streak or 0)+1)
+   else
+    state.last_good_direction=key;state.good_direction_streak=1
+   end
+   state.good_direction_lock=math.min(3,state.good_direction_streak)
+  elseif combined_gain< -1.5 then
+   state.good_direction_lock=0;state.good_direction_streak=0
+  end
   if delta_distance>0.5 or delta_lateral>0.5 then
    -- Partial improvement must not count as a bad burst even if weighted cost rose.
    state.penalties[key]=math.max(0,(state.penalties[key] or 0)-2)
