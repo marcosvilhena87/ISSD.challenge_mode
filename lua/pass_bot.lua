@@ -606,6 +606,13 @@ while true do
               "|projection="..tostring(motion and motion.projection)..
               "|suspended="..tostring(movement.right_suspended))
           end
+          if movement.right_suspended then
+            buttons={};autopass.enabled=false;pass_chain.active=false;auto_finished=true
+            auto_write(emu.framecount(),"approach_right_blocked",holder,target,selected_pass_button,
+              "reason="..tostring(movement.right_block_reason)..
+              "|distance_change="..tostring(right_delta)..
+              "|no_up_left_fallback=true")
+          end
         end
         local diagonal_result,growth,lateral_growth=Ordered.guard_diagonal(movement,measurement)
         if diagonal_result then
@@ -688,11 +695,9 @@ while true do
         if (movement.burst_remaining or 0)>0 and movement.burst_buttons then
           local new_buttons,check=Ordered.step(sample_for_auto,holder,target,movement)
           if check=="approach_step" then
-            if movement.burst_direction=="Up_Right" and not movement.diagonal_disabled then
-              buttons={Up=true,Right=true}
-            else
-              buttons=new_buttons
-            end
+            -- Preserve the SAME physical input for the entire calibrated burst.
+            -- Ordered.step is still called to revalidate possession/geometry.
+            buttons=movement.burst_buttons
             reason="approach_step"
           else
             buttons={};reason=check;movement.burst_remaining=0
@@ -714,7 +719,8 @@ while true do
               movement.burst_direction=nil
               for key,pressed in pairs(buttons) do if pressed then movement.burst_direction=key end end
             end
-            movement.burst_remaining=math.min(Ordered.BURST_FRAMES,
+            movement.burst_remaining=math.min(
+              (holder==5 and target==8 and not movement.right_suspended and buttons.Right) and 2 or Ordered.BURST_FRAMES,
               (movement.approach_limit or Ordered.MAX_APPROACH)-(pass_chain.approach_frames or 0),
               (movement.recovery_exploratory and movement.recovery_left>0) and movement.recovery_left or Ordered.BURST_FRAMES)
             auto_write(emu.framecount(),"approach_burst_started",holder,target,selected_pass_button,
