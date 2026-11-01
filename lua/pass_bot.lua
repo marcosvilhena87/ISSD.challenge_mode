@@ -456,7 +456,7 @@ while true do
     local holder=spatial.holder
     local plan,selector_reason,bridge_info,priority_stage
     if holder and integration_ok then
-      plan,selector_reason,bridge_info,priority_stage=Priority.resolve(Bridge,Alignment,sample_for_auto,holder,spatial.visited,pass_chain.previous,pass_chain.consecutive_relays)
+      plan,selector_reason,bridge_info,priority_stage=Priority.resolve(Bridge,Alignment,sample_for_auto,holder,spatial.visited,pass_chain.previous,pass_chain.consecutive_relays,autopass.retargets>0 and {[autopass.rejected_target]=true} or nil)
     elseif not integration_ok then selector_reason="integration_selftest_failed"
     else selector_reason="no_stable_holder" end
     local report=bridge_info and bridge_info.report
@@ -489,6 +489,16 @@ while true do
     if buttons.B or buttons.Up or buttons.Down or buttons.Left or buttons.Right or
        reason=="target_selected" or reason=="no_valid_target" or reason=="no_direction_for_pass" or reason=="selector_api_mismatch" or reason=="selector_report_missing" or reason=="integration_selftest_failed" or reason=="selected_without_receiver" or reason=="invalid_handoff" or reason=="no_unvisited_receiver" then
       log_input(emu.framecount(),phase_before,reason,holder,autopass.target,buttons)
+    end
+    if type(reason)=="string" and reason:match("^retarget_requested_") then
+      buttons={}
+      auto_write(emu.framecount(),"retarget_requested",autopass.origin,autopass.rejected_target,selected_pass_button,
+        "cause="..tostring(autopass.rejected_reason).."|count="..tostring(autopass.retargets).."|max="..tostring(autopass.max_retargets))
+    elseif reason=="retarget_ready" then
+      auto_write(emu.framecount(),"retarget_ready",autopass.origin,nil,selected_pass_button,"neutral_cooldown_complete")
+    elseif reason=="retarget_limit_reached" then
+      buttons={};pass_chain.active=false;autopass.enabled=false;auto_finished=true
+      auto_write(emu.framecount(),"retarget_limit_stop",autopass.origin,autopass.rejected_target,selected_pass_button,"max_retargets")
     end
     if type(reason)=="string" and reason:match("^feet_pass_rejected_") then
       auto_write(emu.framecount(),"feet_pass_rejected",autopass.origin,autopass.target,selected_pass_button,reason)
@@ -533,7 +543,7 @@ while true do
     elseif reason=="pass_pulse" and autopass.last_attempt then
       local a=autopass.last_attempt
       auto_write(emu.framecount(),"pass_pulse",a.from,a.to,a.button,"experimental_unverified|wait_frames="..tostring(autopass.wait_frames))
-    elseif reason=="transfer_candidate_observed" or reason=="ball_moved_without_transfer" or reason=="no_ball_motion_detected" or reason=="timeout" or reason=="completion_candidate_stop" or reason=="coordinates_lost" or reason=="no_valid_target" or reason=="no_direction_for_pass" or reason=="selector_api_mismatch" or reason=="selector_report_missing" or reason=="integration_selftest_failed" or reason=="selected_without_receiver" or reason=="invalid_handoff" or reason=="no_unvisited_receiver" or reason=="possession_gate_timeout" then
+    elseif reason=="transfer_candidate_observed" or reason=="ball_moved_without_transfer" or reason=="no_ball_motion_detected" or reason=="timeout" or reason=="completion_candidate_stop" or reason=="coordinates_lost" or reason=="no_valid_target" or reason=="no_direction_for_pass" or reason=="selector_api_mismatch" or reason=="selector_report_missing" or reason=="integration_selftest_failed" or reason=="selected_without_receiver" or reason=="invalid_handoff" or reason=="no_unvisited_receiver" or reason=="possession_gate_timeout" or reason=="retarget_limit_reached" then
       if reason=="possession_gate_timeout" then
         auto_write(emu.framecount(),"possession_gate_timeout",autopass.origin,autopass.target,selected_pass_button,
           "streak="..tostring(autopass.gate_tracker and autopass.gate_tracker.streak))
@@ -600,7 +610,7 @@ while true do
   end
   -- Frame-level WRAM evidence surrounding every pass and trigger delay.
   if armed and sample_for_auto and
-      (autopass.phase=="possession_gate" or autopass.phase=="prewait" or autopass.phase=="face" or autopass.phase=="face_release" or autopass.phase=="align" or
+      (autopass.phase=="retarget_wait" or autopass.phase=="possession_gate" or autopass.phase=="prewait" or autopass.phase=="face" or autopass.phase=="face_release" or autopass.phase=="align" or
        autopass.phase=="hold" or autopass.phase=="wait") then
     local pf=autopass.pass_frame
     if autopass.phase~="wait" or (pf and emu.framecount()-pf<=30) then
