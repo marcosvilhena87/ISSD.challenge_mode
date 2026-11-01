@@ -18,7 +18,7 @@ function M.can_extend(state,frames,measurement)
  if state and state.recent_progress and state.recent_progress>=2 and
    measurement.distance<=state.best_distance+12 and
    (state.stalled or 0)<M.STALL_WINDOW and
-   state.recent_extension_count~=nil and state.recent_extension_count<2 then
+   (state.recent_extension_count or 0)<2 then
   return true,"recent_progress_verified"
  end
  if (state.stalled or 0)>=M.STALL_WINDOW then return false,"stalled" end
