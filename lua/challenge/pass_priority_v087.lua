@@ -2,8 +2,8 @@
 local Ordered=require("challenge.pass_ordered_v0820")
 local Feet=require("challenge.pass_feet_v0815")
 local M={VERSION="0.8.20"}
-function M.resolve(bridge,selector,sample,holder,visited,previous,consecutive,excluded,route_index)
- local target,why=Ordered.next(route_index,holder,visited)
+function M.resolve(bridge,selector,sample,holder,visited,previous,consecutive,excluded,route_index,nine_to_eight_done)
+ local target,why=Ordered.next(route_index,holder,visited,nine_to_eight_done)
  if not target then return nil,why,{reason=why,report=nil},"ordered" end
  local safe,reason,geometry=Feet.check(sample,holder,target)
  if not safe then
