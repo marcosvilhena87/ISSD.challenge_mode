@@ -461,12 +461,34 @@ while true do
         c and string.format("%.2f",c.cost) or "unknown",tostring(receiver.aligned)))
     elseif reason=="alignment_correction" then
       auto_write(emu.framecount(),"alignment_correction",holder,autopass.target,selected_pass_button,"bounded_directional_pre_align")
+    elseif reason=="flight_wait_extended" then
+      auto_write(emu.framecount(),"flight_wait_extended",autopass.origin,autopass.target,
+        selected_pass_button,"wait_frames="..tostring(autopass.wait_frames)..
+        "|first_motion_frame="..tostring(autopass.first_motion_frame)..
+        "|displacement="..string.format("%.2f",autopass.ball_max_displacement))
     elseif reason=="pass_pulse" and autopass.last_attempt then
       local a=autopass.last_attempt
       auto_write(emu.framecount(),"pass_pulse",a.from,a.to,a.button,"experimental_unverified|wait_frames="..tostring(autopass.wait_frames))
     elseif reason=="transfer_candidate_observed" or reason=="ball_moved_without_transfer" or reason=="no_ball_motion_detected" or reason=="timeout" or reason=="completion_candidate_stop" or reason=="coordinates_lost" or reason=="no_valid_target" or reason=="no_direction_for_pass" or reason=="selector_api_mismatch" or reason=="selector_report_missing" or reason=="integration_selftest_failed" or reason=="selected_without_receiver" or reason=="invalid_handoff" or reason=="no_unvisited_receiver" then
       auto_write(emu.framecount(),"single_pass_result",autopass.origin,autopass.target,selected_pass_button,reason.."|direction="..selected_direction.."|max_ball_displacement="..string.format("%.2f",autopass.ball_max_displacement))
       calibration_write(emu.framecount(),reason,autopass.last_attempt,reason=="transfer_candidate_observed" and holder or nil,reason=="transfer_candidate_observed" and emu.framecount() or nil)
+      local flight=autopass.flight_samples or {}
+      for _,point in ipairs(flight) do
+        auto_write(point.frame,"flight_sample",autopass.origin,autopass.target,selected_pass_button,
+          "x="..tostring(point.x).."|y="..tostring(point.y)..
+          "|displacement="..string.format("%.2f",point.displacement)..
+          "|target_distance="..(point.target_distance and string.format("%.2f",point.target_distance) or "unknown"))
+      end
+      auto_write(emu.framecount(),"flight_summary",autopass.origin,autopass.target,
+        selected_pass_button,"first_motion_frame="..tostring(autopass.first_motion_frame)..
+        "|observed_receiver="..tostring(reason=="transfer_candidate_observed" and holder or "none")..
+        "|wait_frames="..tostring(autopass.wait_frames).."|extended="..tostring(autopass.extended))
+      if reason=="transfer_candidate_observed" and holder~=autopass.target then
+        auto_write(emu.framecount(),"receiver_mismatch",autopass.origin,holder,selected_pass_button,
+          "planned="..tostring(autopass.target).."|observed="..tostring(holder)..
+          "|reserved_early="..tostring((holder==10 or holder==11) and not spatial.visited[2]))
+      end
+      local completed_displacement=autopass.ball_max_displacement
       if reason=="transfer_candidate_observed" and pass_chain.active then
         pass_chain.passes=pass_chain.passes+1
         local visits=0;for id in pairs(spatial.visited) do if type(id)=="number" and id>=2 and id<=11 then visits=visits+1 end end
@@ -487,7 +509,7 @@ while true do
       else
         pass_chain.active=false;autopass.enabled=false;auto_finished=true
       end
-      print("[ISSD.pass_lv1] single-pass result: "..reason.." max_ball_displacement="..string.format("%.2f",autopass.ball_max_displacement))
+      print("[ISSD.pass_lv1] single-pass result: "..reason.." max_ball_displacement="..string.format("%.2f",completed_displacement))
     end
   end
   if armed and finish.enabled then
