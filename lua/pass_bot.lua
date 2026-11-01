@@ -357,9 +357,11 @@ while true do
       if armed then print("[ISSD.pass_lv1] TRIGGER mode requires a new ARM")
       else trigger_mode=cmd:sub(9);print("[ISSD.pass_lv1] trigger experiment="..trigger_mode) end
     elseif cmd=="FINISH:ON" then
-      auto_finish_queued=false
-      print("[ISSD.pass_lv1] FINISH disabled in v0.7.1 single-pass diagnostic")
-      -- print("[ISSD.pass_lv1] FINISH queued for next ARM; X shot only after spatial completion and bonus countdown")
+      if armed then print("[ISSD.pass_lv1] FINISH:ON requires next ARM")
+      else
+        auto_finish_queued=true
+        print("[ISSD.pass_lv1] FINISH queued for next ARM; one X shot only after 10/10 and bonus countdown")
+      end
     elseif cmd=="FINISH:OFF" then
       auto_finish_queued=false;finish.enabled=false;release()
     elseif cmd:match("^DIRECTION:") then
@@ -390,7 +392,7 @@ while true do
       if cmd=="REARM" then pending_auto=true;print("[ISSD.pass_lv1] REARM accepted: fresh single chain") end
       -- Probe is not proof of gameplay; explicit LV.1 selection is a safety gate.
       if p.status=="candidate" and p.challenge=="PASS" and p.level==1 then
-        armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();bonus=Bonus.new();completion_frame=nil;last_spatial_frame=nil;autopass=Auto.new();finish=Finish.new();finish.enabled=false;auto_finish_queued=false
+        armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();bonus=Bonus.new();completion_frame=nil;last_spatial_frame=nil;autopass=Auto.new();finish=Finish.new();finish.enabled=auto_finish_queued;auto_finish_queued=false
         autopass.enabled=pending_auto and selected_pass_button=="B";autopass.button=selected_pass_button;autopass.start_frame=emu.framecount();autopass.direction=selected_direction;autopass.trigger_delay=trigger_mode=="B" and 12 or 0
         pending_auto=false;auto_finished=false;previous_gate=nil
         pass_chain={active=autopass.enabled,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0}
@@ -434,7 +436,7 @@ while true do
     pass_chain.active=false;autopass.enabled=false;auto_finished=true
     auto_write(emu.framecount(),"chain_complete_candidate",nil,spatial.holder,selected_pass_button,
       "visited=10/10|spatial_only|no_auto_shot")
-    print("[ISSD.pass_lv1] chain candidate complete: 10/10 outfield players; shot disabled")
+    print("[ISSD.pass_lv1] chain candidate complete: 10/10 outfield players; FINISH="..tostring(finish.enabled))
   end
   -- v0.8.5: lack of a stable holder is a transient wait, not a terminal failure.
   -- Timeout is measured from ARM and never emits controller input.
@@ -571,12 +573,15 @@ while true do
     end
   end
   if armed and finish.enabled then
-    local shot,reason=Finish.step(finish,emu.framecount(),completion_frame,bonus.first_decrement_frame)
+    local shot,reason=Finish.step(finish,emu.framecount(),completion_frame,bonus.first_decrement_frame,sample_for_auto,spatial.holder)
     if reason=="shoot_pulse" or reason=="completion_and_bonus_observed" or reason=="finish_window_expired" then
       finish_write(emu.framecount(),reason)
+      auto_write(emu.framecount(),"finish_"..reason,spatial.holder,nil,"X",
+        "aim="..tostring(finish.aim_reason).."|direction="..tostring(finish.aim and (finish.aim.Left and "Left" or "Right"))..
+        "|vertical="..tostring(finish.aim and (finish.aim.Up and "Up" or finish.aim.Down and "Down" or "neutral")))
     end
     -- Finalization only emits X once; it must never combine with pass B.
-    if shot.X then buttons={X=true};autopass.enabled=false
+    if shot.X then buttons=shot;autopass.enabled=false
     elseif completion_frame then buttons={} end
   end
   -- Frame-level WRAM evidence surrounding every pass and trigger delay.
@@ -589,6 +594,7 @@ while true do
         spatial.holder,autopass.target,sample_for_auto,buttons)
     end
   end
+  if buttons.X then log_input(emu.framecount(),"finish","shoot_pulse",spatial.holder,nil,buttons) end
   joypad.set(buttons,1)
   emu.frameadvance()
 end
