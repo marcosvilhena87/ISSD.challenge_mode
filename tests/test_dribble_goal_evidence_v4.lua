@@ -1,5 +1,5 @@
 package.path="lua/?.lua;lua/?/init.lua;"..package.path
-local E=require("challenge.dribble_goal_evidence_v4")
+local E=require("challenge.goal_evidence_v4")
 local function s(f,g,n,gs) return {frame=f,goal=g,lo=g%256,hi=math.floor(g/256),remaining=n,gs=gs or 0,ptr=0x0F00} end
 local q=E.new(s(100,3,5))
 for n=4,1,-1 do E.step(q,s(105+(4-n)*10,3,n)) end
