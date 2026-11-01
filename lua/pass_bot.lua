@@ -589,6 +589,16 @@ while true do
             "limit="..approach_limit.."|absolute="..Ordered.MAX_APPROACH_ABSOLUTE.."|reason="..why)
           end
         end
+      elseif pass_chain.approach_neutral and (movement.right_followup_left or 0)>0 then
+        buttons={};reason="approach_right_followup"
+        local coords=Ordered.capture(sample_for_auto,holder,target)
+        if coords then
+          auto_write(emu.framecount(),"approach_right_followup",holder,target,selected_pass_button,
+            "remaining="..movement.right_followup_left..
+            "|holder_x="..coords.hx.."|holder_y="..coords.hy..
+            "|target_x="..coords.tx.."|target_y="..coords.ty)
+        end
+        movement.right_followup_left=movement.right_followup_left-1
       elseif pass_chain.approach_neutral then
         buttons={};reason="approach_neutral";pass_chain.approach_neutral=false
         local measurement=Feet.measure(sample_for_auto,holder,target)
@@ -738,10 +748,12 @@ while true do
               movement.burst_direction=nil
               for key,pressed in pairs(buttons) do if pressed then movement.burst_direction=key end end
             end
-            movement.burst_remaining=math.min(
-              (holder==5 and target==8 and not movement.right_suspended and buttons.Right) and 8 or Ordered.BURST_FRAMES,
+            local desired_burst=(holder==5 and target==8 and not movement.right_suspended and buttons.Right) and 8 or Ordered.BURST_FRAMES
+            local recovery_cap=(movement.recovery_exploratory and (movement.recovery_left or 0)>0)
+                and movement.recovery_left or desired_burst
+            movement.burst_remaining=math.min(desired_burst,
               (movement.approach_limit or Ordered.MAX_APPROACH)-(pass_chain.approach_frames or 0),
-              (movement.recovery_exploratory and movement.recovery_left>0) and movement.recovery_left or Ordered.BURST_FRAMES)
+              recovery_cap)
             auto_write(emu.framecount(),"approach_coordinate_decision",holder,target,selected_pass_button,
               "dx="..tostring(initial and initial.dx).."|dy="..tostring(initial and initial.dy)..
               "|direction="..tostring(movement.burst_direction)..
@@ -771,6 +783,9 @@ while true do
           end
           movement.burst_remaining=movement.burst_remaining-1
           pass_chain.approach_neutral=movement.burst_remaining==0
+          if pass_chain.approach_neutral and holder==5 and target==8 and movement.burst_direction=="Right" then
+            movement.right_followup_left=3
+          end
           auto_write(emu.framecount(),"approach_step",holder,target,selected_pass_button,
             "step="..pass_chain.approach_frames.."|range_limit="..Feet.MAX_RANGE.."|axis="..tostring(movement.axis))
         elseif reason=="target_in_range" then
