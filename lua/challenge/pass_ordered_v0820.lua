@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.43",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.44",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -249,7 +249,13 @@ function M.observe_motion(state,sample,holder,target)
  local ex=expected[direction]
  if not ex then return "motion_unavailable" end
  local projection=hx*ex[1]+hy*ex[2]
- state.last_motion={holder_dx=hx,holder_dy=hy,target_dx=tx,target_dy=ty,projection=projection,direction=direction}
+ local rx,ry=before.tx-before.hx,before.ty-before.hy
+ local len=math.sqrt(rx*rx+ry*ry)
+ local holder_toward=(len>0) and (hx*rx+hy*ry)/len or 0
+ local receiver_away=(len>0) and (tx*rx+ty*ry)/len or 0
+ state.last_motion={holder_dx=hx,holder_dy=hy,target_dx=tx,target_dy=ty,
+  projection=projection,direction=direction,holder_toward=holder_toward,
+  receiver_away=receiver_away,relative_closing=holder_toward-receiver_away}
  state.motion=state.motion or {}
  if math.abs(hx)+math.abs(hy)<0.5 then return "motion_delayed_or_still" end
  local old=state.motion[direction] or {dx=0,dy=0,count=0}
