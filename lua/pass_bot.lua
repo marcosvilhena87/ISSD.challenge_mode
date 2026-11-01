@@ -788,14 +788,29 @@ while true do
           local motion=movement.last_motion
           local moved=motion and (math.abs(motion.holder_dx)+math.abs(motion.holder_dy)) or 0
           movement.pair_67_diagonal_trials=(movement.pair_67_diagonal_trials or 0)+1
-          if (d>2 and l>2) or
-             ((movement.pair_67_diagonal_trials or 0)>=2 and moved<0.5) then
+          -- A single diagonal can appear to regress because receiver 7
+          -- moves concurrently. Keep UP+RIGHT as preferred solution until
+          -- persistent regression is measured over at least three bursts.
+          if d>2 and l>2 then
+            movement.pair_67_diagonal_regressions=(movement.pair_67_diagonal_regressions or 0)+1
+          else
+            movement.pair_67_diagonal_regressions=0
+          end
+          if moved<0.5 then
+            movement.pair_67_diagonal_stalls=(movement.pair_67_diagonal_stalls or 0)+1
+          else
+            movement.pair_67_diagonal_stalls=0
+          end
+          if (movement.pair_67_diagonal_regressions or 0)>=3
+             or (movement.pair_67_diagonal_stalls or 0)>=3 then
             movement.pair_67_diagonal_disabled=true
           end
           auto_write(emu.framecount(),"approach_67_diagonal_feedback",holder,target,selected_pass_button,
             "distance_growth="..tostring(d).."|lateral_growth="..tostring(l)..
             "|holder_motion="..tostring(moved)..
             "|trials="..tostring(movement.pair_67_diagonal_trials)..
+            "|regressions="..tostring(movement.pair_67_diagonal_regressions or 0)..
+            "|stalls="..tostring(movement.pair_67_diagonal_stalls or 0)..
             "|disabled="..tostring(movement.pair_67_diagonal_disabled or false))
         end
         if holder==6 and target==7 and measurement and movement.burst_start then
@@ -1257,6 +1272,19 @@ while true do
     end
   end
   if armed and finish.enabled then
+    if completion_frame and not finish.geometry_audited then
+      finish.geometry_audited=true
+      local b=sample_for_auto and sample_for_auto.ball
+      local g=sample_for_auto and sample_for_auto.goalkeeper
+      local dx=b and g and g.x-b.x
+      local dy=b and g and g.y-b.y
+      auto_write(emu.framecount(),"finish_goalkeeper_wram_audit",spatial.holder,nil,"OBSERVE",
+        "ball_addr=0x042A/0x042C|keeper_addr=0x052A/0x052C"..
+        "|ball_x="..tostring(b and b.x).."|ball_y="..tostring(b and b.y)..
+        "|keeper_x="..tostring(g and g.x).."|keeper_y="..tostring(g and g.y)..
+        "|dx="..tostring(dx).."|dy="..tostring(dy)..
+        "|source=signed16_player_slot_1|goal_reference=unverified")
+    end
     local shot,reason=Finish.step(finish,emu.framecount(),completion_frame,bonus.first_decrement_frame,sample_for_auto,spatial.holder)
     if reason=="shoot_pulse" or reason=="completion_and_bonus_observed" or reason=="finish_window_expired" or reason=="shot_blocked_too_far" or reason=="goalkeeper_coordinate_mismatch" or reason=="invalid_coordinate_domain" then
       finish_write(emu.framecount(),reason)
