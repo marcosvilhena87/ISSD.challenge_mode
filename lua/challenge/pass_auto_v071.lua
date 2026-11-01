@@ -1,5 +1,5 @@
 -- PASS LV.1 v0.7.1: exactly one diagnostic B pass per ARM.
--- Direction + B are held together; all observations remain hypotheses.
+-- Control Pad alone changes facing; Control Pad + B executes a pass.
 local M={}
 function M.new()
  return {enabled=false,button="B",phase="idle",start_frame=nil,tries=0,
@@ -83,7 +83,7 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   return empty,"trigger_pre_wait_complete"
  end
  if t.phase=="pre_up" then
-  -- Only 6->3: orient up for two frames, then release before neutral B.
+  -- Only 6->3: Control Pad UP alone sets orientation; release before UP+B.
   if not sample or not sample.ball or holder~=6 then
    t.enabled=false;t.phase="done";return empty,"pre_up_possession_lost"
   end
@@ -164,12 +164,31 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
    local safe,why=Feet.check(sample,t.origin,t.target,t.feet_initial)
    if safe then
     local BallLine=require("challenge.pass_alignment_ball_v0817")
-    safe,why=BallLine.check(sample,t.origin,t.target)
+    local aligned,alignment_reason=BallLine.check(sample,t.origin,t.target)
+    if t.origin==6 and t.target==3 and
+      (alignment_reason=="ball_behind_carrier" or alignment_reason=="ball_off_pass_axis") then
+      -- This pair is a deliberate UP-facing experiment. The ball must
+      -- remain at the carrier's feet, but do not rotate automatically.
+      local origin=find(sample and sample.players,t.origin)
+      local ball=sample and sample.ball
+      if not origin or not ball or distance(origin,ball)>18 then
+       safe=false;why="ball_not_at_feet"
+      end
+    else
+      safe=aligned;why=alignment_reason
+    end
    end
-   if not safe and (why=="ball_behind_carrier" or why=="ball_off_pass_axis") then
+   if not safe and (why=="ball_behind_carrier" or why=="ball_off_pass_axis") and not (t.origin==6 and t.target==3) then
     t.phase="active_align"
     t.active_alignment={started=frame}
     return empty,"active_alignment_started"
+   end
+   if not safe and t.origin==6 and t.target==3 and
+      (why=="ball_behind_carrier" or why=="ball_off_pass_axis") then
+    -- Do not alter the isolated facing experiment using an automatic
+    -- directional alignment. Reject unsafe geometry instead.
+    t.enabled=false;t.phase="done"
+    return empty,"pre_up_alignment_blocked"
    end
    if not safe then
     t.retargets=(t.retargets or 0)+1
@@ -201,10 +220,10 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   elseif direction~="NEUTRAL" then
    for key in direction:gmatch("[^_]+") do buttons[key]=true end
   end
-  -- 6->3 is the sole diagnostic exception: release UP, then B alone.
-  if t.origin==6 and t.target==3 then buttons={} end
-  -- Other passes still require a direction together with B.
-  if not (buttons.Left or buttons.Right or buttons.Up or buttons.Down) and not (t.origin==6 and t.target==3) then
+  -- 6->3: UP was used alone for facing; UP+B now executes the pass.
+  if t.origin==6 and t.target==3 then buttons={Up=true} end
+  -- Control Pad + B is required for every pass.
+  if not (buttons.Left or buttons.Right or buttons.Up or buttons.Down) then
    t.enabled=false;t.phase="done";return {},"no_direction_for_pass"
   end
   if t.hold_count==0 and sample and sample.ball then
