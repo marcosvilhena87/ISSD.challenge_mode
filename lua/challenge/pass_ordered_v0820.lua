@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.34",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.35",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -45,6 +45,12 @@ function M.step(sample,holder,target,state)
  if safe then return {},"target_in_range",metrics end
  if why~="too_far" and why~="diagonal_risk" then return {},why,metrics end
  local dx,dy=metrics.dx,metrics.dy
+ if holder==8 and target==9 and state and not state.diagonal_disabled and
+   (state.diagonal_trials or 0)<3 and
+   (state.recovery_left or 0)==0 then
+  state.axis="xy";state.direction="Up_Right";state.geometry_reason=why
+  return {Up=true,Right=true},"approach_step",metrics
+ end
  local choices={}
  for _,entry in ipairs(KEYS) do
   local key,vx,vy=entry[1],entry[2],entry[3]
@@ -122,6 +128,26 @@ function M.recover(state,measurement,holder,target)
  state.stalled=0;state.bad_bursts=0
  return true,best
 end
+function M.guard_diagonal(state,metrics)
+ if not state or not state.diagonal_start or not metrics then return nil end
+ local before=state.diagonal_start
+ local growth=metrics.distance-before.distance
+ local lateral_growth=metrics.lateral-before.lateral
+ state.diagonal_trials=(state.diagonal_trials or 0)+1
+ state.diagonal_start=nil
+ if growth>5 or (growth>1 and lateral_growth>5) then
+  state.diagonal_disabled=true
+  state.penalties=state.penalties or {}
+  state.penalties.Up=(state.penalties.Up or 0)+6
+  state.penalties.Right=(state.penalties.Right or 0)+6
+  return "diagonal_regression",growth,lateral_growth
+ end
+ if math.abs(growth)<0.5 and math.abs(lateral_growth)<0.5 then
+  state.diagonal_still=(state.diagonal_still or 0)+1
+  if state.diagonal_still>=2 then state.diagonal_disabled=true;return "diagonal_still",growth,lateral_growth end
+ else state.diagonal_still=0 end
+ return "diagonal_observed",growth,lateral_growth
+end
 function M.capture(sample,holder,target)
  local a,b=find(sample,holder),find(sample,target)
  if not a or not b then return nil end
@@ -134,7 +160,7 @@ function M.observe_motion(state,sample,holder,target)
  local hx=now.hx-before.hx;local hy=now.hy-before.hy
  local tx=now.tx-before.tx;local ty=now.ty-before.ty
  local direction=state.burst_direction
- local expected={Right={1,0},Left={-1,0},Down={0,1},Up={0,-1}}
+ local expected={Right={1,0},Left={-1,0},Down={0,1},Up={0,-1},Up_Right={1,-1}}
  local ex=expected[direction]
  if not ex then return "motion_unavailable" end
  local projection=hx*ex[1]+hy*ex[2]
