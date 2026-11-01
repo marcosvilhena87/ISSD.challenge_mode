@@ -1335,19 +1335,6 @@ while true do
     end
   end
   if armed and finish.enabled then
-    if completion_frame and not finish.geometry_audited then
-      finish.geometry_audited=true
-      local b=sample_for_auto and sample_for_auto.ball
-      local g=sample_for_auto and sample_for_auto.goalkeeper
-      local dx=b and g and g.x-b.x
-      local dy=b and g and g.y-b.y
-      auto_write(emu.framecount(),"finish_goalkeeper_wram_audit",spatial.holder,nil,"OBSERVE",
-        "ball_addr=0x042A/0x042C|keeper_addr=0x052A/0x052C"..
-        "|ball_x="..tostring(b and b.x).."|ball_y="..tostring(b and b.y)..
-        "|keeper_x="..tostring(g and g.x).."|keeper_y="..tostring(g and g.y)..
-        "|dx="..tostring(dx).."|dy="..tostring(dy)..
-        "|source=signed16_player_slot_1|goal_reference=unverified")
-    end
     -- The challenge has no opposing goalkeeper: read the field reference instead.
     local goal,goal_error=GoalStadium.read(memory.read_s16_le,memory.read_u16_le)
     if sample_for_auto then sample_for_auto.goal_reference=goal end
