@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.32",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.33",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -60,7 +60,10 @@ function M.step(sample,holder,target,state)
   return x.key<y.key
  end)
  local candidate=choices[1]
- if holder==6 and target==2 and candidate.key=="Right" then
+ if holder==5 and target==8 and (not state or (state.right_bursts or 0)<2) then
+  for _,choice in ipairs(choices) do if choice.key=="Right" then candidate=choice;break end end
+ end
+ if holder==6 and (target==2 or target==3) and candidate.key=="Right" then
   for _,choice in ipairs(choices) do if choice.key~="Right" then candidate=choice;break end end
  end
  if state and state.recovery_left and state.recovery_left>0 and state.recovery_direction then
@@ -90,7 +93,7 @@ function M.recover(state,measurement,holder,target)
  local best=nil;local best_gain=0
  for _,key in ipairs(keys) do
   local v=state.motion and state.motion[key]
-  if not (holder==6 and target==2 and key=="Right") and v and v.count>=1 then
+  if not (holder==6 and (target==2 or target==3) and key=="Right") and v and v.count>=1 then
    local dx=measurement.dx-v.dx;local dy=measurement.dy-v.dy
    local d=math.sqrt(dx*dx+dy*dy);local lat=math.min(math.abs(dx),math.abs(dy))
    local gain=M.score(measurement)-M.score({distance=d,lateral=lat})
@@ -100,12 +103,13 @@ function M.recover(state,measurement,holder,target)
  if not best then
   -- Probe an alternative direction briefly; validate on the next neutral sample.
   for _,key in ipairs(keys) do
-   if not (holder==6 and target==2 and key=="Right") and key~=state.direction and key~=state.last_still_direction then
+   if not (holder==6 and target==2 and key=="Right") and key~=state.direction and key~=state.last_still_direction and (not state.motion or not state.motion[key] or state.motion[key].dx*({Right=1,Left=-1,Up=0,Down=0})[key]+state.motion[key].dy*({Up=-1,Down=1,Right=0,Left=0})[key]>=0) then
     best=key;break
    end
   end
   if not best then return false,"no_exploration_candidate" end
   state.recovery_exploratory=true
+  state.recovery_phase="running"
  else state.recovery_exploratory=false end
  state.recovery_direction=best;state.recovery_left=state.recovery_exploratory and 4 or 16
  state.recovery_used=(state.recovery_used or 0)+1
@@ -186,10 +190,11 @@ function M.observe(state,metrics)
     result="direction_pending_feedback"
    end
   end
-  if state.recovery_exploratory and state.recovery_used and state.recovery_left==0 then
+  if state.recovery_exploratory and state.recovery_phase=="awaiting_sample" then
    state.recovery_probe_gain=gain
    if delta_distance<=0.5 and delta_lateral<=0.5 then state.recovery_probe_failed=true end
   end
+  if key=="Right" then state.right_bursts=(state.right_bursts or 0)+1 end
   state.last_gain=gain
   state.burst_start=nil
   state.burst_direction=nil
