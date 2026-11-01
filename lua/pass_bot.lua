@@ -26,6 +26,7 @@ package.loaded["challenge.pass_priority_v087"]=nil
 package.loaded["challenge.pass_ordered_v0820"]=nil
 local Priority=require("challenge.pass_priority_v087")
 local Ordered=require("challenge.pass_ordered_v0820")
+local Reach=require("challenge.pass_reach_v0863")
 assert(type(Ordered.observe)=="function" and type(Ordered.step)=="function",
   "v0.8.23 requires updated challenge.pass_ordered_v0820; restart main.lua")
 local Feet=require("challenge.pass_feet_v0815")
@@ -307,6 +308,18 @@ local armed=false
 local previous=nil
 local auto_finished=false
 local pass_chain={active=false,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0,route_index=1,approach_frames=0,approach_neutral=false,approach_state={}}
+local reach=Reach.new()
+local reach_path=root.."/csv/pass_reach_v0863.csv"
+local rf=assert(io.open(reach_path,"ab"))
+if rf:seek("end")==0 then assert(rf:write("session,frame,event,attempt,from_player,planned_player,observed_player,initial_gap,carrier_walk,ball_path,ball_max_displacement,elapsed,ball_x,ball_y\\n")) end
+rf:close()
+local function reach_emit(event,frame,attempt,receiver,sample,elapsed)
+ local h=assert(io.open(reach_path,"ab"))
+ assert(h:write(csv({session,frame,event,attempt.id,attempt.from,attempt.to,receiver,
+  attempt.initial,attempt.walk,attempt.ball_path,attempt.ball_max,elapsed,
+  sample and sample.ball and sample.ball.x,sample and sample.ball and sample.ball.y},14)))
+ assert(h:close())
+end
 local previous_gate=nil
 local function gate_write(frame,gate,reason,p,sample)
  local signature=table.concat({gate,tostring(armed),tostring(autopass.enabled),
@@ -444,7 +457,7 @@ while true do
       if cmd=="REARM" then pending_auto=true;print("[ISSD.pass_lv1] REARM accepted: fresh single chain") end
       -- Probe is not proof of gameplay; explicit LV.1 selection is a safety gate.
       if p.status=="candidate" and p.challenge=="PASS" and p.level==1 then
-        armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();bonus=Bonus.new();completion_frame=nil;last_spatial_frame=nil;autopass=Auto.new();finish=Finish.new();goal_monitor=GoalEvidence.new(GoalEvidence.read(memory.read_u8,memory.read_u16_le,emu.framecount()));finish.enabled=auto_finish_queued;auto_finish_queued=false
+        armed=true;reach=Reach.new();tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();bonus=Bonus.new();completion_frame=nil;last_spatial_frame=nil;autopass=Auto.new();finish=Finish.new();goal_monitor=GoalEvidence.new(GoalEvidence.read(memory.read_u8,memory.read_u16_le,emu.framecount()));finish.enabled=auto_finish_queued;auto_finish_queued=false
         autopass.enabled=pending_auto and selected_pass_button=="B";autopass.button=selected_pass_button;autopass.start_frame=emu.framecount();autopass.direction=selected_direction;autopass.trigger_delay=trigger_mode=="B" and 12 or 0;autopass.calibration_mode=calibration_mode
         pending_auto=false;auto_finished=false;previous_gate=nil
         pass_chain={active=autopass.enabled,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0,route_index=1,approach_frames=0,approach_neutral=false,approach_state={}}
@@ -1214,6 +1227,10 @@ while true do
       local a=autopass.last_attempt
       auto_write(emu.framecount(),"pass_pulse",a.from,a.to,a.button,"experimental_unverified|wait_frames="..tostring(autopass.wait_frames).."|calib="..tostring(autopass.calibration_mode))
     elseif reason=="transfer_candidate_observed" or reason=="ball_moved_without_transfer" or reason=="no_ball_motion_detected" or reason=="timeout" or reason=="completion_candidate_stop" or reason=="coordinates_lost" or reason=="no_valid_target" or reason=="no_direction_for_pass" or reason=="selector_api_mismatch" or reason=="selector_report_missing" or reason=="integration_selftest_failed" or reason=="selected_without_receiver" or reason=="invalid_handoff" or reason=="no_unvisited_receiver" or reason=="possession_gate_timeout" or reason=="retarget_limit_reached" then
+      if reach.flight then
+        Reach.finish(reach,emu.framecount(),sample_for_auto,
+          reason=="transfer_candidate_observed" and spatial.holder or nil,reason,reach_emit)
+      end
       if reason=="possession_gate_timeout" then
         auto_write(emu.framecount(),"possession_gate_timeout",autopass.origin,autopass.target,selected_pass_button,
           "streak="..tostring(autopass.gate_tracker and autopass.gate_tracker.streak))
@@ -1374,6 +1391,14 @@ while true do
     local blocker=Ordered.interposition(sample_for_auto)
     if blocker then auto_write(emu.framecount(),"interposition_6_3_2",6,2,selected_pass_button,
       "between="..tostring(blocker.between).."|offset="..tostring(blocker.offset).."|blocked="..tostring(blocker.blocked)) end
+  end
+  if armed and sample_for_auto then
+    local tracked_target=autopass.target
+    if not tracked_target and pass_chain.approach_state then tracked_target=pass_chain.approach_state.target end
+    Reach.observe(reach,emu.framecount(),sample_for_auto,spatial.holder,tracked_target,buttons,reach_emit)
+    if reach.flight and emu.framecount()-reach.flight.start>=180 then
+      Reach.finish(reach,emu.framecount(),sample_for_auto,nil,"flight_timeout",reach_emit)
+    end
   end
   if buttons.X then log_input(emu.framecount(),"finish","shoot_pulse",spatial.holder,nil,buttons) end
   if armed and pass_chain.active and (holder==9 or holder==6) and
