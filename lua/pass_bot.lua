@@ -30,6 +30,9 @@ assert(type(Ordered.observe)=="function" and type(Ordered.step)=="function",
   "v0.8.23 requires updated challenge.pass_ordered_v0820; restart main.lua")
 local Feet=require("challenge.pass_feet_v0815")
 Auto=require("challenge.pass_auto_v071")
+package.loaded["challenge.goal_evidence_v4"]=nil
+package.loaded["challenge.pass_goal_evidence_v0826"]=nil
+local GoalEvidence=require("challenge.pass_goal_evidence_v0826")
 local Finish=require("challenge.pass_finish_v07")
 local Commands=require("challenge.dribble_commands_v035")
 local function mkdir(p) os.execute('mkdir "'..p..'" >nul 2>&1') end
@@ -47,6 +50,7 @@ if f:seek("end")==0 then
 end
 f:close()
 local session=os.date("!%Y%m%dT%H%M%SZ")
+local goal_monitor=nil
 local map_path=root.."/pass_ram_map_v02.lua"
 local map=nil
 local map_file=io.open(map_path,"rb")
@@ -144,6 +148,22 @@ ff:close()
 local function finish_write(frame,event)
  local h=assert(io.open(finish_csv,"ab"))
  assert(h:write(csv({session,frame,event,completion_frame,bonus.first_decrement_frame,finish.shot_frame,"operator_confirmed_button_unverified_goal"},7)))
+ assert(h:close())
+end
+local goal_evidence_csv=root.."/csv/pass_goal_evidence_v0826.csv"
+local gfh=assert(io.open(goal_evidence_csv,"ab"))
+if gfh:seek("end")==0 then
+ assert(gfh:write("session,frame,event,goal_u16,baseline,delta,gs,ptr,remaining,completion_frame,bonus_frame,shot_frame,classification,evidence\n"))
+end
+gfh:close()
+local function goal_write(frame,event,sample)
+ local m=goal_monitor
+ if not m then return end
+ local h=assert(io.open(goal_evidence_csv,"ab"))
+ assert(h:write(csv({session,frame,event,sample and sample.goal,m.baseline,
+  sample and sample.goal and sample.goal-m.baseline,
+  sample and sample.gs,sample and sample.ptr,sample and sample.remaining,
+  m.complete,m.bonus,m.shot,GoalEvidence.classify(m),"passive_counter_unverified_goal"},14)))
  assert(h:close())
 end
 local calibration_csv=root.."/csv/pass_direction_v072.csv"
@@ -409,7 +429,7 @@ while true do
       if cmd=="REARM" then pending_auto=true;print("[ISSD.pass_lv1] REARM accepted: fresh single chain") end
       -- Probe is not proof of gameplay; explicit LV.1 selection is a safety gate.
       if p.status=="candidate" and p.challenge=="PASS" and p.level==1 then
-        armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();bonus=Bonus.new();completion_frame=nil;last_spatial_frame=nil;autopass=Auto.new();finish=Finish.new();finish.enabled=auto_finish_queued;auto_finish_queued=false
+        armed=true;tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();bonus=Bonus.new();completion_frame=nil;last_spatial_frame=nil;autopass=Auto.new();finish=Finish.new();goal_monitor=GoalEvidence.new(GoalEvidence.read(memory.read_u8,memory.read_u16_le,emu.framecount()));finish.enabled=auto_finish_queued;auto_finish_queued=false
         autopass.enabled=pending_auto and selected_pass_button=="B";autopass.button=selected_pass_button;autopass.start_frame=emu.framecount();autopass.direction=selected_direction;autopass.trigger_delay=trigger_mode=="B" and 12 or 0;autopass.calibration_mode=calibration_mode
         pending_auto=false;auto_finished=false;previous_gate=nil
         pass_chain={active=autopass.enabled,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0,route_index=1,approach_frames=0,approach_neutral=false,approach_state={}}
@@ -733,7 +753,14 @@ while true do
         "|vertical="..tostring(finish.aim and (finish.aim.Up and "Up" or finish.aim.Down and "Down" or "neutral")))
     end
     -- Finalization only emits X once; it must never combine with pass B.
-    if shot.X then buttons=shot;autopass.enabled=false
+    if shot.X then
+      buttons=shot;autopass.enabled=false
+      if goal_monitor then
+        goal_monitor.shot=emu.framecount()
+        goal_monitor.complete=completion_frame
+        goal_monitor.bonus=bonus.first_decrement_frame
+        goal_write(emu.framecount(),"shot_x_issued",GoalEvidence.read(memory.read_u8,memory.read_u16_le,emu.framecount()))
+      end
     elseif completion_frame then buttons={} end
   end
   -- Frame-level WRAM evidence surrounding every pass and trigger delay.
