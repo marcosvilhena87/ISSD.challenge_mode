@@ -515,6 +515,7 @@ while true do
     if autopass.phase=="idle" and not plan and selector_reason=="approach_required"
         and pass_chain.active and holder then
       local target=bridge_info and bridge_info.target
+      local movement=pass_chain.approach_state
       if (pass_chain.approach_frames or 0)>=Ordered.MAX_APPROACH then
         reason="approach_timeout";buttons={};autopass.enabled=false
         pass_chain.active=false;auto_finished=true
@@ -554,7 +555,6 @@ while true do
           "|best_lateral="..tostring(pass_chain.approach_state.best_lateral)..
           "|stalled="..tostring(pass_chain.approach_state.stalled or 0))
       else
-        local movement=pass_chain.approach_state
         -- Keep a direction continuously for up to four frames; check safety on
         -- every frame and sample progress once per burst on the neutral frame.
         if (movement.burst_remaining or 0)>0 and movement.burst_buttons then
