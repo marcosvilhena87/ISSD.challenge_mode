@@ -42,11 +42,11 @@ function M.selftest(selector,auto)
     "B and control-pad must be simultaneous")
    pulses=pulses+1
   end
-  if last_last_state=="pass_pulse" then break end
+  if last_state=="pass_pulse" then break end
  end
  assert(ready,"possession gate never became ready")
  assert(pulses==3,"expected exactly three B+direction frames")
- assert(t.tries==1 and state=="pass_pulse","expected exactly one pass pulse")
+ assert(t.tries==1 and last_state=="pass_pulse","expected exactly one pass pulse")
  return {holder=6,eligible=info.report.eligible,target=plan.target,
   selector_version=selector.VERSION}
 end
