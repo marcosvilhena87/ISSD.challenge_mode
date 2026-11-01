@@ -4,7 +4,7 @@ local M={}
 function M.new()
  return {enabled=false,button="B",phase="idle",start_frame=nil,tries=0,
  target=nil,origin=nil,pass_frame=nil,ball_before=nil,ball_max_displacement=0,
- hold_frames=3,wait_frames=90,extra_wait_frames=90,extended=false,first_motion_frame=nil,flight_samples={},last_attempt=nil,direction="AUTO",align_frames=2}
+ trigger_delay=0,prewait_until=nil,hold_frames=3,wait_frames=90,extra_wait_frames=90,extended=false,first_motion_frame=nil,flight_samples={},last_attempt=nil,direction="AUTO",align_frames=2}
 end
 local function find(players,id)
  for _,p in ipairs(players or {}) do if p.id==id then return p end end
@@ -44,6 +44,12 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
    return empty,t.ball_max_displacement>=8 and "ball_moved_without_transfer" or "no_ball_motion_detected"
   end
   return empty,"await_ball_motion"
+ end
+ if t.phase=="prewait" then
+  if frame<(t.prewait_until or frame) then return empty,"trigger_pre_wait" end
+  t.phase=t.next_phase or "hold"
+  -- Deliberately no buttons on the transition frame.
+  return empty,"trigger_pre_wait_complete"
  end
  if t.phase=="align" then
   local dest=find(sample and sample.players,t.target)
@@ -99,7 +105,12 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   local range=distance(origin,dest)
   t.wait_frames=range<=150 and 90 or (range<=300 and 150 or 210)
   t.extended=false;t.first_motion_frame=nil;t.flight_samples={}
-  t.origin=holder;t.target=target;t.phase=(plan and plan.aligned==false) and "align" or "hold";t.hold_count=0;t.align_count=0
+  t.origin=holder;t.target=target
+  t.next_phase=(plan and plan.aligned==false) and "align" or "hold"
+  if (t.trigger_delay or 0)>0 then
+   t.phase="prewait";t.prewait_until=frame+t.trigger_delay
+  else t.phase=t.next_phase end
+  t.hold_count=0;t.align_count=0
   t.ball_before={x=sample.ball.x,y=sample.ball.y}
   return empty,"target_selected"
  end
