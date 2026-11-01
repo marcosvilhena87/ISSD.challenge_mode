@@ -505,6 +505,13 @@ while true do
         c and string.format("%.2f",c.distance) or "unknown",
         c and string.format("%.2f",c.misalignment) or "unknown",
         c and string.format("%.2f",c.cost) or "unknown",tostring(receiver.aligned)))
+    elseif reason=="facing_directional" then
+      auto_write(emu.framecount(),"facing_directional",autopass.origin,autopass.target,selected_pass_button,
+        "direction="..tostring(autopass.facing_direction)..
+        "|frame="..tostring(autopass.facing_count)..
+        "|no_B=true")
+    elseif reason=="facing_release" then
+      auto_write(emu.framecount(),"facing_release",autopass.origin,autopass.target,selected_pass_button,"neutral_frame")
     elseif reason=="alignment_correction" then
       auto_write(emu.framecount(),"alignment_correction",holder,autopass.target,selected_pass_button,"bounded_directional_pre_align")
     elseif reason=="possession_gate_ready" then
@@ -586,7 +593,7 @@ while true do
   end
   -- Frame-level WRAM evidence surrounding every pass and trigger delay.
   if armed and sample_for_auto and
-      (autopass.phase=="possession_gate" or autopass.phase=="prewait" or autopass.phase=="align" or
+      (autopass.phase=="possession_gate" or autopass.phase=="prewait" or autopass.phase=="face" or autopass.phase=="face_release" or autopass.phase=="align" or
        autopass.phase=="hold" or autopass.phase=="wait") then
     local pf=autopass.pass_frame
     if autopass.phase~="wait" or (pf and emu.framecount()-pf<=30) then
