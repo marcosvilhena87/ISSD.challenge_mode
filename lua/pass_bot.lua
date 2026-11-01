@@ -505,7 +505,7 @@ while true do
         c and string.format("%.2f",c.cost) or "unknown",tostring(receiver.aligned)))
     elseif reason=="alignment_correction" then
       auto_write(emu.framecount(),"alignment_correction",holder,autopass.target,selected_pass_button,"bounded_directional_pre_align")
-    elseif reason=="possession_gate_ready" or reason=="possession_gate_timeout" then
+    elseif reason=="possession_gate_ready" then
       auto_write(emu.framecount(),reason,autopass.origin,autopass.target,selected_pass_button,
         "distance="..tostring(autopass.gate_distance)..
         "|streak="..tostring(autopass.gate_tracker and autopass.gate_tracker.streak))
@@ -518,6 +518,10 @@ while true do
       local a=autopass.last_attempt
       auto_write(emu.framecount(),"pass_pulse",a.from,a.to,a.button,"experimental_unverified|wait_frames="..tostring(autopass.wait_frames))
     elseif reason=="transfer_candidate_observed" or reason=="ball_moved_without_transfer" or reason=="no_ball_motion_detected" or reason=="timeout" or reason=="completion_candidate_stop" or reason=="coordinates_lost" or reason=="no_valid_target" or reason=="no_direction_for_pass" or reason=="selector_api_mismatch" or reason=="selector_report_missing" or reason=="integration_selftest_failed" or reason=="selected_without_receiver" or reason=="invalid_handoff" or reason=="no_unvisited_receiver" or reason=="possession_gate_timeout" then
+      if reason=="possession_gate_timeout" then
+        auto_write(emu.framecount(),"possession_gate_timeout",autopass.origin,autopass.target,selected_pass_button,
+          "streak="..tostring(autopass.gate_tracker and autopass.gate_tracker.streak))
+      end
       auto_write(emu.framecount(),"single_pass_result",autopass.origin,autopass.target,selected_pass_button,reason.."|direction="..selected_direction.."|max_ball_displacement="..string.format("%.2f",autopass.ball_max_displacement))
       calibration_write(emu.framecount(),reason,autopass.last_attempt,reason=="transfer_candidate_observed" and holder or nil,reason=="transfer_candidate_observed" and emu.framecount() or nil)
       local flight=autopass.flight_samples or {}
