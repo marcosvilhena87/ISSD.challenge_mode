@@ -609,6 +609,13 @@ while true do
             "|target_x="..coords.tx.."|target_y="..coords.ty)
         end
         movement.right_followup_left=movement.right_followup_left-1
+      elseif pass_chain.approach_neutral and holder==6 and target==7 and
+          (movement.pair_67_settle_left or 0)>0 then
+        -- Do not assess a temporarily still carrier until two neutral samples.
+        buttons={};reason="approach_67_settle"
+        movement.pair_67_settle_left=movement.pair_67_settle_left-1
+        auto_write(emu.framecount(),"approach_67_neutral_wait",holder,target,selected_pass_button,
+          "remaining="..tostring(movement.pair_67_settle_left))
       elseif pass_chain.approach_neutral then
         buttons={};reason="approach_neutral";pass_chain.approach_neutral=false
         local measurement=Feet.measure(sample_for_auto,holder,target)
@@ -630,7 +637,15 @@ while true do
         end
         local motion_feedback=Ordered.observe_motion(movement,sample_for_auto,holder,target)
         local motion=movement.last_motion
-        if motion_feedback=="motion_delayed_or_still" then
+        if holder==6 and target==7 and motion_feedback=="motion_delayed_or_still" then
+          movement.pair_67_settle_left=2
+          movement.pair_67_delayed_samples=(movement.pair_67_delayed_samples or 0)+1
+          -- Recheck after neutral frames before penalizing directions.
+          auto_write(emu.framecount(),"approach_67_delayed_motion",holder,target,selected_pass_button,
+            "samples="..tostring(movement.pair_67_delayed_samples).."|neutral_frames=2")
+        end
+        if motion_feedback=="motion_delayed_or_still" and not (holder==6 and target==7 and
+             (movement.pair_67_delayed_samples or 0)<2) then
           movement.still_counts=movement.still_counts or {}
           local k=movement.burst_direction
           if k then
@@ -1095,6 +1110,13 @@ while true do
           auto_write(emu.framecount(),"route_deviation",autopass.origin,holder,selected_pass_button,
             "expected="..tostring(autopass.target).."|observed="..tostring(holder).."|recovery=continue")
           pass_chain.approach_frames=0;pass_chain.approach_neutral=false
+          pass_chain.approach_state={}
+          if Ordered.can_relay_six_seven(holder,spatial.visited) then
+            auto_write(emu.framecount(),"route_67_continuity",holder,7,selected_pass_button,
+              "player_6_previously_visited="..tostring(spatial.visited[6] and true or false)..
+              "|player_2_visited="..tostring(spatial.visited[2] and true or false)..
+              "|player_7_visited=false|eligible=true")
+          end
           auto_write(emu.framecount(),"route_recovered",autopass.origin,holder,selected_pass_button,
             "next="..tostring(Ordered.next(pass_chain.route_index,holder,spatial.visited)))
         end
