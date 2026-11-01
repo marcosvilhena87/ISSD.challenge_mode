@@ -4,7 +4,7 @@ local M={}
 function M.new()
  return {enabled=false,button="B",phase="idle",start_frame=nil,tries=0,
  target=nil,origin=nil,pass_frame=nil,ball_before=nil,ball_max_displacement=0,
- trigger_delay=0,prewait_until=nil,gate_start=nil,gate_tracker=nil,hold_frames=3,wait_frames=90,extra_wait_frames=90,extended=false,first_motion_frame=nil,flight_samples={},last_attempt=nil,direction="AUTO",align_frames=2,facing_frames=4,facing_count=0,facing_direction=nil,feet_initial=nil,retargets=0,max_retargets=3,retarget_wait=0,active_alignment=nil}
+ trigger_delay=0,prewait_until=nil,gate_start=nil,gate_tracker=nil,hold_frames=3,wait_frames=90,extra_wait_frames=90,extended=false,first_motion_frame=nil,flight_samples={},last_attempt=nil,direction="AUTO",align_frames=2,facing_frames=4,facing_count=0,facing_direction=nil,feet_initial=nil,retargets=0,max_retargets=3,retarget_wait=0,active_alignment=nil,relax_level=0}
 end
 local function find(players,id)
  for _,p in ipairs(players or {}) do if p.id==id then return p end end
