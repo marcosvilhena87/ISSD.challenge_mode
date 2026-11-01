@@ -1,5 +1,6 @@
 -- PASS v0.8.7: postpone 11 then 10 when possible; no guaranteed recipient.
-local M={VERSION="0.8.7"}
+local Route=require("challenge.pass_route_v089")
+local M={VERSION="0.8.9"}
 function M.allowed(visited,holder)
  local remaining_early=0
  for id=2,9 do
@@ -27,6 +28,15 @@ function M.resolve(bridge,selector,sample,holder,visited)
  end
  for id in pairs(visited or {}) do filtered[id]=true end
  local plan,reason,info=bridge.resolve(selector,sample,holder,filtered)
+ if plan and info and info.report then
+  local best,score,evaluated=Route.choose(sample,holder,visited,info.report,stage)
+  if best then
+   plan.target=best.id;plan.aligned=best.aligned
+   info.receiver_id=best.id;info.plan_target=best.id
+   info.route_score=score;info.route_evaluated=evaluated
+   info.reason="coordinate_route_selected"
+  end
+ end
  return plan,reason,info,stage
 end
 return M
