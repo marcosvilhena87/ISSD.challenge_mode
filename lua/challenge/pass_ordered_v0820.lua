@@ -22,6 +22,7 @@ function M.step(sample,holder,target,state)
  if why~="too_far" and why~="diagonal_risk" then return {},why,metrics end
  local dx,dy=b.x-a.x,b.y-a.y
  local axis=(state and state.axis) or (math.abs(dx)>=math.abs(dy) and "x" or "y")
+ if state and not state.axis then state.axis=axis end
  local key
  if axis=="x" then key=dx>=0 and "Right" or "Left"
  else key=dy>=0 and "Down" or "Up" end
