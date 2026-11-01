@@ -565,8 +565,25 @@ while true do
         -- Four neutral frames establish the residual motion baseline.
       elseif (pass_chain.approach_frames or 0)>=approach_limit and not pass_chain.approach_neutral then
         local measurement=Feet.measure(sample_for_auto,holder,target)
-        local can_extend,why=Ordered.can_extend(movement,pass_chain.approach_frames,measurement)
+        local checkpoint,checkpoint_reason=false,nil
+        if holder==7 and target==10 then
+          checkpoint,checkpoint_reason=Ordered.goalward_checkpoint(movement,pass_chain.approach_frames,measurement)
+        end
+        local can_extend,why
+        if checkpoint then
+          can_extend,why=true,checkpoint_reason
+        else
+          can_extend,why=Ordered.can_extend(movement,pass_chain.approach_frames,measurement)
+        end
         if can_extend and approach_limit<Ordered.MAX_APPROACH_ABSOLUTE then
+          if why=="goalward_receiver_stage_progress" then
+            movement.pair_710_checkpoints=(movement.pair_710_checkpoints or 0)+1
+            movement.pair_710_checkpoint_distance=measurement.distance
+            auto_write(emu.framecount(),"approach_710_goalward_checkpoint",holder,target,selected_pass_button,
+              "stage="..tostring(movement.pair_710_checkpoints)..
+              "|distance="..tostring(measurement.distance)..
+              "|absolute="..tostring(Ordered.MAX_APPROACH_ABSOLUTE))
+          end
           if why=="pair_89_receiver_escape_progress" then
             movement.pair_89_extension_count=(movement.pair_89_extension_count or 0)+1
           end
@@ -848,6 +865,17 @@ while true do
             "|receiver_away="..tostring(escape)..
             "|right_stalls="..tostring(movement.pair_710_right_stalls or 0)..
             "|vertical_count="..tostring(movement.pair_710_vertical_count or 0))
+          local receiver_goalward=(m and m.target_dx or 0)>0
+          if receiver_goalward then
+            movement.pair_710_goalward_observations=(movement.pair_710_goalward_observations or 0)+1
+          end
+          auto_write(emu.framecount(),"approach_710_goalward_feedback",holder,target,selected_pass_button,
+            "receiver_dx="..tostring(m and m.target_dx)..
+            "|receiver_goalward_candidate="..tostring(receiver_goalward)..
+            "|holder_toward="..tostring(carrier)..
+            "|receiver_away="..tostring(escape)..
+            "|distance="..tostring(measurement.distance)..
+            "|checkpoint_count="..tostring(movement.pair_710_checkpoints or 0))
           auto_write(emu.framecount(),"approach_710_relative_feedback",holder,target,selected_pass_button,
             "direction="..tostring(movement.burst_direction)..
             "|holder_toward="..tostring(carrier)..
@@ -1224,9 +1252,12 @@ while true do
       (pass_chain.approach_state and (pass_chain.approach_state.direction or
        pass_chain.approach_state.burst_direction)) then
     local trace=pass_chain.approach_state
-    local target=autopass and autopass.target
-    if target==7 and (buttons.Up or buttons.Right or buttons.Left or buttons.Down) then
-      auto_write(emu.framecount(),"approach_7_joypad_commit",holder,target,selected_pass_button,
+    local target=pass_chain and pass_chain.approach_target or nil
+    if not target and trace then target=trace.target end
+    if not target and autopass then target=autopass.target end
+    if not target and holder==7 and (buttons.Right or buttons.Up or buttons.Down or buttons.Left) then target=10 end
+    if target and (target==7 or target==10) and (buttons.Up or buttons.Right or buttons.Left or buttons.Down) then
+      auto_write(emu.framecount(),"approach_target_joypad_commit",holder,target,selected_pass_button,
         "selected="..tostring(trace.burst_direction or trace.direction)..
         "|reason="..tostring(trace.geometry_reason)..
         "|up="..tostring(buttons.Up==true).."|right="..tostring(buttons.Right==true)..
