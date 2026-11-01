@@ -1,7 +1,7 @@
 -- v0.8.10: permit visited teammates only as penalized two-leg relays.
 local Feet=require("challenge.pass_feet_v0815")
 local BallLine=require("challenge.pass_alignment_ball_v0817")
-local M={VERSION="0.8.15",RELAY_PENALTY=100,MAX_CONSECUTIVE=2}
+local M={VERSION="0.8.20",RELAY_PENALTY=100,MAX_CONSECUTIVE=2}
 local function leg(a,b)
  local dx,dy=math.abs(a.x-b.x),math.abs(a.y-b.y)
  return math.sqrt(dx*dx+dy*dy)+0.25*math.max(0,math.min(dx,dy)-12)
@@ -12,17 +12,16 @@ function M.choose(sample,holder,visited,previous,consecutive,excluded)
   if p.id and type(p.x)=="number" and type(p.y)=="number" then points[p.id]=p end
  end
  if not points[holder] then return nil,"missing_holder" end
+ local order={6,2,3,4,5,8,9,7,10,11}
  local goals={}
- local early=0
- for id=2,9 do
-  if not visited[id] then goals[id]=true;early=early+1 end
+ local next_goal=nil
+ for _,id in ipairs(order) do
+  if not visited[id] then next_goal=id;break end
  end
- local stage="early"
- if early==0 then
-  if not visited[11] then goals[11]=true;stage="penultimate_11"
-  elseif not visited[10] then goals[10]=true;stage="last_10"
-  else return nil,"all_visited" end
- end
+ if not next_goal then return nil,"all_visited" end
+ -- Prioritize the next unvisited player, never skip ahead to a later one.
+ goals[next_goal]=true
+ local stage="ordered_next_"..tostring(next_goal)
  local best,score,details
  for id in pairs(goals) do
   if id~=holder and not (excluded and excluded[id]) and points[id] and Feet.check(sample,holder,id) then
