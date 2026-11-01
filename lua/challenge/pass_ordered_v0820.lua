@@ -7,7 +7,7 @@ end
 function M.next(_,holder,visited,nine_to_eight_done)
  visited=visited or {}
  if not holder or holder<2 or holder>11 then return nil,"invalid_holder" end
- if holder==9 and visited[8] and not nine_to_eight_done then
+ if holder==9 and not nine_to_eight_done then
   return 8,"nine_to_eight_default_return"
  end
  for _,id in ipairs(M.ROUTE) do
