@@ -84,13 +84,13 @@ function M.interposition(sample)
  local lateral=math.sqrt((c.x-px)^2+(c.y-py)^2)
  return {between=t>0 and t<1,offset=lateral,projection=t,blocked=t>0 and t<1 and lateral<30}
 end
-function M.recover(state,measurement)
+function M.recover(state,measurement,holder,target)
  if not state or not measurement or not state.motion or (state.recovery_used or 0)>=1 then return false,"no_recovery_available" end
  local keys={"Up","Down","Left","Right"}
  local best=nil;local best_gain=0
  for _,key in ipairs(keys) do
   local v=state.motion[key]
-  if v and v.count>=1 then
+  if not (holder==6 and target==2 and key=="Right") and v and v.count>=1 then
    local dx=measurement.dx-v.dx;local dy=measurement.dy-v.dy
    local d=math.sqrt(dx*dx+dy*dy);local lat=math.min(math.abs(dx),math.abs(dy))
    local gain=M.score(measurement)-M.score({distance=d,lateral=lat})
