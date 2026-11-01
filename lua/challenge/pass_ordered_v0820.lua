@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.58",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.60",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -134,6 +134,21 @@ function M.step(sample,holder,target,state)
   state.direction="Up_Right";state.axis="xy"
   state.geometry_reason="pair_67_up_right_approach"
   return {Up=true,Right=true},"approach_step",metrics
+ end
+ -- After a regressing diagonal, try a bounded cardinal recovery based on
+ -- the larger coordinate error. Alternate once after a failed probe.
+ if holder==6 and target==7 and state and state.pair_67_diagonal_disabled
+    and (state.pair_67_cardinal_attempts or 0)<8 then
+  local key
+  if (state.pair_67_cardinal_flip or 0)>0 then
+    key=(math.abs(dy)>math.abs(dx)) and "Right" or (dy<0 and "Up" or "Down")
+  else
+    key=(math.abs(dy)>math.abs(dx)) and (dy<0 and "Up" or "Down") or (dx>0 and "Right" or "Left")
+  end
+  state.pair_67_cardinal_attempts=(state.pair_67_cardinal_attempts or 0)+1
+  state.direction=key;state.axis=(key=="Right" or key=="Left") and "x" or "y"
+  state.geometry_reason="pair_67_cardinal_recovery"
+  return {[key]=true},"approach_step",metrics
  end
  -- Only 6→7: maintain UP while recent neutral feedback proves progress.
  if holder==6 and target==7 and state and state.pair_67_avoid_direction~="Up" and (state.pair_67_up_streak or 0)>=2
