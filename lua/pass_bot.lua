@@ -727,6 +727,45 @@ while true do
             "|distance_gain="..tostring(gain).."|lateral_gain="..tostring(lateral_gain)..
             "|up_streak="..tostring(movement.pair_67_up_streak or 0))
         end
+        -- 6→7: distinguish carrier movement from receiver escape, and
+        -- prevent consecutive bursts that worsen both distance and lateral.
+        if holder==6 and target==7 and measurement and movement.burst_start then
+          local motion=movement.last_motion
+          local dd=measurement.distance-movement.burst_start.distance
+          local dl=measurement.lateral-movement.burst_start.lateral
+          local carrier=motion and motion.holder_toward or 0
+          local escape=motion and motion.receiver_away or 0
+          local closing=motion and motion.relative_closing or 0
+          local direction=movement.burst_direction
+          if dd>1.5 and dl>1.5 then
+            if movement.pair_67_last_regressing_direction==direction then
+              movement.pair_67_double_regression=(movement.pair_67_double_regression or 0)+1
+            else
+              movement.pair_67_double_regression=1
+              movement.pair_67_last_regressing_direction=direction
+            end
+          elseif dd< -0.5 or dl< -0.5 then
+            movement.pair_67_double_regression=0
+            movement.pair_67_last_regressing_direction=nil
+            if direction==movement.pair_67_avoid_direction then
+              movement.pair_67_avoid_direction=nil;movement.pair_67_avoid_left=0
+            end
+          end
+          if (movement.pair_67_double_regression or 0)>=2 and direction then
+            movement.pair_67_avoid_direction=direction
+            movement.pair_67_avoid_left=3
+            movement.pair_67_up_streak=0
+            movement.good_direction_lock=0
+            movement.pair_67_double_regression=0
+            auto_write(emu.framecount(),"approach_67_direction_guard",holder,target,selected_pass_button,
+              "blocked="..tostring(direction).."|next_decisions=3")
+          end
+          auto_write(emu.framecount(),"approach_67_relative_feedback",holder,target,selected_pass_button,
+            "direction="..tostring(direction).."|holder_toward="..tostring(carrier)..
+            "|receiver_away="..tostring(escape).."|closing="..tostring(closing)..
+            "|distance_growth="..tostring(dd).."|lateral_growth="..tostring(dl)..
+            "|both_regressing="..tostring(dd>1.5 and dl>1.5))
+        end
         local feedback=Ordered.observe(pass_chain.approach_state,measurement)
         if movement.recovery_phase=="awaiting_sample" then
           movement.recovery_phase="evaluated"
