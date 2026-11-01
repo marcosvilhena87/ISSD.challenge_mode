@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.36",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.37",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -72,8 +72,7 @@ function M.step(sample,holder,target,state)
   return x.key<y.key
  end)
  local candidate=choices[1]
- if holder==5 and target==8 and (not state or not state.right_suspended) and
-   (not state or (state.right_bursts or 0)<2 or (state.right_progress_streak or 0)>0) then
+ if holder==5 and target==8 and (not state or not state.right_suspended) then
   for _,choice in ipairs(choices) do if choice.key=="Right" then candidate=choice;break end end
  end
  if holder==6 and (target==2 or target==3) and candidate.key=="Right" then
@@ -160,6 +159,7 @@ function M.guard_right(state,metrics,motion)
  state.last_right_distance_change=distance_change
  if distance_change>2 or (actual_projection and actual_projection< -0.5) then
   state.right_suspended=true
+  state.right_block_reason="measured_regression"
   state.right_progress_streak=0
   state.penalties=state.penalties or {}
   state.penalties.Right=(state.penalties.Right or 0)+24
@@ -172,6 +172,7 @@ function M.guard_right(state,metrics,motion)
  state.right_still=(state.right_still or 0)+1
  if state.right_still>=2 then
   state.right_suspended=true
+  state.right_block_reason="measured_still"
   return "right_still",distance_change
  end
  return "right_pending",distance_change
