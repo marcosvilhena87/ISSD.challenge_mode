@@ -973,7 +973,7 @@ while true do
         if autopass.origin==9 and holder==8 and autopass.target==8 then
           pass_chain.nine_to_eight_done=true
           auto_write(emu.framecount(),"route_9_to_8_completed",9,8,selected_pass_button,
-            "repeat_receiver=true|distinct_player_count_unchanged=true")
+            "repeat_receiver="..tostring(repeated and true or false).."|distinct_player_count_unchanged="..tostring(repeated and true or false))
         end
         if holder==autopass.target then
           pass_chain.route_index=pass_chain.route_index+1
