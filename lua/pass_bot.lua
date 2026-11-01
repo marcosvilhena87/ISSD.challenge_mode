@@ -166,6 +166,21 @@ local function goal_write(frame,event,sample)
   m.complete,m.bonus,m.shot,GoalEvidence.classify(m),"passive_counter_unverified_goal"},14)))
  assert(h:close())
 end
+local trajectory_csv=root.."/csv/pass_shot_trajectory_v0859.csv"
+local tf=assert(io.open(trajectory_csv,"ab"))
+if tf:seek("end")==0 then
+ assert(tf:write("session,frame,elapsed,ball_x,ball_y,goalkeeper_x,goalkeeper_y,goalkeeper_x_gap,goal_counter,phase\\n"))
+end
+tf:close()
+local function trajectory_write(frame,elapsed,sample,phase)
+ local b=sample and sample.ball
+ local gk=sample and sample.goalkeeper
+ local c=GoalEvidence.read(memory.read_u8,memory.read_u16_le,frame)
+ local h=assert(io.open(trajectory_csv,"ab"))
+ assert(h:write(csv({session,frame,elapsed,b and b.x,b and b.y,gk and gk.x,gk and gk.y,
+  b and gk and math.abs(gk.x-b.x),c and c.goal,phase},10)))
+ assert(h:close())
+end
 local calibration_csv=root.."/csv/pass_direction_v072.csv"
 local cf=assert(io.open(calibration_csv,"ab"))
 if cf:seek("end")==0 then assert(cf:write("session,frame,result,from_player,planned_player,observed_player,direction,ball_displacement,pass_frame,transfer_frame,latency_frames\n")) end
@@ -1226,15 +1241,25 @@ while true do
   end
   if armed and finish.enabled then
     local shot,reason=Finish.step(finish,emu.framecount(),completion_frame,bonus.first_decrement_frame,sample_for_auto,spatial.holder)
-    if reason=="shoot_pulse" or reason=="completion_and_bonus_observed" or reason=="finish_window_expired" then
+    if reason=="shoot_pulse" or reason=="completion_and_bonus_observed" or reason=="finish_window_expired" or reason=="shot_blocked_too_far" then
       finish_write(emu.framecount(),reason)
       auto_write(emu.framecount(),"finish_"..reason,spatial.holder,nil,"X",
         "aim="..tostring(finish.aim_reason).."|direction="..tostring(finish.aim and (finish.aim.Left and "Left" or "Right"))..
         "|vertical="..tostring(finish.aim and (finish.aim.Up and "Up" or finish.aim.Down and "Down" or "neutral")))
     end
+    if reason=="finish_goal_approach" then
+      buttons=shot;autopass.enabled=false
+      if finish.approach_frames%10==1 then
+        auto_write(emu.framecount(),"finish_goal_approach",spatial.holder,nil,"MOVE",
+          "frames="..tostring(finish.approach_frames)..
+          "|best_gap="..tostring(finish.approach_best)..
+          "|start_gap="..tostring(finish.approach_x_start))
+      end
+    end
     -- Finalization only emits X once; it must never combine with pass B.
     if shot.X then
       buttons=shot;autopass.enabled=false
+      trajectory_write(emu.framecount(),0,sample_for_auto,"shot_x")
       if goal_monitor then
         goal_monitor.complete=completion_frame
         goal_monitor.bonus=bonus.first_decrement_frame
@@ -1245,13 +1270,17 @@ while true do
             "window="..tostring(GoalEvidence.WINDOW).."|baseline="..tostring(shot_sample.goal))
         end
       end
-    elseif completion_frame then buttons={} end
+    elseif completion_frame and reason~="finish_goal_approach" then buttons={} end
   end
   -- DRIBBLE-derived passive counter observation after the X pulse.
   -- This continues even when the pass automation has been disabled.
   if armed and goal_monitor and goal_monitor.shot and not goal_monitor.closed
      and emu.framecount()>goal_monitor.shot then
     local g=GoalEvidence.read(memory.read_u8,memory.read_u16_le,emu.framecount())
+    local elapsed=emu.framecount()-goal_monitor.shot
+    if sample_for_auto and (elapsed<=60 or elapsed%10==0) then
+      trajectory_write(emu.framecount(),elapsed,sample_for_auto,"post_x")
+    end
     local event=GoalEvidence.step(goal_monitor,g)
     if event or goal_monitor.closed or
        (emu.framecount()-goal_monitor.shot)%GoalEvidence.SAMPLE_EVERY==0 then
