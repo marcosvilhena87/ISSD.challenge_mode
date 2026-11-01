@@ -1,12 +1,15 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.44",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.46",ROUTE={6,3,2,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
-function M.next(_,holder,visited)
+function M.next(_,holder,visited,nine_to_eight_done)
  visited=visited or {}
  if not holder or holder<2 or holder>11 then return nil,"invalid_holder" end
+ if holder==9 and visited[8] and not nine_to_eight_done then
+  return 8,"nine_to_eight_default_return"
+ end
  for _,id in ipairs(M.ROUTE) do
   if id~=holder and not visited[id] then return id,"ordered_remaining" end
  end
