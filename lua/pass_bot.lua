@@ -576,7 +576,7 @@ while true do
           pass_chain.approach_neutral=false
         else
           local recovered,dir=Ordered.recover(movement,measurement,holder,target)
-          if recovered and (pass_chain.approach_frames or 0)<Ordered.MAX_APPROACH_ABSOLUTE then
+          if recovered and not movement.pair_89_stopped and (pass_chain.approach_frames or 0)<Ordered.MAX_APPROACH_ABSOLUTE then
             movement.approach_limit=math.min(approach_limit+(movement.recovery_left or 16),Ordered.MAX_APPROACH_ABSOLUTE)
             movement.burst_remaining=0;movement.burst_buttons=nil
             pass_chain.approach_neutral=false;buttons={};reason="approach_recovery_neutral"
@@ -649,6 +649,33 @@ while true do
             "result="..diagonal_result.."|distance_growth="..tostring(growth)..
             "|lateral_growth="..tostring(lateral_growth)..
             "|disabled="..tostring(movement.diagonal_disabled))
+        end
+        -- Evaluate 8→9 using the result at each neutral boundary. Stop early
+        -- if repeated bursts increase distance instead of blindly switching.
+        if holder==8 and target==9 and measurement and movement.burst_start then
+          local delta=measurement.distance-movement.burst_start.distance
+          local lateral_delta=measurement.lateral-movement.burst_start.lateral
+          if delta>1.5 then
+            movement.pair_89_last_bad_direction=movement.burst_direction
+            movement.pair_89_regression=(movement.pair_89_regression or 0)+1
+            movement.pair_89_total_growth=(movement.pair_89_total_growth or 0)+delta
+          elseif delta< -0.5 or lateral_delta< -1 then
+            movement.pair_89_last_bad_direction=nil
+            movement.pair_89_regression=0
+          end
+          auto_write(emu.framecount(),"approach_89_feedback",holder,target,selected_pass_button,
+            "direction="..tostring(movement.burst_direction)..
+            "|distance_delta="..tostring(delta)..
+            "|lateral_delta="..tostring(lateral_delta)..
+            "|regression_streak="..tostring(movement.pair_89_regression or 0))
+          if (movement.pair_89_regression or 0)>=2 or
+             (movement.pair_89_total_growth or 0)>24 then
+            buttons={};autopass.enabled=false;pass_chain.active=false;auto_finished=true
+            movement.pair_89_stopped=true
+            auto_write(emu.framecount(),"approach_89_regression_stop",holder,target,selected_pass_button,
+              "streak="..tostring(movement.pair_89_regression)..
+              "|cumulative_growth="..tostring(movement.pair_89_total_growth))
+          end
         end
         local feedback=Ordered.observe(pass_chain.approach_state,measurement)
         if movement.recovery_phase=="awaiting_sample" then
