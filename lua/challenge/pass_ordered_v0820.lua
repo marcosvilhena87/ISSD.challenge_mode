@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.56",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
+local M={VERSION="0.8.58",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -30,7 +30,7 @@ function M.goalward_checkpoint(state,frames,measurement)
   return false,"carrier_not_advancing"
  end
  local baseline=state.pair_710_checkpoint_distance or state.initial_distance
- if not baseline or baseline-measurement.distance<25 then return false,"insufficient_stage_gain" end
+ if not baseline or baseline-measurement.distance<25 or measurement.distance>state.best_distance+12 then return false,"insufficient_stage_gain" end
  return true,"goalward_receiver_stage_progress"
 end
 function M.can_extend(state,frames,measurement)
@@ -45,7 +45,8 @@ function M.can_extend(state,frames,measurement)
  if state and (state.pair_710_right_streak or 0)>=2
    and (state.pair_710_extension_count or 0)<2
    and (state.pair_710_last_carrier or 0)>0.5
-   and (state.pair_710_last_distance or measurement.distance)>=measurement.distance-8 then
+   and (state.pair_710_recent_net_gain or 0)>=8
+   and measurement.distance<=state.best_distance+12 then
   return true,"pair_710_recent_right_progress"
  end
  if state and state.pair_67_up_streak and state.pair_67_up_streak>=2
