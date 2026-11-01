@@ -650,10 +650,19 @@ while true do
         local motion_feedback=Ordered.observe_motion(movement,sample_for_auto,holder,target)
         local motion=movement.last_motion
         if motion_feedback=="motion_delayed_or_still" then
-
           movement.still_counts=movement.still_counts or {}
           local k=movement.burst_direction
-          if k        elseif motion_feedback=="motion_calibrated" then
+          if k then
+            movement.still_counts[k]=(movement.still_counts[k] or 0)+1
+            if movement.still_counts[k]>=3 then
+              movement.last_still_direction=k
+              movement.penalties=movement.penalties or {}
+              movement.penalties[k]=(movement.penalties[k] or 0)+18
+              auto_write(emu.framecount(),"approach_direction_still",holder,target,selected_pass_button,
+                "direction="..k)
+            end
+          end
+        elseif motion_feedback=="motion_calibrated" then
           movement.still_counts={}
         end
         if motion then
