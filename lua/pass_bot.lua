@@ -759,11 +759,37 @@ while true do
               "|suspended="..tostring(movement.right_suspended))
           end
           if movement.right_suspended then
-            buttons={};autopass.enabled=false;pass_chain.active=false;auto_finished=true
-            auto_write(emu.framecount(),"approach_right_blocked",holder,target,selected_pass_button,
-              "reason="..tostring(movement.right_block_reason)..
-              "|distance_change="..tostring(right_delta)..
-              "|no_up_left_fallback=true")
+            -- Controlled retry uses actual target vector and retains the
+            -- absolute 210-frame cap; do not kill the chain on one bad burst.
+            local used=movement.controlled_58_retries or 0
+            local remaining=Ordered.MAX_APPROACH_ABSOLUTE-(pass_chain.approach_frames or 0)
+            local m=Feet.measure(sample_for_auto,5,8)
+            if used<2 and remaining>12 and m then
+              movement.controlled_58_retries=used+1
+              movement.right_suspended=false
+              movement.right_58_regressions=0
+              movement.right_still=0
+              movement.right_small_negative=0
+              movement.right_cumulative_regression=0
+              movement.burst_remaining=0
+              movement.burst_buttons=nil
+              pass_chain.approach_neutral=false
+              movement.approach_limit=math.min(Ordered.MAX_APPROACH_ABSOLUTE,
+                math.max(movement.approach_limit or Ordered.MAX_APPROACH,
+                  (pass_chain.approach_frames or 0)+16))
+              buttons={}
+              auto_write(emu.framecount(),"approach_58_controlled_retry",5,8,selected_pass_button,
+                "retry="..tostring(used+1)..
+                "|dx="..tostring(m.dx).."|dy="..tostring(m.dy)..
+                "|distance="..tostring(m.distance)..
+                "|remaining="..tostring(remaining))
+            else
+              buttons={};autopass.enabled=false;pass_chain.active=false;auto_finished=true
+              auto_write(emu.framecount(),"approach_right_blocked",holder,target,selected_pass_button,
+                "reason="..tostring(movement.right_block_reason)..
+                "|distance_change="..tostring(right_delta)..
+                "|controlled_retries="..tostring(used))
+            end
           end
         end
         local diagonal_result,growth,lateral_growth=Ordered.guard_diagonal(movement,measurement)
@@ -1171,6 +1197,19 @@ while true do
           "|B="..tostring(buttons.B==true)..
           "|direction="..tostring(autopass.facing_direction)..
           "|distance="..tostring((Feet.measure(sample_for_auto,7,10) or {}).distance))
+      end
+    end
+    if holder==4 and autopass.target==5 and reason=="pass_pulse" then
+      local player4
+      for _,v in ipairs(sample_for_auto and sample_for_auto.players or {}) do
+        if v.id==4 then player4=v;break end
+      end
+      local ball=sample_for_auto and sample_for_auto.ball
+      if ball and player4 then
+        auto_write(emu.framecount(),"pass_45_ball_relative_at_b",4,5,selected_pass_button,
+          "dx="..tostring(ball.x-player4.x)..
+          "|dy="..tostring(ball.y-player4.y)..
+          "|facing_command="..tostring(autopass.facing_direction))
       end
     end
     if holder==4 and autopass.target==5 and reason=="pre_down_step" then
