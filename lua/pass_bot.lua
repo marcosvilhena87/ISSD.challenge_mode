@@ -688,7 +688,7 @@ while true do
         local pos=Ordered.capture(sample_for_auto,7,10)
         if pos and (pass_chain.approach_frames or 0)%4==0 then
           auto_write(emu.framecount(),"approach_710_ab_probe",7,10,selected_pass_button,
-            "phase="DIRECTION_ONLY_V0877"..
+            "phase=DIRECTION_ONLY_V0877"..
             "|holder_x="..tostring(pos.hx).."|holder_y="..tostring(pos.hy)..
             "|receiver_x="..tostring(pos.tx).."|receiver_y="..tostring(pos.ty)..
             "|gap="..tostring(ball_gap_710(sample_for_auto)))
