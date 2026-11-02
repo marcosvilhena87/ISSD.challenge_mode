@@ -154,6 +154,9 @@ end
 function M.step(sample,holder,target,state)
  local a,b=find(sample,holder),find(sample,target)
  if not a or not b or not sample.ball then return {},"missing_geometry" end
+ if holder==7 and target==10 and not M.capture(sample,holder,target) then
+  return {},"invalid_coordinates"
+ end
  local bx,by=sample.ball.x-a.x,sample.ball.y-a.y
  if bx*bx+by*by>18*18 then return {},"ball_not_at_feet" end
  local safe,why,metrics=Feet.check(sample,holder,target)
