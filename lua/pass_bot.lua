@@ -646,6 +646,11 @@ release()
 local exclusive_62={state="ready",start=0,shots=0}
 local exclusive_58={state="ready",start=0,shots=0}
 local pass_clock_expired_frame=nil
+-- v0.9.17: passive per-pair timing, scoped to the observed spatial holder.
+local pair_trace={holder=nil,since=nil,last_x=nil,last_y=nil,moving=0,still=0,last_b=nil}
+local function pair_trace_log(frame,event,from,to,detail)
+ auto_write(frame,"pair917_"..event,from,to,"OBSERVE",detail)
+end
 while true do
   if armed then score_log(emu.framecount(),"armed",false) end
   local p=observe()
@@ -654,6 +659,25 @@ while true do
    local ss,err=Spatial.read(memory.read_s16_le)
    sample_for_auto=ss
    if ss then
+    local pf=emu.framecount()
+    local current=spatial.holder
+    local xy=current and Ordered.capture(ss,current,current)
+    if xy and current==pair_trace.holder then
+      local moved=pair_trace.last_x and
+        (math.abs(xy.hx-pair_trace.last_x)+math.abs(xy.hy-pair_trace.last_y)>0)
+      if moved then pair_trace.moving=pair_trace.moving+1
+      else pair_trace.still=pair_trace.still+1 end
+    end
+    if current~=pair_trace.holder then
+      if pair_trace.holder and pair_trace.since then
+        pair_trace_log(pf,"holder_summary",pair_trace.holder,current,
+          "frames="..(pf-pair_trace.since).."|moving="..pair_trace.moving..
+          "|still="..pair_trace.still..
+          "|last_b="..tostring(pair_trace.last_b))
+      end
+      pair_trace={holder=current,since=pf,last_x=nil,last_y=nil,moving=0,still=0,last_b=nil}
+    end
+    if xy then pair_trace.last_x=xy.hx;pair_trace.last_y=xy.hy end
     local event=spatial:step(ss,emu.framecount())
     if event then
      last_spatial_frame=event.frame
@@ -3093,6 +3117,22 @@ while true do
     end
   end
   local exclusive_receiver=nil
+  -- v0.9.17: one-frame safe fast path for 10->11 when geometry is already
+  -- passable, without walking or overriding another B/X.
+  if armed and clock_started and pass_chain.active and
+     not auto_finished and sample_for_auto and spatial.holder==10 and
+     not spatial.visited[11] and not buttons.B and not buttons.X then
+    local direct=pair_geometry(sample_for_auto,10,11)
+    local gap=carrier_gap(sample_for_auto,10)
+    if direct and gap and gap<=18 and direct.distance>=28 and
+       direct.distance<=175 and math.abs(direct.dy)<=95 and
+       not lane_blocker(sample_for_auto,10,11) then
+      buttons={};buttons[direct.direction]=true;buttons.B=true
+      exclusive_receiver=11
+      auto_write(emu.framecount(),"pair917_direct_10_11",10,11,"B",
+        "distance="..string.format("%.2f",direct.distance))
+    end
+  end
   -- v0.9.14: one arbiter for two bounded, first-time pass priorities.
   -- Prefer 6->2 at opening; 5->8 when 5 is the stable holder later.
   local from,to,ctrl
@@ -3142,7 +3182,7 @@ while true do
     elseif not carrier or carrier>18 then reason="possession_unverified"
     elseif geom.distance>320 then reason="outside_bounded_route"
     elseif from==5 and ctrl.worse_frames>=5 then reason="distance_increasing"
-    elseif from==5 and elapsed>=12 and geom.distance>250 and ctrl.best>geom.distance-15
+    elseif from==5 and elapsed>=9 and geom.distance>250 and ctrl.best>geom.distance-12
        then reason="poor_progress"
     elseif walked>155 then reason="walk_limit"
     elseif elapsed>=(from==6 and 66 or 78) then reason="frame_limit"
@@ -3204,6 +3244,7 @@ while true do
   -- v0.9.1: final output gate for both ordinary and special B passes.
   -- Never rewrite the one-shot finish X or non-pass movement.
   if armed and buttons.B and not buttons.X and sample_for_auto and spatial.holder then
+    if pair_trace.holder==spatial.holder then pair_trace.last_b=emu.framecount() end
     local sender=spatial.holder
     local special=(long_710.phase=="face" or long_710.phase=="observe")
       and long_710.origin==sender and long_710.target
