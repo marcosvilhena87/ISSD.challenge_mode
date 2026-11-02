@@ -124,6 +124,10 @@ local pass_clock=nil
 local clock_start_pending=false
 local clock_started=false
 local clock_expired_logged=false
+local score_last_visits=0
+local score_last_frame=nil
+local score_last_time=nil
+local score_start_frame=nil
 local gate_fast_retries={}
 local previous_clock_read=nil
 local bonus=Bonus.new()
@@ -532,6 +536,7 @@ while true do
       previous_clock_read.time and ts.time and
       previous_clock_read.time<=30 and previous_clock_read.time>ts.time and ts.time>0 then
      clock_start_pending=false;clock_started=true
+     score_start_frame=emu.framecount();score_last_frame=nil;score_last_time=nil;score_last_visits=0
      autopass.enabled=true;autopass.start_frame=emu.framecount()
      pass_chain.active=true;pass_chain.next_frame=emu.framecount()
      long_710.watchdog_last_action=emu.framecount()
@@ -623,6 +628,7 @@ while true do
         armed=true;reach=Reach.new();tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();bonus=Bonus.new();completion_frame=nil;last_spatial_frame=nil;autopass=Auto.new();finish=Finish.new();goal_monitor=GoalEvidence.new(GoalEvidence.read(memory.read_u8,memory.read_u16_le,emu.framecount()));finish.enabled=auto_finish_queued;auto_finish_queued=false
         clock_start_pending=pending_auto and selected_pass_button=="B"
         clock_started=false;clock_expired_logged=false;previous_clock_read=nil;pass_clock=nil;gate_fast_retries={}
+        score_start_frame=nil;score_last_frame=nil;score_last_time=nil;score_last_visits=0
         autopass.enabled=false;autopass.button=selected_pass_button;autopass.start_frame=emu.framecount();autopass.direction=selected_direction;autopass.trigger_delay=trigger_mode=="B" and 12 or 0;autopass.calibration_mode=calibration_mode
         pending_auto=false;auto_finished=false;previous_gate=nil
         pass_chain={active=false,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0,route_index=1,approach_frames=0,approach_neutral=false,approach_state={}}
@@ -671,6 +677,21 @@ while true do
     end
     auto_write(emu.framecount(),"pass_time_budget_expired",spatial.holder,nil,"OBSERVE",
       "time=0|visited="..chain_visits.."/10|limit=30_game_seconds")
+  end
+  -- v0.9.8: measure time cost of each new player, without treating
+  -- intermediate relays as new achievements.
+  if clock_started and chain_visits>score_last_visits then
+    local frame=emu.framecount()
+    local current_time=pass_clock and pass_clock.time
+    auto_write(frame,"time_score_milestone",spatial.holder,nil,"OBSERVE",
+      "visited="..chain_visits.."/10|time_left="..tostring(current_time)..
+      "|frames_since_previous="..tostring(score_last_frame and frame-score_last_frame or 0)..
+      "|seconds_since_previous="..tostring(score_last_time and current_time and
+          score_last_time-current_time or 0)..
+      "|elapsed_frames="..tostring(score_start_frame and frame-score_start_frame or 0))
+    score_last_visits=chain_visits
+    score_last_frame=frame
+    score_last_time=current_time
   end
   if pass_chain.active and chain_visits>=10 then
     pass_chain.active=false;autopass.enabled=false;auto_finished=true
@@ -750,7 +771,8 @@ while true do
   -- v0.9.4: take active control before the previously passive 90-frame watchdog.
   local clock_left=pass_clock and pass_clock.time
   local clock_valid=clock_left and clock_left>=0 and clock_left<=30
-  local wd_threshold=(clock_valid and clock_left<=10) and 12 or 24
+  local wd_threshold=(clock_valid and clock_left<=10) and 8 or
+    ((clock_valid and clock_left<=15) and 16 or 24)
   if pass_chain.active and clock_started and not clock_expired_logged and
      long_710.phase=="ready" and wd_target and
      wd_frame-long_710.watchdog_last_action>=wd_threshold and
@@ -1976,8 +1998,12 @@ while true do
           local next_auto=Auto.new()
           next_auto.enabled=true;next_auto.button="B";next_auto.direction=selected_direction
           next_auto.start_frame=emu.framecount();next_auto.trigger_delay=trigger_mode=="B" and 12 or 0;next_auto.calibration_mode=calibration_mode
-          autopass=next_auto;pass_chain.next_frame=emu.framecount()+8
-          auto_write(emu.framecount(),"chain_next_pending",holder,nil,selected_pass_button,"cooldown_frames=8")
+          autopass=next_auto
+          local next_delay=(pass_clock and pass_clock.time and pass_clock.time<=15
+            and pass_clock.time>0) and 4 or 8
+          pass_chain.next_frame=emu.framecount()+next_delay
+          auto_write(emu.framecount(),"chain_next_pending",holder,nil,selected_pass_button,
+            "cooldown_frames="..next_delay.."|time_left="..tostring(pass_clock and pass_clock.time))
         end
       else
         pass_chain.active=false;autopass.enabled=false;auto_finished=true
