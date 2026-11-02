@@ -592,6 +592,36 @@ while true do
           "|stage="..tostring(priority_stage))
       end
     end
+    -- v0.8.76: one optional repeat 7->10, only when 10 was already
+    -- actually observed and 11 remains unvisited. Does NOT count a new visit.
+    -- The normal 7->11 route is restored when the repeat is consumed.
+    if pass_chain.active and holder==7 and autopass.phase=="idle"
+       and spatial.visited[10] and not spatial.visited[11]
+       and not pass_chain.repeat_710_used then
+      if not pass_chain.repeat_710_started then
+        pass_chain.repeat_710_started=true
+        pass_chain.approach_frames=0
+        pass_chain.approach_neutral=false
+        pass_chain.approach_state={}
+        auto_write(emu.framecount(),"repeat_710_started",7,10,selected_pass_button,
+          "already_visited_10=true|count_additional_visit=false")
+      end
+      local m=Feet.measure(sample_for_auto,7,10)
+      plan=nil
+      selector_reason="approach_required"
+      bridge_info=bridge_info or {}
+      bridge_info.target=10
+      if m and m.distance<=Early.MAX_DISTANCE and m.lateral<=Early.MAX_LATERAL
+         and pass_chain.approach_frames>=Early.MIN_APPROACH then
+        local eligible=Early.evaluate(sample_for_auto,7,10,pass_chain.approach_frames,false)
+        if eligible then
+          plan={sequence={10},target=10,aligned=true,early_710_trial=true}
+          pass_chain.repeat_710_used=true
+          auto_write(emu.framecount(),"repeat_710_pass_authorized",7,10,selected_pass_button,
+            "distance="..tostring(m.distance).."|lateral="..tostring(m.lateral))
+        end
+      end
+    end
     -- 7→10: a single bounded, explicit early trial. Other pairs untouched.
     local early_candidate=false
     local early_distance=nil
@@ -655,6 +685,14 @@ while true do
         end
       end
       if holder==7 and target==10 then
+        local pos=Ordered.capture(sample_for_auto,7,10)
+        if pos and (pass_chain.approach_frames or 0)%4==0 then
+          auto_write(emu.framecount(),"approach_710_ab_probe",7,10,selected_pass_button,
+            "phase="..((math.floor((pass_chain.approach_frames or 0)/8)%2==0) and "RIGHT_ONLY" or "RIGHT_Y")..
+            "|holder_x="..tostring(pos.hx).."|holder_y="..tostring(pos.hy)..
+            "|receiver_x="..tostring(pos.tx).."|receiver_y="..tostring(pos.ty)..
+            "|gap="..tostring(ball_gap_710(sample_for_auto)))
+        end
         local gap=ball_gap_710(sample_for_auto)
         if gap then
           auto_write(emu.framecount(),"approach_710_ball_gap",7,10,selected_pass_button,
@@ -1204,7 +1242,9 @@ while true do
           if reason=="approach_step" then
             -- Dash applies ONLY to movement during 7->10, never a pass.
             -- Keep burst_direction cardinal; Y is not a steering axis.
-            if holder==7 and target==10 and not movement.dash_710_disabled and not buttons.B and
+            if holder==7 and target==10 and not movement.dash_710_disabled
+                and math.floor((pass_chain.approach_frames or 0)/8)%2==1
+                and (ball_gap_710(sample_for_auto) or math.huge)<=12 and not buttons.B and
                 (buttons.Right or buttons.Left or buttons.Up or buttons.Down) then
               buttons.Y=true
               auto_write(emu.framecount(),"approach_710_dash_start",7,10,selected_pass_button,
@@ -1496,6 +1536,12 @@ while true do
             "|visited_actual="..tostring(spatial.visited[holder] and true or false)..
             "|next_unvisited="..tostring(next_target)..
             "|route_reason="..tostring(next_reason))
+        end
+        if holder==7 and autopass.target==10 and pass_chain.repeat_710_started then
+          pass_chain.repeat_710_used=true
+          auto_write(emu.framecount(),"repeat_710_result",autopass.origin,holder,selected_pass_button,
+            "actual_receiver="..tostring(holder)..
+            "|count_additional_visit=false")
         end
         if holder==autopass.target then
           pass_chain.route_index=pass_chain.route_index+1
