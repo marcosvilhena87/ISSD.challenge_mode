@@ -26,7 +26,10 @@ package.loaded["challenge.pass_priority_v087"]=nil
 package.loaded["challenge.pass_ordered_v0820"]=nil
 local Priority=require("challenge.pass_priority_v087")
 local Ordered=require("challenge.pass_ordered_v0820")
+package.loaded["challenge.pass_early_v0865"]=nil
 local Early=require("challenge.pass_early_v0865")
+assert(Early.VERSION=="0.8.70" and Early.TARGET_DISTANCE==160 and Early.MAX_DISTANCE==180,
+  "v0.8.70 requires updated challenge.pass_early_v0865; restart main.lua")
 local Reach=require("challenge.pass_reach_v0863")
 assert(type(Ordered.observe)=="function" and type(Ordered.step)=="function",
   "v0.8.23 requires updated challenge.pass_ordered_v0820; restart main.lua")
@@ -544,6 +547,21 @@ while true do
       end
     elseif not integration_ok then selector_reason="integration_selftest_failed"
     else selector_reason="no_stable_holder" end
+    -- v0.8.70: do not dispatch a 7->10 pass just because the general
+    -- passing radius (190 WRAM) has been reached. Approach to <=180 instead.
+    -- This applies to normal plans as well as the earlier experimental path.
+    -- 160 is the desired proximity; 180 is the bounded release threshold.
+    if pass_chain.active and autopass.phase=="idle" and holder==7
+       and plan and plan.target==10 then
+      local close=Feet.measure(sample_for_auto,7,10)
+      if not close or close.distance>Early.MAX_DISTANCE
+         or close.lateral>Early.MAX_LATERAL then
+        plan=nil
+        selector_reason="approach_required"
+        bridge_info=bridge_info or {}
+        bridge_info.target=10
+      end
+    end
     local report=bridge_info and bridge_info.report
     local receiver=plan and {id=plan.target,aligned=plan.aligned}
     if autopass.phase=="idle" and holder then
@@ -569,6 +587,13 @@ while true do
        and pass_chain.active and holder==7 and bridge_info and bridge_info.target==10 then
       local eligible,early_why,m=Early.evaluate(sample_for_auto,holder,10,
         pass_chain.approach_frames or 0,pass_chain.early_710_used)
+      if not eligible and m and (pass_chain.approach_frames or 0)%12==0 then
+        auto_write(emu.framecount(),"approach_710_close_gate",7,10,selected_pass_button,
+          "distance="..string.format("%.2f",m.distance)..
+          "|lateral="..string.format("%.2f",m.lateral)..
+          "|target="..Early.TARGET_DISTANCE.."|release_max="..Early.MAX_DISTANCE..
+          "|reason="..tostring(early_why))
+      end
       if eligible then
         plan={sequence={10},target=10,aligned=true,early_710_trial=true}
         early_candidate=true
@@ -582,7 +607,7 @@ while true do
           "distance="..string.format("%.2f",m.distance)..
           "|lateral="..string.format("%.2f",m.lateral)..
           "|approach_frames="..tostring(pass_chain.approach_frames)..
-          "|max_distance="..Early.MAX_DISTANCE..
+          "|max_distance="..Early.MAX_DISTANCE.."|target_distance="..Early.TARGET_DISTANCE..
           "|confidence=experimental_unverified")
       end
     end

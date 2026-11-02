@@ -1,7 +1,9 @@
 -- v0.8.65: bounded early-pass trial for player 7 -> 10.
 -- No claim that a long pass will reach the intended receiver.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.65",MIN_APPROACH=24,MAX_DISTANCE=420,MAX_LATERAL=160}
+-- v0.8.70: close-range release, based on observed prior receiver gaps (~153 WRAM median).
+-- Keep the old 420 hard guard in Auto as an additional independent safety check.
+local M={VERSION="0.8.70",MIN_APPROACH=24,TARGET_DISTANCE=160,MAX_DISTANCE=180,MAX_LATERAL=100}
 function M.evaluate(sample,holder,target,frames,already)
  if already or holder~=7 or target~=10 or frames<M.MIN_APPROACH then return false,"not_eligible" end
  local m=Feet.measure(sample,7,10)
