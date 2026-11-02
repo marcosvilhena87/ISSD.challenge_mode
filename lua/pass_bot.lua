@@ -660,6 +660,7 @@ while true do
       local target=bridge_info and bridge_info.target
       local movement=pass_chain.approach_state
       movement.current_frame=emu.framecount()
+      local approach_absolute=(holder==7 and target==10) and Ordered.MAX_APPROACH_710_ABSOLUTE or Ordered.MAX_APPROACH_ABSOLUTE
       -- Detect the same X coordinate persisting across Dash observations.
       -- Switch to plain directional running rather than repeating Y in place.
       if holder==7 and target==10 then
@@ -816,7 +817,7 @@ while true do
         -- Progressive 7->10 budget: extra time only if recent distance or
         -- measured X progress indicates meaningful movement, never unbounded.
         if not can_extend and holder==7 and target==10
-           and (pass_chain.approach_frames or 0)<Ordered.MAX_APPROACH_ABSOLUTE
+           and (pass_chain.approach_frames or 0)<approach_absolute
            and (movement.pair_710_progressive_extensions or 0)<8 then
           local positions=Ordered.capture(sample_for_auto,7,10)
           local last=movement.pair_710_progressive_checkpoint
@@ -845,7 +846,7 @@ while true do
               "|limit="..tostring(approach_limit))
           end
         end
-        if can_extend and approach_limit<Ordered.MAX_APPROACH_ABSOLUTE then
+        if can_extend and approach_limit<approach_absolute then
           if why=="pair_710_progressive_distance" then
             movement.pair_710_progressive_extensions=(movement.pair_710_progressive_extensions or 0)+1
           end
@@ -858,7 +859,7 @@ while true do
             auto_write(emu.framecount(),"approach_710_goalward_checkpoint",holder,target,selected_pass_button,
               "stage="..tostring(movement.pair_710_checkpoints)..
               "|distance="..tostring(measurement.distance)..
-              "|absolute="..tostring(Ordered.MAX_APPROACH_ABSOLUTE))
+              "|absolute="..tostring(approach_absolute))
           end
           if why=="pair_89_receiver_escape_progress" then
             movement.pair_89_extension_count=(movement.pair_89_extension_count or 0)+1
@@ -872,7 +873,7 @@ while true do
           if why=="recent_progress_verified" then
             movement.recent_extension_count=(movement.recent_extension_count or 0)+1
           end
-          movement.approach_limit=math.min(approach_limit+Ordered.EXTEND_FRAMES,Ordered.MAX_APPROACH_ABSOLUTE)
+          movement.approach_limit=math.min(approach_limit+Ordered.EXTEND_FRAMES,approach_absolute)
           auto_write(emu.framecount(),"approach_extended",holder,target,selected_pass_button,
             "old_limit="..approach_limit.."|new_limit="..movement.approach_limit..
             "|distance="..tostring(measurement and measurement.distance)..
@@ -882,8 +883,8 @@ while true do
           pass_chain.approach_neutral=false
         else
           local recovered,dir=Ordered.recover(movement,measurement,holder,target)
-          if recovered and not movement.pair_89_stopped and (pass_chain.approach_frames or 0)<Ordered.MAX_APPROACH_ABSOLUTE then
-            movement.approach_limit=math.min(approach_limit+(movement.recovery_left or 16),Ordered.MAX_APPROACH_ABSOLUTE)
+          if recovered and not movement.pair_89_stopped and (pass_chain.approach_frames or 0)<approach_absolute then
+            movement.approach_limit=math.min(approach_limit+(movement.recovery_left or 16),approach_absolute)
             movement.burst_remaining=0;movement.burst_buttons=nil
             pass_chain.approach_neutral=false;buttons={};reason="approach_recovery_neutral"
             auto_write(emu.framecount(),"approach_recovery_started",holder,target,selected_pass_button,
@@ -892,7 +893,7 @@ while true do
           reason="approach_timeout";buttons={};autopass.enabled=false
           pass_chain.active=false;auto_finished=true
           auto_write(emu.framecount(),"approach_timeout",holder,target,selected_pass_button,
-            "limit="..approach_limit.."|absolute="..Ordered.MAX_APPROACH_ABSOLUTE.."|reason="..why)
+            "limit="..approach_limit.."|absolute="..approach_absolute.."|reason="..why)
           end
         end
       elseif pass_chain.approach_neutral and (movement.right_followup_left or 0)>0 then
@@ -982,7 +983,7 @@ while true do
             -- Controlled retry uses actual target vector and retains the
             -- absolute 210-frame cap; do not kill the chain on one bad burst.
             local used=movement.controlled_58_retries or 0
-            local remaining=Ordered.MAX_APPROACH_ABSOLUTE-(pass_chain.approach_frames or 0)
+            local remaining=approach_absolute-(pass_chain.approach_frames or 0)
             local m=Feet.measure(sample_for_auto,5,8)
             if used<2 and remaining>12 and m then
               movement.controlled_58_retries=used+1
@@ -994,7 +995,7 @@ while true do
               movement.burst_remaining=0
               movement.burst_buttons=nil
               pass_chain.approach_neutral=false
-              movement.approach_limit=math.min(Ordered.MAX_APPROACH_ABSOLUTE,
+              movement.approach_limit=math.min(approach_absolute,
                 math.max(movement.approach_limit or Ordered.MAX_APPROACH,
                   (pass_chain.approach_frames or 0)+16))
               buttons={}
@@ -1224,7 +1225,7 @@ while true do
             "gain="..tostring(movement.recovery_probe_gain))
           if holder==6 and target==7 and movement.pair_67_diagonal_disabled
               and (movement.pair_67_cardinal_flip or 0)==0
-              and (pass_chain.approach_frames or 0)+16<Ordered.MAX_APPROACH_ABSOLUTE then
+              and (pass_chain.approach_frames or 0)+16<approach_absolute then
             movement.pair_67_cardinal_flip=1
             movement.recovery_probe_failed=false
             movement.recovery_exploratory=false
@@ -1232,7 +1233,7 @@ while true do
             movement.recovery_probe_gain=nil
             movement.approach_limit=math.min(
               math.max(movement.approach_limit or Ordered.MAX_APPROACH,
-                (pass_chain.approach_frames or 0)+16),Ordered.MAX_APPROACH_ABSOLUTE)
+                (pass_chain.approach_frames or 0)+16),approach_absolute)
             movement.burst_remaining=0;movement.burst_buttons=nil
             buttons={}
             auto_write(emu.framecount(),"approach_67_cardinal_retry",holder,target,selected_pass_button,
@@ -1244,7 +1245,7 @@ while true do
           auto_write(emu.framecount(),"approach_probe_result",holder,target,selected_pass_button,
             "gain="..tostring(movement.recovery_probe_gain))
           movement.recovery_exploratory=false
-          movement.approach_limit=math.min(math.max(movement.approach_limit or Ordered.MAX_APPROACH,pass_chain.approach_frames+16),Ordered.MAX_APPROACH_ABSOLUTE)
+          movement.approach_limit=math.min(math.max(movement.approach_limit or Ordered.MAX_APPROACH,pass_chain.approach_frames+16),approach_absolute)
         end
         if holder==5 and target==8 and (movement.recent_progress or 0)>=2 then
           auto_write(emu.framecount(),"approach_recent_progress",holder,target,selected_pass_button,
@@ -1263,8 +1264,8 @@ while true do
           auto_write(emu.framecount(),"approach_no_improvement",holder,target,selected_pass_button,
             "bad_bursts="..tostring(movement.bad_bursts))
           local recovered,dir=Ordered.recover(movement,measurement,holder,target)
-          if recovered and (pass_chain.approach_frames or 0)<Ordered.MAX_APPROACH_ABSOLUTE then
-            movement.approach_limit=math.min(math.max(movement.approach_limit or Ordered.MAX_APPROACH,pass_chain.approach_frames+(movement.recovery_left or 16)),Ordered.MAX_APPROACH_ABSOLUTE)
+          if recovered and (pass_chain.approach_frames or 0)<approach_absolute then
+            movement.approach_limit=math.min(math.max(movement.approach_limit or Ordered.MAX_APPROACH,pass_chain.approach_frames+(movement.recovery_left or 16)),approach_absolute)
             auto_write(emu.framecount(),"approach_recovery_started",holder,target,selected_pass_button,
               "direction="..dir.."|cause=no_improvement")
           else
