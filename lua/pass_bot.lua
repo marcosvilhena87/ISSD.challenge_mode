@@ -1814,6 +1814,40 @@ while true do
         "|pass_b="..tostring(buttons.B==true))
     end
   end
+  -- v0.8.80 final frame guard: no controls on impossible 7/10 geometry.
+  if armed and holder==7 and sample_for_auto and pass_chain.approach_state
+     and (pass_chain.approach_state.target==10 or
+          (bridge_info and bridge_info.target==10)) then
+    local v=Ordered.capture(sample_for_auto,7,10)
+    if not v then
+      buttons={}
+      local st=pass_chain.approach_state
+      st.pair_710_output_invalid=(st.pair_710_output_invalid or 0)+1
+      if st.pair_710_output_invalid>=3 then
+        pass_chain.active=false;autopass.enabled=false;auto_finished=true
+        auto_write(emu.framecount(),"approach_710_invalid_coordinates",7,10,selected_pass_button,
+          "reason=output_guard|invalid_frames="..tostring(st.pair_710_output_invalid))
+      end
+    else
+      local st=pass_chain.approach_state
+      st.pair_710_output_invalid=0
+      local empty=not (buttons.Right or buttons.Left or buttons.Up or buttons.Down
+                      or buttons.B or buttons.X or buttons.Y)
+      if empty and reason=="approach_neutral" then
+        st.pair_710_output_neutral=(st.pair_710_output_neutral or 0)+1
+        if st.pair_710_output_neutral>=5 then
+          pass_chain.approach_neutral=false
+          st.right_followup_left=0;st.right_settle_remaining=0
+          st.burst_remaining=0;st.burst_buttons=nil
+          st.pair_710_output_neutral=0
+          auto_write(emu.framecount(),"approach_710_neutral_watchdog",7,10,selected_pass_button,
+            "action=clear_neutral_at_output")
+        end
+      else
+        st.pair_710_output_neutral=0
+      end
+    end
+  end
   joypad.set(buttons,1)
   emu.frameadvance()
 end
