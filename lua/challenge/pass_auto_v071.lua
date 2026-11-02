@@ -166,7 +166,13 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   local Feet=require("challenge.pass_feet_v0815")
   if t.hold_count==0 then
    local safe,why=Feet.check(sample,t.origin,t.target,t.feet_initial)
-   if safe then
+   if t.early_710_trial and t.origin==7 and t.target==10 then
+    local Early=require("challenge.pass_early_v0865")
+    local allowed,guard_reason=Early.evaluate(sample,7,10,Early.MIN_APPROACH,false)
+    if not allowed then t.enabled=false;t.phase="done";return empty,"early_710_guard_"..guard_reason end
+    safe=true;why="early_710_guarded_geometry"
+   end
+   if safe and not t.early_710_trial then
     local BallLine=require("challenge.pass_alignment_ball_v0817")
     local aligned,alignment_reason=BallLine.check(sample,t.origin,t.target)
     if t.origin==6 and t.target==3 and
@@ -256,6 +262,7 @@ function M.step(t,frame,sample,holder,visited,plan,bonus_finished)
   t.wait_frames=range<=150 and 90 or (range<=300 and 150 or 210)
   t.extended=false;t.first_motion_frame=nil;t.flight_samples={}
   t.origin=holder;t.target=target
+  t.early_710_trial=(plan and plan.early_710_trial==true and holder==7 and target==10) or false
   local Feet=require("challenge.pass_feet_v0815")
   t.feet_initial=Feet.measure(sample,holder,target)
   t.next_phase=(plan and plan.aligned==false) and "align" or "hold"
