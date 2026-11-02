@@ -703,6 +703,9 @@ while true do
             local holder_vx=(current.hx-previous.hx)/dt
             local receiver_vx=(current.tx-previous.tx)/dt
             local closing=holder_vx-receiver_vx
+            movement.pair_710_closure_samples=movement.pair_710_closure_samples or {}
+            table.insert(movement.pair_710_closure_samples,{frame=emu.framecount(),closing=closing})
+            while #movement.pair_710_closure_samples>24 do table.remove(movement.pair_710_closure_samples,1) end
             local near_stop=math.abs(receiver_vx)<=0.4
             if near_stop then
               movement.pair_710_slow_frames=(movement.pair_710_slow_frames or 0)+dt
@@ -810,7 +813,21 @@ while true do
         else
           can_extend,why=Ordered.can_extend(movement,pass_chain.approach_frames,measurement)
         end
+        if not can_extend and holder==7 and target==10 then
+          local recent,recent_reason=Ordered.recent_closure_710(movement,pass_chain.approach_frames,measurement)
+          if recent then
+            can_extend,why=true,recent_reason
+            auto_write(emu.framecount(),"approach_710_recent_closure_extension",7,10,selected_pass_button,
+              "frames="..tostring(pass_chain.approach_frames)..
+              "|distance="..tostring(measurement and measurement.distance)..
+              "|best="..tostring(movement.best_distance)..
+              "|limit="..tostring(approach_limit))
+          end
+        end
         if can_extend and approach_limit<Ordered.MAX_APPROACH_ABSOLUTE then
+          if why=="pair_710_recent_measured_closure" then
+            movement.pair_710_recent_extensions=(movement.pair_710_recent_extensions or 0)+1
+          end
           if why=="goalward_receiver_stage_progress" then
             movement.pair_710_checkpoints=(movement.pair_710_checkpoints or 0)+1
             movement.pair_710_checkpoint_distance=measurement.distance
