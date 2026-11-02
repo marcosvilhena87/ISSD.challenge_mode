@@ -316,7 +316,9 @@ local pass_chain={active=false,passes=0,next_frame=0,limit=18,started=false,prev
 -- v0.8.84 long-range pass trial integrated in the normal relay sequence.
 local long_710={phase="ready",start=nil,initial=nil,direction=nil,shot_frame=nil,
  target=nil,origin=nil,trial_kind=nil,returns=0,missing_attempts=0,
- last_holder=nil,return_due=false,walk_ticks=0,walk_start=nil,walk_dir=nil}
+ last_holder=nil,return_due=false,walk_ticks=0,walk_start=nil,walk_dir=nil,
+ advance_start=nil,advance_origin=nil,advance_target=nil,
+ attempts={},cooldown_until=0,receiver_start=nil,carrier_start=nil}
 -- Last missing outfield player: player IDs 2..11 (10 players), spatial evidence only.
 local function last_missing_710(visited,holder)
  if not visited then return nil end
@@ -571,7 +573,7 @@ while true do
   local priority_missing=last_missing_710(spatial.visited,spatial.holder)
   local priority_lock=pass_chain.active and
       (priority_missing~=nil or long_710.return_due or
-       long_710.phase=="sidestep" or long_710.phase=="face" or
+       long_710.phase=="sidestep" or long_710.phase=="advance" or long_710.phase=="face" or
        long_710.phase=="observe")
   if armed and autopass.enabled and not auto_finished and sample_for_auto
       and not priority_lock
@@ -1901,6 +1903,13 @@ while true do
     end
     long_710.last_holder=spatial.holder
   end
+  -- Rearm the directional controller for a NEW relay only after completion.
+  -- Bound retries by carrier/receiver pair and a cooldown in real frames.
+  if long_710.phase=="done" and emu.framecount()>=(long_710.cooldown_until or 0) then
+    long_710.phase="ready"
+    auto_write(emu.framecount(),"long_pass_rearmed",spatial.holder,nil,"B",
+      "reason=finished_previous_trial")
+  end
   -- v0.8.85: first protect the final missing receiver, even after a detour.
   -- Never count a speculative pass as a verified visit.
   local missing=last_missing_710(spatial.visited,spatial.holder)
@@ -1921,7 +1930,10 @@ while true do
           if p.id==from then gap=math.sqrt((bp.x-p.x)^2+(bp.y-p.y)^2) end
         end end
       end
-      if xy and gap and gap<=18 then
+      local attempt_key=tostring(from)..":"..tostring(target)
+      if xy and gap and gap<=18 and
+         (long_710.attempts[attempt_key] or 0)<2 and
+         emu.framecount()>=(long_710.cooldown_until or 0) then
         local dx,dy=xy.tx-xy.hx,xy.ty-xy.hy
         local distance=math.sqrt(dx*dx+dy*dy)
         local blocker,cross=lane_blocker(sample_for_auto,from,target)
@@ -1943,7 +1955,15 @@ while true do
               "|distance="..string.format("%.2f",distance))
           end
         elseif distance>=35 and distance<=410 and math.abs(dy)<=100 then
-          long_710.phase="face";long_710.start=emu.framecount()
+          long_710.start=emu.framecount()
+          long_710.shot_frame=nil
+          long_710.attempts[attempt_key]=(long_710.attempts[attempt_key] or 0)+1
+          long_710.phase=(from==7 and target==10) and "advance" or "face"
+          long_710.advance_start=emu.framecount()
+          long_710.advance_origin={x=xy.hx,y=xy.hy}
+          long_710.advance_target={x=xy.tx,y=xy.ty}
+          long_710.receiver_start={x=xy.tx,y=xy.ty}
+          long_710.carrier_start={x=xy.hx,y=xy.hy}
           long_710.initial=distance;long_710.target=target
           long_710.origin=from
           long_710.trial_kind=long_710.return_due and "return_7_to_10"
@@ -1961,6 +1981,36 @@ while true do
             "|dx="..dx.."|dy="..dy.."|direction="..long_710.direction..
             "|kind="..long_710.trial_kind.."|ball_gap="..string.format("%.2f",gap))
         end
+      end
+    end
+  end
+  -- Shift part of the receiving burden to player 7, using observed motion
+  -- rather than assuming the receiver will run to meet the ball.
+  if long_710.phase=="advance" then
+    local frame=emu.framecount()
+    local xy=Ordered.capture(sample_for_auto,7,10)
+    local gap=ball_gap_710(sample_for_auto)
+    buttons={}
+    if not xy or not gap or gap>18 or spatial.holder~=7 then
+      long_710.phase="done";long_710.cooldown_until=frame+36
+      auto_write(frame,"long_710_advance_aborted",7,10,"B",
+        "reason=geometry_or_possession")
+    else
+      local dx=xy.hx-long_710.advance_origin.x
+      local dy=xy.hy-long_710.advance_origin.y
+      local progress=math.sqrt(dx*dx+dy*dy)
+      local elapsed=frame-long_710.advance_start
+      if elapsed>=18 or progress>=40 then
+        long_710.phase="face";long_710.start=frame
+        auto_write(frame,"long_710_advance_finished",7,10,"B",
+          "carrier_dx="..dx.."|carrier_dy="..dy..
+          "|carrier_walk="..string.format("%.2f",progress)..
+          "|receiver_dx="..(xy.tx-long_710.advance_target.x)..
+          "|receiver_dy="..(xy.ty-long_710.advance_target.y)..
+          "|distance_after="..string.format("%.2f",math.sqrt(
+            (xy.tx-xy.hx)^2+(xy.ty-xy.hy)^2)))
+      else
+        buttons={[long_710.direction]=true}
       end
     end
   end
@@ -2001,7 +2051,7 @@ while true do
       local gap=ball_gap_710(sample_for_auto)
       if spatial.holder~=long_710.origin or not gap or gap>18 or
          not Ordered.capture(sample_for_auto,long_710.origin,long_710.target) then
-        long_710.phase="done"
+        long_710.phase="done";long_710.cooldown_until=frame+36
         auto_write(frame,"long_710_aborted",long_710.origin,long_710.target,selected_pass_button,
           "reason=lost_possession_or_invalid_geometry")
       else
@@ -2024,11 +2074,19 @@ while true do
       end
     else
       if spatial.holder==long_710.target then
-        long_710.phase="done"
+        long_710.phase="done";long_710.cooldown_until=frame+36
+        local xy=Ordered.capture(sample_for_auto,long_710.origin,long_710.target)
+        if xy and long_710.receiver_start and long_710.carrier_start then
+          auto_write(frame,"long_710_motion_result",long_710.origin,long_710.target,"B",
+            "carrier_dx="..(xy.hx-long_710.carrier_start.x)..
+            "|carrier_dy="..(xy.hy-long_710.carrier_start.y)..
+            "|receiver_dx="..(xy.tx-long_710.receiver_start.x)..
+            "|receiver_dy="..(xy.ty-long_710.receiver_start.y))
+        end
         auto_write(frame,"long_710_receiver_observed",long_710.origin,long_710.target,"B",
           "holder="..tostring(long_710.target).."|confidence=spatial_only")
       elseif frame-(long_710.shot_frame or frame)>=120 then
-        long_710.phase="done"
+        long_710.phase="done";long_710.cooldown_until=frame+36
         auto_write(frame,"long_710_observation_timeout",long_710.origin,long_710.target,"B",
           "holder="..tostring(spatial.holder).."|success_unverified")
       end
