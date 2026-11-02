@@ -618,30 +618,8 @@ while true do
       local target=bridge_info and bridge_info.target
       local movement=pass_chain.approach_state
       movement.current_frame=emu.framecount()
+      movement.approach_frames=pass_chain.approach_frames or 0
       local approach_limit=movement.approach_limit or Ordered.MAX_APPROACH
-      -- v0.8.71: detect persistent net regression in the 7->11 fallback.
-      -- A wrong direction must never consume the full 210-frame budget.
-      if holder==7 and target==11 then
-        local m711=Feet.measure(sample_for_auto,7,11)
-        if m711 and not movement.pair_711_start_distance then
-          movement.pair_711_start_distance=m711.distance
-          movement.pair_711_best=m711.distance
-        end
-        if m711 then
-          movement.pair_711_best=math.min(movement.pair_711_best or m711.distance,m711.distance)
-          if (pass_chain.approach_frames or 0)>=24
-             and m711.distance>(movement.pair_711_best or m711.distance)+28
-             and m711.distance>(movement.pair_711_start_distance or m711.distance)+15 then
-            buttons={};autopass.enabled=false;pass_chain.active=false;auto_finished=true
-            auto_write(emu.framecount(),"approach_711_net_regression_stop",7,11,selected_pass_button,
-              "distance="..tostring(m711.distance)..
-              "|initial="..tostring(movement.pair_711_start_distance)..
-              "|best="..tostring(movement.pair_711_best)..
-              "|frames="..tostring(pass_chain.approach_frames))
-            reason="approach_711_net_regression_stop"
-          end
-        end
-      end
       if holder==8 and target==9 and not movement.receiver_last then
         Ordered.observe_receiver(movement,sample_for_auto,emu.framecount(),holder,target)
       end
