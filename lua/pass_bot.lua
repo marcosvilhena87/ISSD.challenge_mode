@@ -647,7 +647,7 @@ local exclusive_62={state="ready",start=0,shots=0}
 local exclusive_58={state="ready",start=0,shots=0}
 local pass_clock_expired_frame=nil
 -- v0.9.17: passive per-pair timing, scoped to the observed spatial holder.
-local pair_trace={holder=nil,since=nil,last_x=nil,last_y=nil,moving=0,still=0,last_b=nil}
+local pair_trace={holder=nil,since=nil,last_x=nil,last_y=nil,moving=0,still=0,last_b=nil,last_target=nil}
 local function pair_trace_log(frame,event,from,to,detail)
  auto_write(frame,"pair917_"..event,from,to,"OBSERVE",detail)
 end
@@ -669,13 +669,21 @@ while true do
       else pair_trace.still=pair_trace.still+1 end
     end
     if current~=pair_trace.holder then
+      if pair_trace.holder and pair_trace.last_target and current and
+         pair_trace.last_target~=current then
+        pair_trace_log(pf,"target_mismatch",pair_trace.holder,current,
+          "commanded_receiver="..tostring(pair_trace.last_target)..
+          "|actual_spatial_holder="..tostring(current)..
+          "|last_B="..tostring(pair_trace.last_b).."|observation_only=true")
+      end
       if pair_trace.holder and pair_trace.since then
         pair_trace_log(pf,"holder_summary",pair_trace.holder,current,
           "frames="..(pf-pair_trace.since).."|moving="..pair_trace.moving..
           "|still="..pair_trace.still..
-          "|last_b="..tostring(pair_trace.last_b))
+          "|last_b="..tostring(pair_trace.last_b)..
+          "|last_target="..tostring(pair_trace.last_target))
       end
-      pair_trace={holder=current,since=pf,last_x=nil,last_y=nil,moving=0,still=0,last_b=nil}
+      pair_trace={holder=current,since=pf,last_x=nil,last_y=nil,moving=0,still=0,last_b=nil,last_target=nil}
     end
     if xy then pair_trace.last_x=xy.hx;pair_trace.last_y=xy.hy end
     local event=spatial:step(ss,emu.framecount())
@@ -3254,6 +3262,7 @@ while true do
     if not receiver and autopass.last_attempt and autopass.last_attempt.from==sender then
       receiver=autopass.last_attempt.to
     end
+    if pair_trace.holder==sender then pair_trace.last_target=receiver end
     local g=receiver and pair_geometry(sample_for_auto,sender,receiver)
     if g and g.distance>=1 then
       local requested=(buttons.Up and "Up") or (buttons.Down and "Down") or
