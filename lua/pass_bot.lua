@@ -1886,7 +1886,9 @@ while true do
   local missing=last_missing_710(spatial.visited,spatial.holder)
   if armed and pass_chain.active and sample_for_auto and
      long_710.phase=="ready" and spatial.holder and
-     (missing or spatial.holder==7) then
+     (missing or (spatial.holder==7 and
+        (Ordered.next(nil,7,spatial.visited)==10 or
+         (pass_chain.repeat_710_started and not pass_chain.repeat_710_used)))) then
     local from=spatial.holder
     local target=missing or ((from==7) and 10 or nil)
     if target and target~=from then
