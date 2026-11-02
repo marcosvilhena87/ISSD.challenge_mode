@@ -501,6 +501,28 @@ local function pass_first_target(sample,from,visited)
  end
  return nil,nil,nil
 end
+-- v0.9.12: support relay before blocker is detected; limited to the proven
+-- short-passing envelope and only when improving an otherwise long route.
+local function preemptive_relay(sample,from,target,visited)
+ if not sample or not from or not target or not visited then return nil end
+ local direct=pair_geometry(sample,from,target)
+ if not direct or direct.distance<=185 then return nil end
+ local winner,best_gain=nil,35
+ for id=2,11 do
+  if id~=from and id~=target and visited[id] then
+   local first=pair_geometry(sample,from,id)
+   local second=pair_geometry(sample,id,target)
+   if first and second and first.distance>=28 and first.distance<=185 and
+      second.distance>=28 and second.distance<=185 and
+      math.abs(first.dy)<=105 and math.abs(second.dy)<=105 and
+      not lane_blocker(sample,from,id) and not lane_blocker(sample,id,target) then
+    local gain=direct.distance+220-(first.distance+second.distance+48)
+    if gain>best_gain then best_gain=gain;winner=id end
+   end
+  end
+ end
+ return winner,best_gain
+end
 -- Diagonal travel is allowed as movement only, never with B.
 local function approach_buttons(g)
  local b={}
@@ -2420,6 +2442,18 @@ while true do
   local missing=last_missing_710(spatial.visited,spatial.holder)
   local pass_first,pass_first_gap=pass_first_target(sample_for_auto,spatial.holder,spatial.visited)
   local queue_target=pass_first or first_unvisited(spatial.visited,spatial.holder)
+  local priority_62=spatial.holder==6 and not spatial.visited[2] and
+      sample_for_auto and pair_geometry(sample_for_auto,6,2)
+  if priority_62 and priority_62.distance<=240 and math.abs(priority_62.dy)<=125 then
+    queue_target=2
+    if long_710.queue_target~=2 then
+      auto_write(emu.framecount(),"priority_6_to_2",6,2,"B",
+        "distance="..string.format("%.2f",priority_62.distance)..
+        "|dy="..priority_62.dy.."|bounded_alignment=true")
+    end
+  end
+  -- A short committed alignment may be needed for the preferred 6 -> 2.
+  -- Ordinary planner still applies the same possession/geometry guards.
   -- Hold a committed recipient during active ordinary/special attempts.
   local busy=(autopass.phase~="idle" and autopass.target~=nil) or
       long_710.phase=="face" or long_710.phase=="observe"
@@ -2485,6 +2519,12 @@ while true do
         local dx,dy=xy.tx-xy.hx,xy.ty-xy.hy
         local distance=math.sqrt(dx*dx+dy*dy)
         local blocker,cross=lane_blocker(sample_for_auto,from,target)
+        local relay_id,relay_gain=preemptive_relay(sample_for_auto,from,target,spatial.visited)
+        if relay_id and not blocker then
+          blocker=relay_id
+          auto_write(emu.framecount(),"preemptive_relay_candidate",from,relay_id,"OBSERVE",
+            "final_target="..target.."|estimated_gain="..string.format("%.2f",relay_gain))
+        end
         -- Universal support BEFORE sidestep, for every intended pass.
         local support_g=blocker and support_receiver(sample_for_auto,from,target,blocker) or nil
         local support_key=blocker and (tostring(from)..":"..tostring(blocker)) or nil
