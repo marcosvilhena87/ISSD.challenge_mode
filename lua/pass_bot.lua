@@ -630,6 +630,30 @@ while true do
       local target=bridge_info and bridge_info.target
       local movement=pass_chain.approach_state
       movement.current_frame=emu.framecount()
+      -- Detect the same X coordinate persisting across Dash observations.
+      -- Switch to plain directional running rather than repeating Y in place.
+      if holder==7 and target==10 then
+        local pos=Ordered.capture(sample_for_auto,7,10)
+        if pos then
+          local prior=movement.stall_710_last_position
+          if prior and math.abs(pos.hx-prior.hx)<0.5 and math.abs(pos.hy-prior.hy)<0.5 then
+            movement.stall_710_frames=(movement.stall_710_frames or 0)+1
+          else
+            movement.stall_710_frames=0
+          end
+          movement.stall_710_last_position=pos
+          if not movement.dash_710_disabled and (movement.stall_710_frames or 0)>=6 then
+            movement.dash_710_disabled=true
+            movement.burst_remaining=0
+            movement.burst_buttons=nil
+            pass_chain.approach_neutral=false
+            auto_write(emu.framecount(),"approach_710_dash_stall_fallback",7,10,selected_pass_button,
+              "holder_x="..tostring(pos.hx).."|holder_y="..tostring(pos.hy)..
+              "|receiver_x="..tostring(pos.tx).."|receiver_y="..tostring(pos.ty)..
+              "|next=direction_only")
+          end
+        end
+      end
       if holder==7 and target==10 then
         local gap=ball_gap_710(sample_for_auto)
         if gap then
@@ -1180,7 +1204,7 @@ while true do
           if reason=="approach_step" then
             -- Dash applies ONLY to movement during 7->10, never a pass.
             -- Keep burst_direction cardinal; Y is not a steering axis.
-            if holder==7 and target==10 and not buttons.B and
+            if holder==7 and target==10 and not movement.dash_710_disabled and not buttons.B and
                 (buttons.Right or buttons.Left or buttons.Up or buttons.Down) then
               buttons.Y=true
               auto_write(emu.framecount(),"approach_710_dash_start",7,10,selected_pass_button,
@@ -1189,6 +1213,11 @@ while true do
             end
             movement.burst_buttons=buttons
             movement.target=target
+            if holder==7 and target==10 and movement.dash_710_disabled then
+              auto_write(emu.framecount(),"approach_710_direction_only",7,10,selected_pass_button,
+                "direction="..tostring(movement.direction)..
+                "|ball_gap="..tostring(ball_gap_710(sample_for_auto)))
+            end
             local initial=Feet.measure(sample_for_auto,holder,target)
             movement.burst_start=initial
             movement.burst_positions=Ordered.capture(sample_for_auto,holder,target)
