@@ -423,6 +423,7 @@ local function pass_first_target(sample,from,visited)
      end
    end
  end
+ end
  -- Conservative fallback: preserve the v0.9.7 queue unless a candidate
  -- has an estimated advantage of at least 25 WRAM-equivalent units.
  local baseline_future=nil
