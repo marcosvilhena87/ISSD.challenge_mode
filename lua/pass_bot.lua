@@ -1896,7 +1896,10 @@ while true do
             "walked="..string.format("%.2f",walked)..
             "|distance="..string.format("%.2f",math.sqrt(
                (coords.tx-coords.hx)^2+(coords.ty-coords.hy)^2))..
-            "|holder_x="..coords.hx.."|holder_y="..coords.hy)
+            "|holder_x="..coords.hx.."|holder_y="..coords.hy..
+            "|requested_direction="..static_710.direction..
+            "|dx="..tostring(coords.hx-static_710.initial.hx)..
+            "|dy="..tostring(coords.hy-static_710.initial.hy))
           buttons={}
         else
           buttons={[static_710.direction]=true}
@@ -1914,12 +1917,14 @@ while true do
       elseif frame-static_710.face_start<5 then
         buttons={}
       elseif frame-static_710.face_start<7 then
-        buttons={B=true}
+        -- ISS Deluxe requires Control Pad + B in the SAME frame.
+        buttons={[static_710.direction]=true,B=true}
         if not static_710.shot_frame then
           static_710.shot_frame=frame
           static_710.ball_origin={x=sample_for_auto.ball.x,y=sample_for_auto.ball.y}
           auto_write(frame,"static_710_range_pass_pulse",7,10,"B",
-            "initial_distance="..string.format("%.2f",math.sqrt(
+            "actual_direction="..static_710.direction..
+            "|actual_B=true|buttons_simultaneous=true|initial_distance="..string.format("%.2f",math.sqrt(
               (static_710.initial.tx-static_710.initial.hx)^2+
               (static_710.initial.ty-static_710.initial.hy)^2)))
         end
@@ -1955,6 +1960,15 @@ while true do
           "|closest_10="..tostring(static_710.closest_10).."|success_unverified")
       end
     end
+  end
+  if static_710.shot_frame and emu.framecount()>=static_710.shot_frame
+     and emu.framecount()<static_710.shot_frame+2 then
+    auto_write(emu.framecount(),"static_710_actual_input",7,10,"B",
+      "up="..tostring(buttons.Up==true)..
+      "|down="..tostring(buttons.Down==true)..
+      "|left="..tostring(buttons.Left==true)..
+      "|right="..tostring(buttons.Right==true)..
+      "|B="..tostring(buttons.B==true))
   end
   joypad.set(buttons,1)
   emu.frameadvance()
