@@ -813,6 +813,27 @@ while true do
         else
           can_extend,why=Ordered.can_extend(movement,pass_chain.approach_frames,measurement)
         end
+        -- Progressive 7->10 budget: extra time only if recent distance or
+        -- measured X progress indicates meaningful movement, never unbounded.
+        if not can_extend and holder==7 and target==10
+           and (pass_chain.approach_frames or 0)<Ordered.MAX_APPROACH_ABSOLUTE
+           and (movement.pair_710_progressive_extensions or 0)<8 then
+          local positions=Ordered.capture(sample_for_auto,7,10)
+          local last=movement.pair_710_progressive_checkpoint
+          if not last and positions then
+            movement.pair_710_progressive_checkpoint={
+              hx=positions.hx, distance=measurement and measurement.distance}
+          elseif last and positions and measurement and
+             (positions.hx-last.hx>=12 or last.distance-measurement.distance>=8) then
+            can_extend=true;why="pair_710_progressive_distance"
+            movement.pair_710_progressive_checkpoint={
+              hx=positions.hx,distance=measurement.distance}
+            auto_write(emu.framecount(),"approach_710_progressive_extension",7,10,selected_pass_button,
+              "holder_x="..tostring(positions.hx)..
+              "|distance="..tostring(measurement.distance)..
+              "|frames="..tostring(pass_chain.approach_frames))
+          end
+        end
         if not can_extend and holder==7 and target==10 then
           local recent,recent_reason=Ordered.recent_closure_710(movement,pass_chain.approach_frames,measurement)
           if recent then
@@ -825,6 +846,9 @@ while true do
           end
         end
         if can_extend and approach_limit<Ordered.MAX_APPROACH_ABSOLUTE then
+          if why=="pair_710_progressive_distance" then
+            movement.pair_710_progressive_extensions=(movement.pair_710_progressive_extensions or 0)+1
+          end
           if why=="pair_710_recent_measured_closure" then
             movement.pair_710_recent_extensions=(movement.pair_710_recent_extensions or 0)+1
           end
