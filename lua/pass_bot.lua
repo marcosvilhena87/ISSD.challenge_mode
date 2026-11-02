@@ -2595,6 +2595,39 @@ while true do
       end
     end
   end
+  -- v0.9.1: final output gate for both ordinary and special B passes.
+  -- Never rewrite the one-shot finish X or non-pass movement.
+  if armed and buttons.B and not buttons.X and sample_for_auto and spatial.holder then
+    local sender=spatial.holder
+    local special=(long_710.phase=="face" or long_710.phase=="observe")
+      and long_710.origin==sender and long_710.target
+    local receiver=special or autopass.target
+    if not receiver and autopass.last_attempt and autopass.last_attempt.from==sender then
+      receiver=autopass.last_attempt.to
+    end
+    local g=receiver and pair_geometry(sample_for_auto,sender,receiver)
+    if g and g.distance>=1 then
+      local requested=(buttons.Up and "Up") or (buttons.Down and "Down") or
+        (buttons.Left and "Left") or (buttons.Right and "Right") or "none"
+      buttons.Up=nil;buttons.Down=nil;buttons.Left=nil;buttons.Right=nil
+      buttons[g.direction]=true
+      buttons.Y=nil
+      auto_write(emu.framecount(),"pass_direction_output",sender,receiver,"B",
+        "calculated_direction="..g.direction..
+        "|requested_direction="..requested..
+        "|actual_buttons="..g.direction.."+B"..
+        "|dx="..g.dx.."|dy="..g.dy..
+        "|distance="..string.format("%.2f",g.distance)..
+        "|controller="..(special and "special" or "ordinary")..
+        "|corrected="..tostring(requested~=g.direction))
+    else
+      -- No trustworthy receiver coordinates: do not fire a blind pass.
+      buttons.B=nil
+      buttons.Up=nil;buttons.Down=nil;buttons.Left=nil;buttons.Right=nil
+      auto_write(emu.framecount(),"pass_direction_blocked",sender,receiver,"B",
+        "reason=missing_target_or_invalid_geometry")
+    end
+  end
   joypad.set(buttons,1)
   emu.frameadvance()
 end
