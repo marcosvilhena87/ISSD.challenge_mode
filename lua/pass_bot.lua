@@ -314,7 +314,38 @@ local previous=nil
 local auto_finished=false
 local pass_chain={active=false,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0,route_index=1,approach_frames=0,approach_neutral=false,approach_state={}}
 -- v0.8.84 long-range pass trial integrated in the normal relay sequence.
-local long_710={phase="ready",start=nil,initial=nil,direction=nil,shot_frame=nil}
+local long_710={phase="ready",start=nil,initial=nil,direction=nil,shot_frame=nil,
+ target=nil,origin=nil,trial_kind=nil}
+-- Last missing outfield player: player IDs 2..11 (10 players), spatial evidence only.
+local function last_missing_710(visited,holder)
+ if not visited then return nil end
+ local absent,count=nil,0
+ for id=2,11 do if not visited[id] then absent=id;count=count+1 end end
+ if count==1 and holder~=absent then return absent end
+ return nil
+end
+local function lane_blocker(sample,from,to)
+ if not sample then return nil end
+ local a,b
+ for _,p in ipairs(sample.players or {}) do
+  if p.id==from then a=p elseif p.id==to then b=p end
+ end
+ if not a or not b then return nil end
+ local dx,dy=b.x-a.x,b.y-a.y
+ local denom=dx*dx+dy*dy
+ if denom<1 then return nil end
+ for _,p in ipairs(sample.players or {}) do
+  if p.id~=from and p.id~=to then
+   local projection=((p.x-a.x)*dx+(p.y-a.y)*dy)/denom
+   if projection>0.10 and projection<0.90 then
+    local px,py=a.x+projection*dx,a.y+projection*dy
+    local cross=math.sqrt((p.x-px)^2+(p.y-py)^2)
+    if cross<=24 then return p.id,cross end
+   end
+  end
+ end
+ return nil
+end
 local reach=Reach.new()
 local reach_path=root.."/csv/pass_reach_v0864.csv"
 local rf=assert(io.open(reach_path,"ab"))
@@ -1850,27 +1881,52 @@ while true do
       end
     end
   end
-  -- v0.8.84: intercept only the selected 7->10 relay at final input.
-  -- A directional B press is essential; never issue an isolated B.
+  -- v0.8.85: first protect the final missing receiver, even after a detour.
+  -- Never count a speculative pass as a verified visit.
+  local missing=last_missing_710(spatial.visited,spatial.holder)
   if armed and pass_chain.active and sample_for_auto and
-     long_710.phase=="ready" and spatial.holder==7 and
-     (Ordered.next(nil,7,spatial.visited)==10 or
-       (pass_chain.repeat_710_started and not pass_chain.repeat_710_used)) then
-    local xy=Ordered.capture(sample_for_auto,7,10)
-    local gap=ball_gap_710(sample_for_auto)
-    if xy and gap and gap<=18 then
-      local dx,dy=xy.tx-xy.hx,xy.ty-xy.hy
-      local distance=math.sqrt(dx*dx+dy*dy)
-      if distance>=180 and distance<=410 and math.abs(dy)<=100 then
-        long_710.phase="face";long_710.start=emu.framecount()
-        long_710.initial=distance
-        long_710.direction=(math.abs(dx)>=math.abs(dy))
-           and (dx>=0 and "Right" or "Left")
-           or (dy>=0 and "Down" or "Up")
-        auto_write(emu.framecount(),"long_710_started",7,10,selected_pass_button,
-          "distance="..string.format("%.2f",distance)..
-          "|dx="..dx.."|dy="..dy.."|direction="..long_710.direction..
-          "|ball_gap="..string.format("%.2f",gap))
+     long_710.phase=="ready" and spatial.holder and
+     (missing or (spatial.holder==7 and
+        (Ordered.next(nil,7,spatial.visited)==10 or
+         (pass_chain.repeat_710_started and not pass_chain.repeat_710_used)))) then
+    local from=spatial.holder
+    local target=missing or ((from==7) and 10 or nil)
+    if target and target~=from then
+      local xy=Ordered.capture(sample_for_auto,from,target)
+      local gap=ball_gap_710(sample_for_auto)
+      if from~=7 then
+        local bp=sample_for_auto.ball
+        if bp then for _,p in ipairs(sample_for_auto.players or {}) do
+          if p.id==from then gap=math.sqrt((bp.x-p.x)^2+(bp.y-p.y)^2) end
+        end end
+      end
+      if xy and gap and gap<=18 then
+        local dx,dy=xy.tx-xy.hx,xy.ty-xy.hy
+        local distance=math.sqrt(dx*dx+dy*dy)
+        local blocker,cross=lane_blocker(sample_for_auto,from,target)
+        if blocker then
+          if not long_710.last_blocker_frame or
+             emu.framecount()-long_710.last_blocker_frame>=24 then
+            long_710.last_blocker_frame=emu.framecount()
+            auto_write(emu.framecount(),"long_pass_lane_blocked",from,target,"B",
+              "blocker="..tostring(blocker).."|cross="..string.format("%.2f",cross)..
+              "|distance="..string.format("%.2f",distance))
+          end
+        elseif distance>=35 and distance<=410 and math.abs(dy)<=100 then
+          long_710.phase="face";long_710.start=emu.framecount()
+          long_710.initial=distance;long_710.target=target
+          long_710.origin=from
+          long_710.trial_kind=missing and "last_missing" or "relay_710"
+          long_710.direction=(math.abs(dx)>=math.abs(dy))
+             and (dx>=0 and "Right" or "Left")
+             or (dy>=0 and "Down" or "Up")
+          -- Suspend normal approach immediately for this bounded experiment.
+          pass_chain.next_frame=emu.framecount()+150
+          auto_write(emu.framecount(),"long_710_started",from,target,"B",
+            "distance="..string.format("%.2f",distance)..
+            "|dx="..dx.."|dy="..dy.."|direction="..long_710.direction..
+            "|kind="..long_710.trial_kind.."|ball_gap="..string.format("%.2f",gap))
+        end
       end
     end
   end
@@ -1882,10 +1938,10 @@ while true do
     buttons={}
     if long_710.phase=="face" then
       local gap=ball_gap_710(sample_for_auto)
-      if spatial.holder~=7 or not gap or gap>18 or
-         not Ordered.capture(sample_for_auto,7,10) then
+      if spatial.holder~=long_710.origin or not gap or gap>18 or
+         not Ordered.capture(sample_for_auto,long_710.origin,long_710.target) then
         long_710.phase="done"
-        auto_write(frame,"long_710_aborted",7,10,selected_pass_button,
+        auto_write(frame,"long_710_aborted",long_710.origin,long_710.target,selected_pass_button,
           "reason=lost_possession_or_invalid_geometry")
       else
         local elapsed=frame-long_710.start
@@ -1897,7 +1953,7 @@ while true do
           buttons={[long_710.direction]=true,B=true}
           if not long_710.shot_frame then
             long_710.shot_frame=frame
-            auto_write(frame,"long_710_directional_b",7,10,"B",
+            auto_write(frame,"long_710_directional_b",long_710.origin,long_710.target,"B",
               "distance="..tostring(long_710.initial)..
               "|direction="..long_710.direction.."|simultaneous=true")
           end
@@ -1906,13 +1962,13 @@ while true do
         end
       end
     else
-      if spatial.holder==10 then
+      if spatial.holder==long_710.target then
         long_710.phase="done"
-        auto_write(frame,"long_710_receiver_observed",7,10,"B",
-          "holder=10|confidence=spatial_only")
+        auto_write(frame,"long_710_receiver_observed",long_710.origin,long_710.target,"B",
+          "holder="..tostring(long_710.target).."|confidence=spatial_only")
       elseif frame-(long_710.shot_frame or frame)>=120 then
         long_710.phase="done"
-        auto_write(frame,"long_710_observation_timeout",7,10,"B",
+        auto_write(frame,"long_710_observation_timeout",long_710.origin,long_710.target,"B",
           "holder="..tostring(spatial.holder).."|success_unverified")
       end
     end
