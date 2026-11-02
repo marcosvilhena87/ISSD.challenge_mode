@@ -642,6 +642,8 @@ else
 end
 print("[ISSD.pass_lv1] commands="..command_path.." log="..log_path)
 release()
+-- v0.9.13: final-output exclusive, bounded 6 -> 2 control.
+local exclusive_62={state="ready",start=0,shots=0}
 while true do
   if armed then score_log(emu.framecount(),"armed",false) end
   local p=observe()
@@ -3076,6 +3078,59 @@ while true do
           "|B="..tostring(buttons.B==true))
       end
     end
+  end
+  -- Priority arbitration happens AFTER other controllers, BEFORE joypad output.
+  -- Never interfere with the bonus finish or release an unverified B pulse.
+  if armed and clock_started and pass_chain.active and not auto_finished and
+     sample_for_auto and not buttons.X and not spatial.visited[2] and
+     spatial.holder==6 and exclusive_62.state~="done" then
+    local frame=emu.framecount()
+    local geom=pair_geometry(sample_for_auto,6,2)
+    local carrier=carrier_gap(sample_for_auto,6)
+    if exclusive_62.state=="ready" then
+      exclusive_62.state="moving";exclusive_62.start=frame
+      auto_write(frame,"exclusive_6_to_2_started",6,2,"MOVE",
+        "distance="..tostring(geom and geom.distance)..
+        "|dy="..tostring(geom and geom.dy))
+    end
+    local elapsed=frame-exclusive_62.start
+    local reason=nil
+    if not geom then reason="missing_geometry"
+    elseif not carrier or carrier>18 then reason="possession_unverified"
+    elseif elapsed>=54 then reason="frame_limit"
+    elseif geom.distance>320 then reason="outside_bounded_route"
+    end
+    if reason then
+      exclusive_62.state="done"
+      auto_write(frame,"exclusive_6_to_2_fallback",6,2,"OBSERVE",
+        "reason="..reason.."|frames="..elapsed)
+      buttons={}
+    else
+      -- Override *all* other controller buttons while exclusive ownership holds.
+      buttons={}
+      if geom.distance<=175 and math.abs(geom.dy)<=95 and
+         not lane_blocker(sample_for_auto,6,2) then
+        buttons[geom.direction]=true
+        buttons.B=true
+        exclusive_62.shots=exclusive_62.shots+1
+        exclusive_62.state="done"
+        auto_write(frame,"exclusive_6_to_2_B",6,2,"B",
+          "direction="..geom.direction..
+          "|distance="..string.format("%.2f",geom.distance)..
+          "|frames="..elapsed.."|shots="..exclusive_62.shots)
+      else
+        if math.abs(geom.dx)>20 then buttons[geom.dx>0 and "Right" or "Left"]=true end
+        if math.abs(geom.dy)>20 then buttons[geom.dy>0 and "Down" or "Up"]=true end
+        auto_write(frame,"exclusive_6_to_2_move",6,2,"MOVE",
+          "dx="..geom.dx.."|dy="..geom.dy..
+          "|distance="..string.format("%.2f",geom.distance)..
+          "|elapsed="..elapsed)
+      end
+    end
+  elseif exclusive_62.state=="moving" then
+    exclusive_62.state="done"
+    auto_write(emu.framecount(),"exclusive_6_to_2_fallback",6,2,"OBSERVE",
+      "reason=holder_or_phase_changed")
   end
   -- v0.9.1: final output gate for both ordinary and special B passes.
   -- Never rewrite the one-shot finish X or non-pass movement.
