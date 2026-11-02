@@ -323,7 +323,7 @@ local long_710={phase="ready",start=nil,initial=nil,direction=nil,shot_frame=nil
  sidestep_97_last_cross=nil,sidestep_97_exhausted=false,
  support_attempts={},support_target=nil,original_target=nil,fast_pass=false,
  final_target=nil,final_retries=0,final_next_retry=0,final_last_holder=nil,
- universal_previous_holder=nil,universal_support_cooldown={}}
+ universal_previous_holder=nil,universal_support_cooldown={},support_failed={},support_observed_holder=nil}
 -- Last missing outfield player: player IDs 2..11 (10 players), spatial evidence only.
 local function last_missing_710(visited,holder)
  if not visited then return nil end
@@ -382,6 +382,22 @@ local function support_receiver(sample,from,to,blocker)
  local second=lane_blocker(sample,from,blocker)
  if second then return nil end
  return g
+end
+-- A support pass must make measurable geometric progress toward the goal.
+local function support_quality(sample,from,target,blocker,visited)
+ local direct=pair_geometry(sample,from,target)
+ local first=support_receiver(sample,from,target,blocker)
+ local remaining=pair_geometry(sample,blocker,target)
+ if not direct or not first or not remaining then return nil,"invalid_geometry" end
+ local next_blocker=lane_blocker(sample,blocker,target)
+ local progress=direct.distance-remaining.distance
+ -- Penalize detours and a second blocked corridor. Previously visited
+ -- teammates must improve distance by at least 32 WRAM.
+ local minimum=(visited and visited[blocker]) and 32 or 12
+ if progress<minimum then return nil,"insufficient_progress" end
+ if next_blocker then return nil,"next_leg_blocked" end
+ return {first=first,remaining=remaining.distance,progress=progress,
+         direct=direct.distance},nil
 end
 local function carrier_gap(sample,id)
  if not sample or not sample.ball then return nil end
@@ -2065,7 +2081,9 @@ while true do
         local distance=math.sqrt(dx*dx+dy*dy)
         local blocker,cross=lane_blocker(sample_for_auto,from,target)
         -- Universal support BEFORE sidestep, for every intended pass.
-        local support_g=blocker and support_receiver(sample_for_auto,from,target,blocker) or nil
+        local quality,quality_reason=blocker and
+          support_quality(sample_for_auto,from,target,blocker,spatial.visited) or nil,nil
+        local support_g=quality and quality.first or nil
         local support_key=blocker and (tostring(from)..":"..tostring(blocker)) or nil
         local support_count=support_key and (long_710.support_attempts[support_key] or 0) or 0
         local loop_back=blocker and blocker==long_710.universal_previous_holder
@@ -2089,7 +2107,10 @@ while true do
             "primary_target="..tostring(target)..
             "|already_visited="..tostring(spatial.visited[blocker]==true)..
             "|attempt="..(support_count+1)..
-            "|direction="..support_g.direction)
+            "|direction="..support_g.direction..
+            "|direct="..string.format("%.2f",quality.direct)..
+            "|remaining="..string.format("%.2f",quality.remaining)..
+            "|progress="..string.format("%.2f",quality.progress))
         elseif blocker and from==9 and target==7 and
            not long_710.sidestep_97_exhausted and
            long_710.sidestep_97_count<4 then
@@ -2125,7 +2146,7 @@ while true do
             "primary_target="..tostring(target)..
             "|reason="..(loop_back and "immediate_return" or
               (support_count>=2 and "attempt_limit" or
-              (not support_g and "invalid_geometry" or "cooldown"))))
+              (not support_g and (quality_reason or "invalid_geometry") or "cooldown"))))
         elseif blocker and missing and not long_710.return_due and
            long_710.walk_ticks<4 then
           long_710.phase="sidestep"
@@ -2393,7 +2414,21 @@ while true do
         end
         auto_write(frame,"long_710_receiver_observed",long_710.origin,long_710.target,"B",
           "holder="..tostring(long_710.target).."|confidence=spatial_only")
-      elseif frame-(long_710.shot_frame or frame)>=120 then
+      elseif spatial.holder and spatial.holder~=long_710.origin and
+             spatial.holder~=long_710.target then
+        local observed=spatial.holder
+        auto_write(frame,"relay_unexpected_receiver",long_710.origin,observed,"B",
+          "expected="..tostring(long_710.target)..
+          "|primary_target="..tostring(long_710.original_target)..
+          "|reason=observed_different_holder")
+        long_710.phase="done"
+        long_710.cooldown_until=frame+12
+        long_710.target=nil
+        long_710.support_target=nil
+        long_710.original_target=nil
+        long_710.fast_pass=false
+        long_710.attempts={}
+            elseif frame-(long_710.shot_frame or frame)>=120 then
         long_710.phase="done";long_710.cooldown_until=frame+36
         auto_write(frame,"long_710_observation_timeout",long_710.origin,long_710.target,"B",
           "holder="..tostring(spatial.holder).."|success_unverified")
