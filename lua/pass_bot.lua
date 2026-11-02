@@ -268,6 +268,11 @@ score_file:close()
 local score_previous=nil
 local score_stable=0
 local score_last_frame=-9999
+local score_armed_baseline=nil
+local score_result_stable=0
+local score_result_key=nil
+local score_result_confirmed=false
+local score_new_result=false
 local function score_byte(addr)
  local ok,v=pcall(memory.read_u8,addr,"WRAM")
  if ok and type(v)=="number" then return v end
@@ -287,6 +292,22 @@ local function score_log(frame,phase,force)
  local changed=(score_previous~=nil and score_previous~=key)
  score_stable=(score_previous==key) and score_stable+1 or 1
  score_previous=key
+ if score_armed_baseline==nil then score_armed_baseline=key end
+ if key~=score_armed_baseline and a~=nil and b~=nil and c~=nil and
+    c>0 and c==a+b then score_new_result=true end
+ if score_new_result and c~=nil and d==c and c>0 and a+b==c then
+  local result_key=tostring(a)..":"..tostring(b)..":"..tostring(c)
+  score_result_stable=(score_result_key==result_key) and score_result_stable+1 or 1
+  score_result_key=result_key
+  if score_result_stable>=3 and not score_result_confirmed then
+   score_result_confirmed=true
+   auto_write(frame,"pass_score_wram_correlated",nil,nil,"OBSERVE",
+     "time="..a.."|bonus="..b.."|total="..c..
+     "|copy="..d.."|status=consistent_candidate_not_official")
+  end
+ else
+  score_result_stable=0
+ end
  local arithmetic=(a~=nil and b~=nil and c~=nil and c==a+b)
  local copy=(c~=nil and d~=nil and c==d)
  local h=assert(io.open(score_csv,"ab"))
@@ -2477,7 +2498,24 @@ while true do
           remaining.distance+12<distance and
           remaining.distance<distance and
           (not lane_blocker(sample_for_auto,blocker,target))
-        if blocker and support_g and improves and support_count<2 and not loop_back and
+        -- v0.9.11: use a relay only when it is plausibly faster
+        -- than moving toward an obstructed receiver; cap relay range.
+        local relay_cost=(support_g and remaining) and
+          (support_g.distance+remaining.distance+48) or math.huge
+        local walk_cost=distance+220
+        local relay_saves=walk_cost-relay_cost
+        local relay_fast=improves and support_g.distance<=185 and
+          remaining.distance<=185 and math.abs(support_g.dy)<=105 and
+          math.abs(remaining.dy)<=105 and relay_saves>=35
+        if blocker and support_g and improves and not relay_fast and
+           (not long_710.relay_reject_frame or
+            emu.framecount()-long_710.relay_reject_frame>=30) then
+          long_710.relay_reject_frame=emu.framecount()
+          auto_write(emu.framecount(),"time_score_relay_rejected",from,blocker,"OBSERVE",
+            "target="..target.."|estimated_savings="..
+            string.format("%.2f",relay_saves).."|reason=insufficient_safe_gain")
+        end
+        if blocker and support_g and relay_fast and support_count<2 and not loop_back and
            emu.framecount()>=cooldown then
           long_710.support_attempts[support_key]=support_count+1
           long_710.universal_support_cooldown[support_key]=emu.framecount()+90
