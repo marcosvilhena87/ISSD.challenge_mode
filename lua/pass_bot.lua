@@ -3188,6 +3188,8 @@ while true do
     elseif elapsed>=(from==6 and 66 or 78) then reason="frame_limit"
     elseif from==6 and elapsed>=26 and frame-ctrl.last_vertical_progress>=18
        and math.abs(geom.dy)>95 then reason="vertical_stall"
+    elseif from==6 and elapsed>=10 and frame-ctrl.last_progress>=10 and
+       frame-ctrl.last_vertical_progress>=10 then reason="initial_motion_stall"
     elseif frame-ctrl.last_progress>=14 and
        not (from==6 and frame-ctrl.last_vertical_progress<12) then reason="progress_stall"
     end
