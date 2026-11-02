@@ -351,6 +351,52 @@ local function lane_blocker(sample,from,to)
  end
  return nil
 end
+-- v0.8.90: WRAM coordinates: X grows rightward, Y grows downward.
+local function pair_geometry(sample,from,to)
+ local xy=Ordered.capture(sample,from,to)
+ if not xy then return nil end
+ local dx,dy=xy.tx-xy.hx,xy.ty-xy.hy
+ local direction=(math.abs(dx)>=math.abs(dy))
+   and (dx>=0 and "Right" or "Left")
+   or (dy>=0 and "Down" or "Up")
+ return {xy=xy,dx=dx,dy=dy,distance=math.sqrt(dx*dx+dy*dy),
+         direction=direction}
+end
+local function carrier_gap(sample,id)
+ if not sample or not sample.ball then return nil end
+ for _,p in ipairs(sample.players or {}) do
+  if p.id==id then
+   local dx=sample.ball.x-p.x
+   local dy=sample.ball.y-p.y
+   return math.sqrt(dx*dx+dy*dy)
+  end
+ end
+ return nil
+end
+-- Try four neighboring cardinal directions; prefer the one that clears the
+-- known blocker without increasing the holder-to-receiver separation much.
+local function lane_escape(sample,from,to)
+ local g=pair_geometry(sample,from,to)
+ if not g then return nil end
+ local options={{"Up",0,-12},{"Down",0,12},{"Left",-12,0},{"Right",12,0}}
+ local best,best_score=nil,-math.huge
+ for _,a in ipairs(options) do
+  local shifted={players={},ball=sample.ball}
+  for _,p in ipairs(sample.players or {}) do
+   local np={id=p.id,x=p.x,y=p.y}
+   if p.id==from then np.x=np.x+a[2];np.y=np.y+a[3] end
+   shifted.players[#shifted.players+1]=np
+  end
+  local blocker,cross=lane_blocker(shifted,from,to)
+  local ng=pair_geometry(shifted,from,to)
+  if ng then
+   local score=(not blocker and 1000 or (cross or 0)*3)
+       -(ng.distance-g.distance)*2
+   if score>best_score then best_score=score;best=a[1] end
+  end
+ end
+ return best
+end
 local reach=Reach.new()
 local reach_path=root.."/csv/pass_reach_v0864.csv"
 local rf=assert(io.open(reach_path,"ab"))
@@ -1953,12 +1999,14 @@ while true do
           long_710.sidestep_97_initial={x=xy.hx,y=xy.hy}
           long_710.sidestep_97_blocker=blocker
           long_710.sidestep_97_last_cross=cross
-          long_710.walk_dir=(long_710.sidestep_97_count%2==1) and "Up" or "Down"
+          long_710.walk_dir=lane_escape(sample_for_auto,from,target) or "Up"
           auto_write(emu.framecount(),"relay_97_sidestep_started",9,7,"B",
             "attempt="..long_710.sidestep_97_count..
             "|blocker="..blocker.."|cross="..string.format("%.2f",cross)..
             "|direction="..long_710.walk_dir..
-            "|holder_x="..xy.hx.."|holder_y="..xy.hy)
+            "|holder_x="..xy.hx.."|holder_y="..xy.hy..
+            "|target_x="..xy.tx.."|target_y="..xy.ty..
+            "|dx="..dx.."|dy="..dy)
         elseif blocker and from==9 and target==7 and
            long_710.sidestep_97_count>=4 then
           if not long_710.sidestep_97_exhausted then
@@ -1973,7 +2021,7 @@ while true do
           long_710.walk_start=emu.framecount()
           long_710.walk_ticks=long_710.walk_ticks+1
           long_710.origin=from;long_710.target=target
-          long_710.walk_dir=(long_710.walk_ticks%2==1) and "Up" or "Down"
+          long_710.walk_dir=lane_escape(sample_for_auto,from,target) or "Up"
           auto_write(emu.framecount(),"last_missing_sidestep_started",from,target,"B",
             "blocker="..tostring(blocker).."|direction="..long_710.walk_dir)
         elseif blocker then
@@ -2007,9 +2055,7 @@ while true do
           if long_710.return_due then
             long_710.return_due=false;long_710.returns=long_710.returns+1
           end
-          long_710.direction=(math.abs(dx)>=math.abs(dy))
-             and (dx>=0 and "Right" or "Left")
-             or (dy>=0 and "Down" or "Up")
+          long_710.direction=pair_geometry(sample_for_auto,from,target).direction
           -- Suspend normal approach immediately for this bounded experiment.
           pass_chain.next_frame=emu.framecount()+150
           auto_write(emu.framecount(),"long_710_started",from,target,"B",
@@ -2101,6 +2147,8 @@ while true do
           "reason=lost_possession_or_invalid_geometry")
       else
         local elapsed=frame-long_710.start
+        local g=pair_geometry(sample_for_auto,long_710.origin,long_710.target)
+        if g then long_710.direction=g.direction end
         if elapsed<3 then
           buttons={[long_710.direction]=true}
         elseif elapsed<5 then
@@ -2111,6 +2159,12 @@ while true do
             long_710.shot_frame=frame
             auto_write(frame,"long_710_directional_b",long_710.origin,long_710.target,"B",
               "distance="..tostring(long_710.initial)..
+              "|holder_x="..tostring(g and g.xy.hx)..
+              "|holder_y="..tostring(g and g.xy.hy)..
+              "|target_x="..tostring(g and g.xy.tx)..
+              "|target_y="..tostring(g and g.xy.ty)..
+              "|dx="..tostring(g and g.dx)..
+              "|dy="..tostring(g and g.dy)..
               "|direction="..long_710.direction.."|simultaneous=true")
           end
         else
@@ -2145,6 +2199,30 @@ while true do
       and long_710.phase=="ready" then
     -- Do not allow stale ordinary approach commands to move toward player 10.
     buttons={}
+  end
+  -- Audit actual input and paired coordinates for ANY selected relay.
+  if armed and sample_for_auto and spatial.holder then
+    local target=long_710.target
+    if not target and long_710.phase=="ready" then
+      target=last_missing_710(spatial.visited,spatial.holder)
+        or Ordered.next(nil,spatial.holder,spatial.visited)
+    end
+    if target and target~=spatial.holder and emu.framecount()%6==0 then
+      local g=pair_geometry(sample_for_auto,spatial.holder,target)
+      if g then
+        auto_write(emu.framecount(),"relay_coordinates",spatial.holder,target,"B",
+          "hx="..g.xy.hx.."|hy="..g.xy.hy..
+          "|tx="..g.xy.tx.."|ty="..g.xy.ty..
+          "|dx="..g.dx.."|dy="..g.dy..
+          "|distance="..string.format("%.2f",g.distance)..
+          "|direction="..g.direction..
+          "|up="..tostring(buttons.Up==true)..
+          "|down="..tostring(buttons.Down==true)..
+          "|left="..tostring(buttons.Left==true)..
+          "|right="..tostring(buttons.Right==true)..
+          "|B="..tostring(buttons.B==true))
+      end
+    end
   end
   joypad.set(buttons,1)
   emu.frameadvance()
