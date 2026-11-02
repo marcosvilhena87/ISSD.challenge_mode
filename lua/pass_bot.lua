@@ -324,7 +324,8 @@ local long_710={phase="ready",start=nil,initial=nil,direction=nil,shot_frame=nil
  support_attempts={},support_target=nil,original_target=nil,fast_pass=false,
  final_target=nil,final_retries=0,final_next_retry=0,final_last_holder=nil,
  universal_previous_holder=nil,universal_support_cooldown={},queue_target=nil,queue_last_holder=nil,
- watchdog_key=nil,watchdog_start=0,watchdog_last_action=0,watchdog_release_until=0}
+ watchdog_key=nil,watchdog_start=0,watchdog_last_action=0,watchdog_release_until=0,
+ align_start=0,align_origin=nil,align_initial_gap=nil,align_no_progress=0,align_mode=0}
 -- Last missing outfield player: player IDs 2..11 (10 players), spatial evidence only.
 local function last_missing_710(visited,holder)
  if not visited then return nil end
@@ -650,11 +651,31 @@ while true do
     print("[ISSD.pass_lv1] single-pass result: holder_detection_timeout")
   end
   -- Priority lock: normal approach/repeat must not compete with recovery.
+  -- v0.8.99: active diagonal alignment for any holder/first-unvisited pair.
+  local align_target=first_unvisited(spatial.visited,spatial.holder)
+  local align_g=align_target and pair_geometry(sample_for_auto,spatial.holder,align_target)
+  local align_gap=spatial.holder and carrier_gap(sample_for_auto,spatial.holder)
+  if armed and pass_chain.active and autopass.enabled and not auto_finished and
+      long_710.phase=="ready" and align_g and align_gap and align_gap<=18 and
+      math.abs(align_g.dy)>100 and
+      long_710.align_no_progress<3 then
+    long_710.phase="align"
+    long_710.origin=spatial.holder
+    long_710.target=align_target
+    long_710.align_start=emu.framecount()
+    long_710.align_origin={x=align_g.xy.hx,y=align_g.xy.hy}
+    long_710.align_initial_gap=align_g.distance
+    long_710.watchdog_last_action=emu.framecount()
+    auto_write(emu.framecount(),"queue_alignment_started",long_710.origin,align_target,"B",
+      "dx="..align_g.dx.."|dy="..align_g.dy..
+      "|direction="..align_g.direction.."|distance="..string.format("%.2f",align_g.distance))
+  end
   -- v0.8.98: do not let an idle special-route priority lock the ordinary controller.
   local wd_frame=emu.framecount()
   local wd_target=first_unvisited(spatial.visited,spatial.holder)
   local wd_key=tostring(spatial.holder)..":"..tostring(wd_target)
   if wd_key~=long_710.watchdog_key then
+    long_710.align_no_progress=0;long_710.align_mode=0
     long_710.watchdog_key=wd_key
     long_710.watchdog_start=wd_frame
     long_710.watchdog_last_action=wd_frame
@@ -675,7 +696,7 @@ while true do
       and not long_710.sidestep_97_exhausted
   local priority_lock=pass_chain.active and not wd_released and
       (priority_missing~=nil or relay_97 or long_710.return_due or
-       long_710.phase=="sidestep" or long_710.phase=="advance" or long_710.phase=="face" or
+       long_710.phase=="align" or long_710.phase=="sidestep" or long_710.phase=="advance" or long_710.phase=="face" or
        long_710.phase=="observe")
   if armed and autopass.enabled and not auto_finished and sample_for_auto
       and not priority_lock
@@ -2287,6 +2308,53 @@ while true do
   end
   -- Shift part of the receiving burden to player 7, using observed motion
   -- rather than assuming the receiver will run to meet the ball.
+  if long_710.phase=="align" then
+    local frame=emu.framecount()
+    local g=pair_geometry(sample_for_auto,long_710.origin,long_710.target)
+    local gap=carrier_gap(sample_for_auto,long_710.origin)
+    buttons={}
+    pass_chain.next_frame=frame+2
+    if spatial.holder~=long_710.origin or not g or not gap or gap>18 then
+      auto_write(frame,"queue_alignment_stopped",long_710.origin,long_710.target,"B",
+        "reason=possession_or_geometry")
+      long_710.phase="ready";long_710.cooldown_until=frame+18
+    else
+      local elapsed=frame-long_710.align_start
+      local walked=math.sqrt((g.xy.hx-long_710.align_origin.x)^2+
+                             (g.xy.hy-long_710.align_origin.y)^2)
+      local gain=long_710.align_initial_gap-g.distance
+      if math.abs(g.dy)<=100 or elapsed>=18 or walked>=42 then
+        local progress=gain>=5 or walked>=5
+        if progress then
+          long_710.align_no_progress=0
+        else
+          long_710.align_no_progress=long_710.align_no_progress+1
+          long_710.align_mode=(long_710.align_mode+1)%3
+        end
+        long_710.phase="ready"
+        long_710.cooldown_until=frame+8
+        long_710.watchdog_last_action=frame
+        auto_write(frame,"queue_alignment_result",long_710.origin,long_710.target,"B",
+          "reason="..(math.abs(g.dy)<=100 and "aligned" or
+                       (progress and "bounded_progress" or "insufficient_progress"))..
+          "|walk="..string.format("%.2f",walked)..
+          "|gain="..string.format("%.2f",gain)..
+          "|dy="..g.dy.."|no_progress="..long_710.align_no_progress)
+        if long_710.align_no_progress>=3 then
+          long_710.watchdog_release_until=frame+48
+          auto_write(frame,"queue_alignment_fallback",long_710.origin,long_710.target,"B",
+            "reason=repeated_no_progress|release_frames=48")
+        end
+      else
+        buttons=approach_buttons(g)
+        if long_710.align_mode==1 then
+          buttons={ [g.dy>0 and "Down" or "Up"]=true }
+        elseif long_710.align_mode==2 then
+          buttons={ [g.dx>0 and "Right" or "Left"]=true }
+        end
+      end
+    end
+  end
   if long_710.phase=="advance" then
     local frame=emu.framecount()
     local xy=Ordered.capture(sample_for_auto,7,10)
