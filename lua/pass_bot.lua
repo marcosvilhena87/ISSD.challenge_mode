@@ -644,6 +644,8 @@ print("[ISSD.pass_lv1] commands="..command_path.." log="..log_path)
 release()
 -- v0.9.13: final-output exclusive, bounded 6 -> 2 control.
 local exclusive_62={state="ready",start=0,shots=0}
+local exclusive_58={state="ready",start=0,shots=0}
+local pass_clock_expired_frame=nil
 while true do
   if armed then score_log(emu.framecount(),"armed",false) end
   local p=observe()
@@ -655,7 +657,18 @@ while true do
     local event=spatial:step(ss,emu.framecount())
     if event then
      last_spatial_frame=event.frame
-     if not completion_frame and event.visited_count==10 then completion_frame=event.frame end
+     if not completion_frame and event.visited_count==10 and clock_started then
+        -- Whole seconds reaching zero cannot prove that the last centiseconds
+        -- have elapsed. Preserve the candidate and let bonus/result validate.
+        completion_frame=event.frame
+        local clock_value=pass_clock and pass_clock.time
+        local status=(clock_value and clock_value>0 and not clock_expired_logged)
+          and "seconds_positive" or "boundary_unverified"
+        auto_write(emu.framecount(),"chain_completion_clock_evidence",nil,spatial.holder,"OBSERVE",
+          "status="..status.."|seconds="..tostring(clock_value)..
+          "|expired_logged="..tostring(clock_expired_logged)..
+          "|requires_bonus_or_result_confirmation=true")
+       end
      spatial_write(event,ss)
     end
    elseif not spatial.read_error_logged then
@@ -823,11 +836,11 @@ while true do
     pass_chain.time_score_last_frame=emu.framecount()
     pass_chain.time_score_last_visits=chain_visits
   end
-  if pass_chain.active and chain_visits>=10 then
+  if pass_chain.active and chain_visits>=10 and completion_frame then
     pass_chain.active=false;autopass.enabled=false;auto_finished=true
     score_log(emu.framecount(),"ten_candidates",true)
     auto_write(emu.framecount(),"chain_complete_candidate",nil,spatial.holder,selected_pass_button,
-      "visited=10/10|spatial_only|no_auto_shot")
+      "visited=10/10|spatial_only|time_boundary_requires_game_confirmation|no_auto_shot")
     print("[ISSD.pass_lv1] chain candidate complete: 10/10 outfield players; FINISH="..tostring(finish.enabled))
   end
   -- v0.8.5: lack of a stable holder is a transient wait, not a terminal failure.
@@ -3079,60 +3092,81 @@ while true do
       end
     end
   end
-  local exclusive_pass_62=false
-  -- Priority arbitration happens AFTER other controllers, BEFORE joypad output.
-  -- Never interfere with the bonus finish or release an unverified B pulse.
+  local exclusive_receiver=nil
+  -- v0.9.14: one arbiter for two bounded, first-time pass priorities.
+  -- Prefer 6->2 at opening; 5->8 when 5 is the stable holder later.
+  local from,to,ctrl
+  if spatial.holder==6 and not spatial.visited[2] then
+    from,to,ctrl=6,2,exclusive_62
+  elseif spatial.holder==5 and not spatial.visited[8] then
+    from,to,ctrl=5,8,exclusive_58
+  end
   if armed and clock_started and pass_chain.active and not auto_finished and
-     sample_for_auto and not buttons.X and not spatial.visited[2] and
-     spatial.holder==6 and exclusive_62.state~="done" then
+     sample_for_auto and not buttons.X and from and ctrl.state~="done" then
     local frame=emu.framecount()
-    local geom=pair_geometry(sample_for_auto,6,2)
-    local carrier=carrier_gap(sample_for_auto,6)
-    if exclusive_62.state=="ready" then
-      exclusive_62.state="moving";exclusive_62.start=frame
-      auto_write(frame,"exclusive_6_to_2_started",6,2,"MOVE",
+    local geom=pair_geometry(sample_for_auto,from,to)
+    local carrier=carrier_gap(sample_for_auto,from)
+    if ctrl.state=="ready" then
+      ctrl.state="moving";ctrl.start=frame
+      ctrl.best=geom and geom.distance or math.huge
+      ctrl.last_progress=frame
+      ctrl.start_position=geom and {x=geom.xy.hx,y=geom.xy.hy} or nil
+      auto_write(frame,"exclusive_priority_started",from,to,"MOVE",
         "distance="..tostring(geom and geom.distance)..
         "|dy="..tostring(geom and geom.dy))
     end
-    local elapsed=frame-exclusive_62.start
+    local elapsed=frame-ctrl.start
+    if geom and geom.distance<ctrl.best-1 then
+      ctrl.best=geom.distance;ctrl.last_progress=frame
+    end
+    local walked=geom and ctrl.start_position and math.sqrt(
+      (geom.xy.hx-ctrl.start_position.x)^2+(geom.xy.hy-ctrl.start_position.y)^2) or 0
     local reason=nil
     if not geom then reason="missing_geometry"
     elseif not carrier or carrier>18 then reason="possession_unverified"
-    elseif elapsed>=54 then reason="frame_limit"
     elseif geom.distance>320 then reason="outside_bounded_route"
+    elseif walked>155 then reason="walk_limit"
+    elseif elapsed>=78 then reason="frame_limit"
+    elseif frame-ctrl.last_progress>=14 then reason="progress_stall"
     end
     if reason then
-      exclusive_62.state="done"
-      auto_write(frame,"exclusive_6_to_2_fallback",6,2,"OBSERVE",
-        "reason="..reason.."|frames="..elapsed)
+      ctrl.state="done"
       buttons={}
+      auto_write(frame,"exclusive_priority_fallback",from,to,"OBSERVE",
+        "reason="..reason.."|frames="..elapsed.."|walked="..
+        string.format("%.2f",walked))
     else
-      -- Override *all* other controller buttons while exclusive ownership holds.
       buttons={}
       if geom.distance<=175 and math.abs(geom.dy)<=95 and
-         not lane_blocker(sample_for_auto,6,2) then
-        buttons[geom.direction]=true
-        buttons.B=true
-        exclusive_pass_62=true
-        exclusive_62.shots=exclusive_62.shots+1
-        exclusive_62.state="done"
-        auto_write(frame,"exclusive_6_to_2_B",6,2,"B",
-          "direction="..geom.direction..
-          "|distance="..string.format("%.2f",geom.distance)..
-          "|frames="..elapsed.."|shots="..exclusive_62.shots)
+         not lane_blocker(sample_for_auto,from,to) then
+        buttons[geom.direction]=true;buttons.B=true
+        exclusive_receiver=to
+        ctrl.shots=ctrl.shots+1;ctrl.state="done"
+        auto_write(frame,"exclusive_priority_B",from,to,"B",
+          "direction="..geom.direction.."|distance="..
+          string.format("%.2f",geom.distance).."|frames="..elapsed)
       else
-        if math.abs(geom.dx)>20 then buttons[geom.dx>0 and "Right" or "Left"]=true end
-        if math.abs(geom.dy)>20 then buttons[geom.dy>0 and "Down" or "Up"]=true end
-        auto_write(frame,"exclusive_6_to_2_move",6,2,"MOVE",
+        -- Once close enough, spend remaining movement on vertical correction.
+        if math.abs(geom.dy)>95 and geom.distance<=200 then
+          buttons[geom.dy>0 and "Down" or "Up"]=true
+        else
+          if math.abs(geom.dx)>20 then buttons[geom.dx>0 and "Right" or "Left"]=true end
+          if math.abs(geom.dy)>20 then buttons[geom.dy>0 and "Down" or "Up"]=true end
+        end
+        auto_write(frame,"exclusive_priority_move",from,to,"MOVE",
           "dx="..geom.dx.."|dy="..geom.dy..
           "|distance="..string.format("%.2f",geom.distance)..
           "|elapsed="..elapsed)
       end
     end
-  elseif exclusive_62.state=="moving" then
+  end
+  if exclusive_62.state=="moving" and from~=6 then
     exclusive_62.state="done"
-    auto_write(emu.framecount(),"exclusive_6_to_2_fallback",6,2,"OBSERVE",
-      "reason=holder_or_phase_changed")
+    auto_write(emu.framecount(),"exclusive_priority_fallback",6,2,"OBSERVE","reason=holder_changed")
+  end
+  if exclusive_58.state=="moving" and from~=5 then
+    exclusive_58.state="done"
+    auto_write(emu.framecount(),"exclusive_priority_fallback",5,8,"OBSERVE","reason=holder_changed")
   end
   -- v0.9.1: final output gate for both ordinary and special B passes.
   -- Never rewrite the one-shot finish X or non-pass movement.
@@ -3140,7 +3174,7 @@ while true do
     local sender=spatial.holder
     local special=(long_710.phase=="face" or long_710.phase=="observe")
       and long_710.origin==sender and long_710.target
-    local receiver=exclusive_pass_62 and 2 or special or autopass.target
+    local receiver=exclusive_receiver or special or autopass.target
     if not receiver and autopass.last_attempt and autopass.last_attempt.from==sender then
       receiver=autopass.last_attempt.to
     end
