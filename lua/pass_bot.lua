@@ -392,22 +392,56 @@ local function pair_geometry(sample,from,to)
 end
 -- v0.9.8: rank safe direct passes ahead of expensive walking.
 -- Select only observable, unvisited receivers; preserve old order as fallback.
+-- v0.9.9: direct passes only when they improve on the proven queue.
+-- Look one receiver ahead to avoid a locally short but isolated destination.
 local function pass_first_target(sample,from,visited)
- local best,best_score,best_gap=nil,nil,nil
- if not sample or not from then return nil,nil end
+ if not sample or not from or not visited then return nil,nil,nil end
+ local fallback=first_unvisited(visited,from)
+ local baseline=fallback and pair_geometry(sample,from,fallback)
+ local baseline_cost=baseline and (baseline.distance+math.abs(baseline.dy)*0.30) or nil
+ local best,best_gap,best_cost=nil,nil,nil
  for id=2,11 do
   if id~=from and not visited[id] then
    local g=pair_geometry(sample,from,id)
-   if g and g.distance>=28 and g.distance<=185 and
-      math.abs(g.dy)<=105 and not lane_blocker(sample,from,id) then
-     local score=g.distance+math.abs(g.dy)*0.30
-     if not best_score or score<best_score then
-      best,best_score,best_gap=id,score,g.distance
+   if g and g.distance>=28 and g.distance<=185 and math.abs(g.dy)<=105
+      and not lane_blocker(sample,from,id) then
+     local next_cost=nil
+     for other=2,11 do
+      if other~=id and other~=from and not visited[other] then
+       local step=pair_geometry(sample,id,other)
+       if step then
+        -- Movement is more expensive than direct passing.
+        local cost=step.distance+(step.distance>185 and 220 or 0)
+        if not next_cost or cost<next_cost then next_cost=cost end
+       end
+      end
      end
+     local score=g.distance+math.abs(g.dy)*0.30+
+        (next_cost and next_cost*0.65 or 0)
+     if not best_cost or score<best_cost then
+      best,best_gap,best_cost=id,g.distance,score
+     end
+   end
+ end
+ -- Conservative fallback: preserve the v0.9.7 queue unless a candidate
+ -- has an estimated advantage of at least 25 WRAM-equivalent units.
+ local baseline_future=nil
+ if fallback then
+  for other=2,11 do
+   if other~=fallback and other~=from and not visited[other] then
+    local step=pair_geometry(sample,fallback,other)
+    if step then
+     local cost=step.distance+(step.distance>185 and 220 or 0)
+     if not baseline_future or cost<baseline_future then baseline_future=cost end
+    end
    end
   end
  end
- return best,best_gap
+ local reference=baseline_cost and (baseline_cost+(baseline_future and baseline_future*0.65 or 0))
+ if best and best~=fallback and reference and best_cost+25<reference then
+  return best,best_gap,best_cost
+ end
+ return nil,nil,nil
 end
 -- Diagonal travel is allowed as movement only, never with B.
 local function approach_buttons(g)
@@ -717,7 +751,10 @@ while true do
   end
   -- Priority lock: normal approach/repeat must not compete with recovery.
   -- v0.8.99: active diagonal alignment for any holder/first-unvisited pair.
-  local align_target=pass_first_target(sample_for_auto,spatial.holder,spatial.visited) or first_unvisited(spatial.visited,spatial.holder)
+  local align_target=(long_710.queue_commit_holder==spatial.holder and
+    long_710.queue_commit_target and not spatial.visited[long_710.queue_commit_target] and long_710.queue_commit_target)
+    or pass_first_target(sample_for_auto,spatial.holder,spatial.visited)
+    or first_unvisited(spatial.visited,spatial.holder)
   local align_g=align_target and pair_geometry(sample_for_auto,spatial.holder,align_target)
   local align_gap=spatial.holder and carrier_gap(sample_for_auto,spatial.holder)
   if armed and pass_chain.active and autopass.enabled and not auto_finished and
@@ -764,7 +801,10 @@ while true do
   end
   -- v0.8.98: do not let an idle special-route priority lock the ordinary controller.
   local wd_frame=emu.framecount()
-  local wd_target=pass_first_target(sample_for_auto,spatial.holder,spatial.visited) or first_unvisited(spatial.visited,spatial.holder)
+  local wd_target=(long_710.queue_commit_holder==spatial.holder and
+    long_710.queue_commit_target and not spatial.visited[long_710.queue_commit_target] and long_710.queue_commit_target)
+    or pass_first_target(sample_for_auto,spatial.holder,spatial.visited)
+    or first_unvisited(spatial.visited,spatial.holder)
   local wd_key=tostring(spatial.holder)..":"..tostring(wd_target)
   if wd_key~=long_710.watchdog_key then
     long_710.align_no_progress=0;long_710.align_mode=0
@@ -2312,6 +2352,16 @@ while true do
   local missing=last_missing_710(spatial.visited,spatial.holder)
   local pass_first,pass_first_gap=pass_first_target(sample_for_auto,spatial.holder,spatial.visited)
   local queue_target=pass_first or first_unvisited(spatial.visited,spatial.holder)
+  -- Hold a committed recipient during active ordinary/special attempts.
+  local busy=(autopass.phase~="idle" and autopass.target~=nil) or
+      long_710.phase=="face" or long_710.phase=="observe"
+  if busy and long_710.queue_commit_holder==spatial.holder and
+      long_710.queue_commit_target and not spatial.visited[long_710.queue_commit_target] then
+    queue_target=long_710.queue_commit_target
+  elseif not busy or long_710.queue_commit_holder~=spatial.holder then
+    long_710.queue_commit_holder=spatial.holder
+    long_710.queue_commit_target=queue_target
+  end
   if pass_first and queue_target~=long_710.queue_target then
     auto_write(emu.framecount(),"time_score_pass_first",spatial.holder,pass_first,"B",
       "strategy=direct_unvisited|distance="..string.format("%.2f",pass_first_gap)..
