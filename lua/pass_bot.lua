@@ -38,7 +38,13 @@ Auto=require("challenge.pass_auto_v071")
 package.loaded["challenge.goal_evidence_v4"]=nil
 package.loaded["challenge.pass_goal_evidence_v0826"]=nil
 local GoalEvidence=require("challenge.pass_goal_evidence_v0826")
+-- Force reload: BizHawk keeps package.loaded across Lua script restarts.
+package.loaded["challenge.pass_finish_v07"]=nil
 local Finish=require("challenge.pass_finish_v07")
+assert(Finish.VERSION=="0.9.7" and Finish.MAX_APPROACH_FRAMES==210,
+  "v0.9.7 requires updated pass_finish_v07.lua; restart main.lua")
+print("[ISSD.pass_lv1] finish_version="..Finish.VERSION..
+  " max_approach_frames="..Finish.MAX_APPROACH_FRAMES)
 local GoalStadium=require("challenge.pass_goal_stadium_v0866")
 local Commands=require("challenge.dribble_commands_v035")
 local function mkdir(p) os.execute('mkdir "'..p..'" >nul 2>&1') end
@@ -2045,7 +2051,7 @@ while true do
         "|read_error="..tostring(goal_error))
     end
     local shot,reason=Finish.step(finish,emu.framecount(),completion_frame,bonus.first_decrement_frame,sample_for_auto,spatial.holder)
-    if reason=="shoot_pulse" or reason=="completion_and_bonus_observed" or reason=="finish_window_expired" or reason=="shot_blocked_too_far" or reason=="shot_blocked_no_progress" or reason=="goalkeeper_coordinate_mismatch" or reason=="invalid_coordinate_domain" then
+    if reason=="shoot_pulse" or reason=="completion_and_bonus_observed" or reason=="finish_window_expired" or reason=="shot_blocked_too_far" or reason=="shot_blocked_no_progress" or reason=="finish_bonus_exhausted" or reason=="goalkeeper_coordinate_mismatch" or reason=="invalid_coordinate_domain" then
       finish_write(emu.framecount(),reason)
       auto_write(emu.framecount(),"finish_"..reason,spatial.holder,nil,"X",
         "aim="..tostring(finish.aim_reason).."|direction="..tostring(finish.aim and (finish.aim.Left and "Left" or "Right"))..
@@ -2079,6 +2085,12 @@ while true do
     -- Finalization only emits X once; it must never combine with pass B.
     if shot.X then
       buttons=shot;autopass.enabled=false
+      auto_write(emu.framecount(),"finish_x_verified_output",spatial.holder,nil,"X",
+        "frame="..emu.framecount().."|completion="..tostring(completion_frame)..
+        "|bonus_first_decrement="..tostring(bonus.first_decrement_frame)..
+        "|shot_count="..tostring(finish.shots)..
+        "|B="..tostring(buttons.B==true)..
+        "|X="..tostring(buttons.X==true))
       auto_write(emu.framecount(),"finish_x_output",spatial.holder,nil,"X",
         "right="..tostring(buttons.Right==true)..
         "|left="..tostring(buttons.Left==true)..

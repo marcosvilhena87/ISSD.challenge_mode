@@ -1,6 +1,6 @@
 -- PASS v0.8.13: one opt-in X shot after 10 spatial visitors + matching bonus countdown.
 -- Goal position is derived from stadium geometry; endpoint/attack side require calibration.
-local M={VERSION="0.8.66",MAX_GOALKEEPER_X=135,MAX_APPROACH_FRAMES=210}
+local M={VERSION="0.9.7",MAX_GOALKEEPER_X=135,MAX_APPROACH_FRAMES=210}
 function M.new()
  return {enabled=false,phase="waiting",completion_frame=nil,shot_frame=nil,shots=0,
   aim=nil,aim_reason=nil,approach_frames=0,approach_x_start=nil,approach_best=nil,
@@ -48,7 +48,10 @@ function M.step(t,frame,completion_frame,bonus_first_decrement,sample,stable_hol
   t.approach_best=math.min(t.approach_best or gap,gap)
   if gap>M.MAX_GOALKEEPER_X then
    if (t.approach_frames or 0)>=M.MAX_APPROACH_FRAMES then
-    t.enabled=false;return {},"shot_blocked_too_far"
+    t.enabled=false
+    t.aim_reason="approach_limit|gap="..tostring(gap).."|best="..tostring(t.approach_best)..
+      "|frames="..tostring(t.approach_frames)
+    return {},"shot_blocked_too_far"
    end
    -- Measure true progress; if movement stalls, alternate diagonal/cardinal
    -- alignment before giving up. Never shoot when still out of range.
@@ -65,7 +68,10 @@ function M.step(t,frame,completion_frame,bonus_first_decrement,sample,stable_hol
     t.approach_last_event="finish_approach_recovery"
    end
    if t.approach_recoveries>=9 then
-    t.enabled=false;return {},"shot_blocked_no_progress"
+    t.enabled=false
+    t.aim_reason="no_progress|gap="..tostring(gap)..
+      "|recoveries="..tostring(t.approach_recoveries)
+    return {},"shot_blocked_no_progress"
    end
    -- Only move when the ball is demonstrably at the current holder's feet.
    local holder_found=false
