@@ -313,6 +313,9 @@ local armed=false
 local previous=nil
 local auto_finished=false
 local pass_chain={active=false,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0,route_index=1,approach_frames=0,approach_neutral=false,approach_state={}}
+-- Single stationary range trial: starts on the FIRST verified possession by 7.
+-- It intentionally bypasses approach range selection for this one experiment.
+local static_710={phase="await_7",started=nil,direction=nil,initial=nil,shot_frame=nil}
 local reach=Reach.new()
 local reach_path=root.."/csv/pass_reach_v0864.csv"
 local rf=assert(io.open(reach_path,"ab"))
@@ -1845,6 +1848,63 @@ while true do
         end
       else
         st.pair_710_output_neutral=0
+      end
+    end
+  end
+  -- Experimental stationary 7->10 range probe. All earlier movement
+  -- decisions are overridden from first verified 7-possession onward.
+  if armed and static_710.phase~="finished" then
+    local frame=emu.framecount()
+    if static_710.phase=="await_7" and holder==7 and sample_for_auto then
+      local pos=Ordered.capture(sample_for_auto,7,10)
+      local gap=ball_gap_710(sample_for_auto)
+      if pos and gap and gap<=18 then
+        static_710.phase="face"
+        static_710.started=frame
+        static_710.initial=pos
+        local dx,dy=pos.tx-pos.hx,pos.ty-pos.hy
+        static_710.direction=(math.abs(dx)>=math.abs(dy))
+            and (dx>=0 and "Right" or "Left")
+            or (dy>=0 and "Down" or "Up")
+        pass_chain.active=false
+        autopass.enabled=false
+        auto_write(frame,"static_710_range_started",7,10,selected_pass_button,
+          "holder_x="..pos.hx.."|holder_y="..pos.hy..
+          "|receiver_x="..pos.tx.."|receiver_y="..pos.ty..
+          "|distance="..string.format("%.2f",math.sqrt(dx*dx+dy*dy))..
+          "|lateral="..tostring(math.abs(dy))..
+          "|ball_gap="..tostring(gap)..
+          "|direction="..static_710.direction)
+      end
+    end
+    if static_710.phase=="face" then
+      local gap=ball_gap_710(sample_for_auto)
+      if not gap or gap>18 or not Ordered.capture(sample_for_auto,7,10) then
+        static_710.phase="finished";buttons={}
+        auto_write(frame,"static_710_range_aborted",7,10,selected_pass_button,
+          "reason=possession_or_coordinates_invalid")
+      elseif frame-static_710.started<3 then
+        buttons={[static_710.direction]=true}
+      elseif frame-static_710.started<5 then
+        buttons={}
+      elseif frame-static_710.started<7 then
+        buttons={B=true}
+        if not static_710.shot_frame then
+          static_710.shot_frame=frame
+          auto_write(frame,"static_710_range_pass_pulse",7,10,"B",
+            "initial_distance="..string.format("%.2f",math.sqrt(
+              (static_710.initial.tx-static_710.initial.hx)^2+
+              (static_710.initial.ty-static_710.initial.hy)^2)))
+        end
+      else
+        static_710.phase="observe";buttons={}
+      end
+    elseif static_710.phase=="observe" then
+      buttons={}
+      if frame-static_710.started>=127 then
+        static_710.phase="finished";auto_finished=true
+        auto_write(frame,"static_710_range_observation_finished",7,10,selected_pass_button,
+          "observation_frames=120|success_unverified")
       end
     end
   end
