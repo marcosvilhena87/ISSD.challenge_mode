@@ -318,7 +318,9 @@ local long_710={phase="ready",start=nil,initial=nil,direction=nil,shot_frame=nil
  target=nil,origin=nil,trial_kind=nil,returns=0,missing_attempts=0,
  last_holder=nil,return_due=false,walk_ticks=0,walk_start=nil,walk_dir=nil,
  advance_start=nil,advance_origin=nil,advance_target=nil,
- attempts={},cooldown_until=0,receiver_start=nil,carrier_start=nil}
+ attempts={},cooldown_until=0,receiver_start=nil,carrier_start=nil,
+ sidestep_97_count=0,sidestep_97_initial=nil,sidestep_97_blocker=nil,
+ sidestep_97_last_cross=nil,sidestep_97_exhausted=false}
 -- Last missing outfield player: player IDs 2..11 (10 players), spatial evidence only.
 local function last_missing_710(visited,holder)
  if not visited then return nil end
@@ -572,6 +574,7 @@ while true do
   -- Priority lock: normal approach/repeat must not compete with recovery.
   local priority_missing=last_missing_710(spatial.visited,spatial.holder)
   local relay_97=pass_chain.active and spatial.holder==9 and not spatial.visited[7]
+      and not long_710.sidestep_97_exhausted
   local priority_lock=pass_chain.active and
       (priority_missing~=nil or relay_97 or long_710.return_due or
        long_710.phase=="sidestep" or long_710.phase=="advance" or long_710.phase=="face" or
@@ -1940,7 +1943,31 @@ while true do
         local dx,dy=xy.tx-xy.hx,xy.ty-xy.hy
         local distance=math.sqrt(dx*dx+dy*dy)
         local blocker,cross=lane_blocker(sample_for_auto,from,target)
-        if blocker and missing and not long_710.return_due and
+        if blocker and from==9 and target==7 and
+           not long_710.sidestep_97_exhausted and
+           long_710.sidestep_97_count<4 then
+          long_710.phase="sidestep"
+          long_710.walk_start=emu.framecount()
+          long_710.sidestep_97_count=long_710.sidestep_97_count+1
+          long_710.origin=9;long_710.target=7
+          long_710.sidestep_97_initial={x=xy.hx,y=xy.hy}
+          long_710.sidestep_97_blocker=blocker
+          long_710.sidestep_97_last_cross=cross
+          long_710.walk_dir=(long_710.sidestep_97_count%2==1) and "Up" or "Down"
+          auto_write(emu.framecount(),"relay_97_sidestep_started",9,7,"B",
+            "attempt="..long_710.sidestep_97_count..
+            "|blocker="..blocker.."|cross="..string.format("%.2f",cross)..
+            "|direction="..long_710.walk_dir..
+            "|holder_x="..xy.hx.."|holder_y="..xy.hy)
+        elseif blocker and from==9 and target==7 and
+           long_710.sidestep_97_count>=4 then
+          if not long_710.sidestep_97_exhausted then
+            long_710.sidestep_97_exhausted=true
+            auto_write(emu.framecount(),"relay_97_sidestep_exhausted",9,7,"B",
+              "attempts="..long_710.sidestep_97_count..
+              "|blocker="..blocker.."|cross="..string.format("%.2f",cross))
+          end
+        elseif blocker and missing and not long_710.return_due and
            long_710.walk_ticks<4 then
           long_710.phase="sidestep"
           long_710.walk_start=emu.framecount()
@@ -2038,16 +2065,25 @@ while true do
     buttons={}
     if not xy or not gap or gap>18 or spatial.holder~=long_710.origin then
       long_710.phase="ready"
-      auto_write(frame,"last_missing_sidestep_aborted",
+      auto_write(frame,long_710.origin==9 and long_710.target==7
+        and "relay_97_sidestep_aborted" or "last_missing_sidestep_aborted",
         long_710.origin,long_710.target,"B","reason=loss_of_possession")
     elseif frame-long_710.walk_start<6 then
       buttons={[long_710.walk_dir]=true}
     else
       long_710.phase="ready"
-      auto_write(frame,"last_missing_sidestep_finished",
-        long_710.origin,long_710.target,"B",
+      local is97=long_710.origin==9 and long_710.target==7
+      local blocker,cross=lane_blocker(sample_for_auto,long_710.origin,long_710.target)
+      local origin=long_710.sidestep_97_initial
+      local delta_x=origin and xy.hx-origin.x or 0
+      local delta_y=origin and xy.hy-origin.y or 0
+      auto_write(frame,is97 and "relay_97_sidestep_finished"
+        or "last_missing_sidestep_finished",long_710.origin,long_710.target,"B",
         "direction="..long_710.walk_dir..
-        "|holder_x="..xy.hx.."|holder_y="..xy.hy)
+        "|holder_x="..xy.hx.."|holder_y="..xy.hy..
+        "|dx="..delta_x.."|dy="..delta_y..
+        "|blocker="..tostring(blocker).."|cross="..tostring(cross)..
+        "|previous_cross="..tostring(long_710.sidestep_97_last_cross))
     end
   end
   if long_710.phase=="face" or long_710.phase=="observe" then
@@ -2104,7 +2140,8 @@ while true do
   end
   if pass_chain.active and
       (last_missing_710(spatial.visited,spatial.holder) or
-       (spatial.holder==9 and not spatial.visited[7]))
+       (spatial.holder==9 and not spatial.visited[7]
+        and not long_710.sidestep_97_exhausted))
       and long_710.phase=="ready" then
     -- Do not allow stale ordinary approach commands to move toward player 10.
     buttons={}
