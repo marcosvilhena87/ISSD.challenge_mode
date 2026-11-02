@@ -118,6 +118,7 @@ local pass_clock=nil
 local clock_start_pending=false
 local clock_started=false
 local clock_expired_logged=false
+local gate_fast_retries={}
 local previous_clock_read=nil
 local bonus=Bonus.new()
 local completion_frame=nil
@@ -615,7 +616,7 @@ while true do
       if p.status=="candidate" and p.challenge=="PASS" and p.level==1 then
         armed=true;reach=Reach.new();tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();bonus=Bonus.new();completion_frame=nil;last_spatial_frame=nil;autopass=Auto.new();finish=Finish.new();goal_monitor=GoalEvidence.new(GoalEvidence.read(memory.read_u8,memory.read_u16_le,emu.framecount()));finish.enabled=auto_finish_queued;auto_finish_queued=false
         clock_start_pending=pending_auto and selected_pass_button=="B"
-        clock_started=false;clock_expired_logged=false;previous_clock_read=nil;pass_clock=nil
+        clock_started=false;clock_expired_logged=false;previous_clock_read=nil;pass_clock=nil;gate_fast_retries={}
         autopass.enabled=false;autopass.button=selected_pass_button;autopass.start_frame=emu.framecount();autopass.direction=selected_direction;autopass.trigger_delay=trigger_mode=="B" and 12 or 0;autopass.calibration_mode=calibration_mode
         pending_auto=false;auto_finished=false;previous_gate=nil
         pass_chain={active=false,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0,route_index=1,approach_frames=0,approach_neutral=false,approach_state={}}
@@ -705,6 +706,7 @@ while true do
   -- v0.9.3: spatial possession changes invalidate a stale ordinary gate.
   -- Reconcile only when an outfield holder has actually changed.
   if pass_chain.active and armed and spatial.holder and
+      long_710.phase~="face" and long_710.phase~="observe" and
       autopass.phase~="idle" and autopass.origin and
       spatial.holder~=autopass.origin and
       spatial.holder>=2 and spatial.holder<=11 then
@@ -1974,22 +1976,53 @@ while true do
       else
         pass_chain.active=false;autopass.enabled=false;auto_finished=true
       end
-      if reason=="possession_gate_timeout" and pass_chain.active and
-          spatial.holder and spatial.holder>=2 and spatial.holder<=11 then
+      -- v0.9.6: recover a same-holder gate timeout without repeating alignment.
+      if reason=="possession_gate_timeout" and clock_started and not clock_expired_logged and
+          pass_chain.active and spatial.holder and spatial.holder>=2 and spatial.holder<=11 then
         local old_origin,old_target=autopass.origin,autopass.target
-        local fresh=Auto.new()
-        fresh.enabled=true;fresh.button="B";fresh.direction=selected_direction
-        fresh.calibration_mode=calibration_mode
-        fresh.start_frame=emu.framecount()
-        autopass=fresh
-        pass_chain.active=true;auto_finished=false
-        pass_chain.approach_frames=0;pass_chain.approach_state={}
-        pass_chain.approach_neutral=false
-        pass_chain.next_frame=emu.framecount()+6
-        long_710.watchdog_last_action=emu.framecount()
-        auto_write(emu.framecount(),"possession_gate_restarted",old_origin,spatial.holder,"B",
-          "stale_target="..tostring(old_target)..
-          "|next_unvisited="..tostring(first_unvisited(spatial.visited,spatial.holder)))
+        local actual=spatial.holder
+        local target=(old_origin==actual and old_target) or first_unvisited(spatial.visited,actual)
+        local g=target and pair_geometry(sample_for_auto,actual,target)
+        local ball_distance=carrier_gap(sample_for_auto,actual)
+        local remaining=pass_clock and pass_clock.time
+        local k=tostring(actual)..":"..tostring(target)
+        local retries=gate_fast_retries[k] or 0
+        local valid_time=remaining and remaining>0 and remaining<=30
+        if g and g.distance<=185 and math.abs(g.dy)<=105 and
+            ball_distance and ball_distance<=18 and valid_time and retries<2 and
+            long_710.phase~="face" and long_710.phase~="observe" then
+          gate_fast_retries[k]=retries+1
+          long_710.origin=actual;long_710.target=target
+          long_710.phase="face";long_710.fast_pass=true
+          long_710.direction=g.direction;long_710.start=emu.framecount()
+          long_710.trial_kind="gate_fast_recovery"
+          long_710.shot_frame=nil
+          pass_chain.active=true;auto_finished=false
+          autopass.enabled=false
+          long_710.watchdog_last_action=emu.framecount()
+          auto_write(emu.framecount(),"possession_gate_fast_recovery",actual,target,"B",
+            "attempt="..(retries+1).."|distance="..string.format("%.2f",g.distance)..
+            "|dy="..g.dy.."|direction="..g.direction..
+            "|ball_gap="..string.format("%.2f",ball_distance)..
+            "|time_left="..remaining)
+        else
+          local fresh=Auto.new()
+          fresh.enabled=true;fresh.button="B";fresh.direction=selected_direction
+          fresh.calibration_mode=calibration_mode
+          fresh.start_frame=emu.framecount()
+          autopass=fresh
+          pass_chain.active=true;auto_finished=false
+          pass_chain.approach_frames=0;pass_chain.approach_state={}
+          pass_chain.approach_neutral=false
+          pass_chain.next_frame=emu.framecount()+4
+          long_710.watchdog_last_action=emu.framecount()
+          auto_write(emu.framecount(),"possession_gate_restarted",old_origin,actual,"B",
+            "stale_target="..tostring(old_target)..
+            "|next_unvisited="..tostring(first_unvisited(spatial.visited,actual))..
+            "|reason=fast_guard_not_met|distance="..tostring(g and g.distance)..
+            "|ball_gap="..tostring(ball_distance)..
+            "|time_left="..tostring(remaining).."|retry="..retries)
+        end
       end
       print("[ISSD.pass_lv1] single-pass result: "..reason.." max_ball_displacement="..string.format("%.2f",completed_displacement))
     end
