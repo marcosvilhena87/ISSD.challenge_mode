@@ -618,6 +618,15 @@ while true do
       local target=bridge_info and bridge_info.target
       local movement=pass_chain.approach_state
       movement.current_frame=emu.framecount()
+      if holder==7 and target==10 then
+        local v=Ordered.observe_710(movement,sample_for_auto,emu.framecount())
+        if v and emu.framecount()%12==0 then
+          local measured=Feet.measure(sample_for_auto,7,10)
+          auto_write(emu.framecount(),"approach_710_receiver_velocity",7,10,selected_pass_button,
+            "vx="..tostring(v.vx).."|vy="..tostring(v.vy)..
+            "|distance="..tostring(measured and measured.distance))
+        end
+      end
       movement.approach_frames=pass_chain.approach_frames or 0
       local approach_limit=movement.approach_limit or Ordered.MAX_APPROACH
       if holder==8 and target==9 and not movement.receiver_last then
