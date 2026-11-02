@@ -1277,7 +1277,7 @@ while true do
           if reason=="approach_step" then
             -- Dash applies ONLY to movement during 7->10, never a pass.
             -- Keep burst_direction cardinal; Y is not a steering axis.
-            if false and holder==7 and target==10 and not buttons.B and
+            if movement.experimental_dash_710_enabled==true and holder==7 and target==10 and not buttons.B and
                 (buttons.Right or buttons.Left or buttons.Up or buttons.Down) then
               buttons.Y=true
               auto_write(emu.framecount(),"approach_710_dash_start",7,10,selected_pass_button,
