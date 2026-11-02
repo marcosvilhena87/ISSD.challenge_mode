@@ -657,12 +657,17 @@ while true do
     local event=spatial:step(ss,emu.framecount())
     if event then
      last_spatial_frame=event.frame
-     if not completion_frame and event.visited_count==10 and clock_started and
-        not clock_expired_logged and pass_clock and pass_clock.time and pass_clock.time>0 then
+     if not completion_frame and event.visited_count==10 and clock_started then
+        -- Whole seconds reaching zero cannot prove that the last centiseconds
+        -- have elapsed. Preserve the candidate and let bonus/result validate.
         completion_frame=event.frame
-       elseif event.visited_count==10 and not completion_frame then
-        auto_write(emu.framecount(),"chain_complete_out_of_time",nil,spatial.holder,"OBSERVE",
-          "time="..tostring(pass_clock and pass_clock.time).."|no_finish_authorization")
+        local clock_value=pass_clock and pass_clock.time
+        local status=(clock_value and clock_value>0 and not clock_expired_logged)
+          and "seconds_positive" or "boundary_unverified"
+        auto_write(emu.framecount(),"chain_completion_clock_evidence",nil,spatial.holder,"OBSERVE",
+          "status="..status.."|seconds="..tostring(clock_value)..
+          "|expired_logged="..tostring(clock_expired_logged)..
+          "|requires_bonus_or_result_confirmation=true")
        end
      spatial_write(event,ss)
     end
@@ -835,7 +840,7 @@ while true do
     pass_chain.active=false;autopass.enabled=false;auto_finished=true
     score_log(emu.framecount(),"ten_candidates",true)
     auto_write(emu.framecount(),"chain_complete_candidate",nil,spatial.holder,selected_pass_button,
-      "visited=10/10|spatial_only|no_auto_shot")
+      "visited=10/10|spatial_only|time_boundary_requires_game_confirmation|no_auto_shot")
     print("[ISSD.pass_lv1] chain candidate complete: 10/10 outfield players; FINISH="..tostring(finish.enabled))
   end
   -- v0.8.5: lack of a stable holder is a transient wait, not a terminal failure.
