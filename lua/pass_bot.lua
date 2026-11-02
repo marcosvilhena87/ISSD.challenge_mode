@@ -323,7 +323,8 @@ local long_710={phase="ready",start=nil,initial=nil,direction=nil,shot_frame=nil
  sidestep_97_last_cross=nil,sidestep_97_exhausted=false,
  support_attempts={},support_target=nil,original_target=nil,fast_pass=false,
  final_target=nil,final_retries=0,final_next_retry=0,final_last_holder=nil,
- universal_previous_holder=nil,universal_support_cooldown={},queue_target=nil,queue_last_holder=nil}
+ universal_previous_holder=nil,universal_support_cooldown={},queue_target=nil,queue_last_holder=nil,
+ watchdog_key=nil,watchdog_start=0,watchdog_last_action=0,watchdog_release_until=0}
 -- Last missing outfield player: player IDs 2..11 (10 players), spatial evidence only.
 local function last_missing_710(visited,holder)
  if not visited then return nil end
@@ -649,10 +650,30 @@ while true do
     print("[ISSD.pass_lv1] single-pass result: holder_detection_timeout")
   end
   -- Priority lock: normal approach/repeat must not compete with recovery.
+  -- v0.8.98: do not let an idle special-route priority lock the ordinary controller.
+  local wd_frame=emu.framecount()
+  local wd_target=first_unvisited(spatial.visited,spatial.holder)
+  local wd_key=tostring(spatial.holder)..":"..tostring(wd_target)
+  if wd_key~=long_710.watchdog_key then
+    long_710.watchdog_key=wd_key
+    long_710.watchdog_start=wd_frame
+    long_710.watchdog_last_action=wd_frame
+    long_710.watchdog_release_until=0
+  end
+  if long_710.phase=="ready" and wd_target and
+     wd_frame-long_710.watchdog_last_action>=90 then
+    long_710.watchdog_release_until=wd_frame+48
+    long_710.watchdog_last_action=wd_frame
+    long_710.attempts={}
+    long_710.cooldown_until=0
+    auto_write(wd_frame,"queue_watchdog_release",spatial.holder,wd_target,"B",
+      "reason=special_route_idle|release_frames=48")
+  end
+  local wd_released=wd_frame<long_710.watchdog_release_until
   local priority_missing=last_missing_710(spatial.visited,spatial.holder)
   local relay_97=pass_chain.active and spatial.holder==9 and not spatial.visited[7]
       and not long_710.sidestep_97_exhausted
-  local priority_lock=pass_chain.active and
+  local priority_lock=pass_chain.active and not wd_released and
       (priority_missing~=nil or relay_97 or long_710.return_due or
        long_710.phase=="sidestep" or long_710.phase=="advance" or long_710.phase=="face" or
        long_710.phase=="observe")
@@ -2059,7 +2080,7 @@ while true do
       "priority=unvisited_first")
   end
   if armed and pass_chain.active and sample_for_auto and
-     long_710.phase=="ready" and spatial.holder and
+     not wd_released and long_710.phase=="ready" and spatial.holder and
      (missing or long_710.return_due or
       (spatial.holder==9 and not spatial.visited[7]) or (spatial.holder==7 and
         (Ordered.next(nil,7,spatial.visited)==10 or
@@ -2077,6 +2098,18 @@ while true do
         if bp then for _,p in ipairs(sample_for_auto.players or {}) do
           if p.id==from then gap=math.sqrt((bp.x-p.x)^2+(bp.y-p.y)^2) end
         end end
+      end
+      local routing_g=pair_geometry(sample_for_auto,from,target)
+      if routing_g and (emu.framecount()-long_710.watchdog_last_action>=24) then
+        local why=(not gap and "missing_ball" or
+          (gap>18 and "ball_not_with_holder" or
+          (routing_g.distance>410 and "distance" or
+          (math.abs(routing_g.dy)>100 and "lateral_alignment" or
+          (emu.framecount()<long_710.cooldown_until and "cooldown" or "evaluate_lane")))))
+        auto_write(emu.framecount(),"queue_route_diagnostic",from,target,"B",
+          "reason="..why.."|dx="..routing_g.dx.."|dy="..routing_g.dy..
+          "|direction="..routing_g.direction..
+          "|distance="..string.format("%.2f",routing_g.distance))
       end
       local attempt_key=tostring(from)..":"..tostring(target)
       if xy and gap and gap<=18 and
@@ -2110,9 +2143,11 @@ while true do
           long_710.receiver_start={x=support_g.xy.tx,y=support_g.xy.ty}
           long_710.carrier_start={x=support_g.xy.hx,y=support_g.xy.hy}
           long_710.start=emu.framecount()
+          long_710.watchdog_last_action=emu.framecount()
           long_710.shot_frame=nil
           long_710.fast_pass=true
           long_710.phase="face"
+          long_710.watchdog_last_action=emu.framecount()
           auto_write(emu.framecount(),"universal_support_planned",from,blocker,"B",
             "primary_target="..tostring(target)..
             "|already_visited="..tostring(spatial.visited[blocker]==true)..
@@ -2125,6 +2160,7 @@ while true do
            not long_710.sidestep_97_exhausted and
            long_710.sidestep_97_count<4 then
           long_710.phase="sidestep"
+          long_710.watchdog_last_action=emu.framecount()
           long_710.walk_start=emu.framecount()
           long_710.sidestep_97_count=long_710.sidestep_97_count+1
           long_710.origin=9;long_710.target=7
