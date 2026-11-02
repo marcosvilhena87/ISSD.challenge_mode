@@ -660,6 +660,37 @@ while true do
       local target=bridge_info and bridge_info.target
       local movement=pass_chain.approach_state
       movement.current_frame=emu.framecount()
+      -- Watchdog for neutral/settle states that never resume an approach.
+      if holder==7 and target==10 then
+        local coords=Ordered.capture(sample_for_auto,7,10)
+        if not coords then
+          movement.pair_710_invalid_frames=(movement.pair_710_invalid_frames or 0)+1
+          if movement.pair_710_invalid_frames>=3 then
+            buttons={};reason="approach_710_invalid_coordinates"
+            pass_chain.active=false;autopass.enabled=false;auto_finished=true
+            auto_write(emu.framecount(),"approach_710_invalid_coordinates",7,10,selected_pass_button,
+              "invalid_frames="..tostring(movement.pair_710_invalid_frames))
+          end
+        else
+          movement.pair_710_invalid_frames=0
+        end
+        if pass_chain.approach_neutral and (movement.burst_remaining or 0)<=0 then
+          movement.pair_710_neutral_frames=(movement.pair_710_neutral_frames or 0)+1
+          if movement.pair_710_neutral_frames>=5 then
+            pass_chain.approach_neutral=false
+            movement.right_followup_left=0
+            movement.right_settle_remaining=0
+            movement.burst_remaining=0
+            movement.burst_buttons=nil
+            movement.pair_710_neutral_frames=0
+            auto_write(emu.framecount(),"approach_710_neutral_watchdog",7,10,selected_pass_button,
+              "action=recalculate_direction|distance="..
+                tostring((Feet.measure(sample_for_auto,7,10) or {}).distance))
+          end
+        else
+          movement.pair_710_neutral_frames=0
+        end
+      end
       local approach_absolute=(holder==7 and target==10) and Ordered.MAX_APPROACH_710_ABSOLUTE or Ordered.MAX_APPROACH_ABSOLUTE
       -- Detect the same X coordinate persisting across Dash observations.
       -- Switch to plain directional running rather than repeating Y in place.
