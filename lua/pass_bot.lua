@@ -618,6 +618,7 @@ while true do
       local target=bridge_info and bridge_info.target
       local movement=pass_chain.approach_state
       movement.current_frame=emu.framecount()
+      movement.approach_frames=pass_chain.approach_frames or 0
       local approach_limit=movement.approach_limit or Ordered.MAX_APPROACH
       if holder==8 and target==9 and not movement.receiver_last then
         Ordered.observe_receiver(movement,sample_for_auto,emu.framecount(),holder,target)
@@ -1387,6 +1388,15 @@ while true do
         auto_write(emu.framecount(),"relay_outcome",autopass.origin,holder,selected_pass_button,
           "repeat="..tostring(repeated and true or false).."|consecutive="..pass_chain.consecutive_relays)
         pass_chain.previous=autopass.origin
+        if holder~=autopass.target then
+          local next_target,next_reason=Ordered.next(pass_chain.route_index,holder,spatial.visited)
+          auto_write(emu.framecount(),"route_unexpected_receiver_reconcile",autopass.origin,holder,selected_pass_button,
+            "planned="..tostring(autopass.target)..
+            "|actual="..tostring(holder)..
+            "|visited_actual="..tostring(spatial.visited[holder] and true or false)..
+            "|next_unvisited="..tostring(next_target)..
+            "|route_reason="..tostring(next_reason))
+        end
         if holder==autopass.target then
           pass_chain.route_index=pass_chain.route_index+1
           pass_chain.approach_frames=0;pass_chain.approach_neutral=false;pass_chain.approach_state={}
