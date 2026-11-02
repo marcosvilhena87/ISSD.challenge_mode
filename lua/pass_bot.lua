@@ -257,6 +257,42 @@ local function auto_write(frame,event,from,to,button,reason)
  assert(h:write(csv({session,frame,event,from,to,button,reason},7)))
  assert(h:close())
 end
+-- v0.9.10: passive WRAM score telemetry (candidates from DRIBBLE).
+-- Read only: observations do not authorize a goal or an official score.
+local score_csv=root.."/csv/pass_score_wram_v0910.csv"
+local score_file=assert(io.open(score_csv,"ab"))
+if score_file:seek("end")==0 then
+ score_file:write("session,frame,phase,time_score_u8,bonus_score_u16,total_score_u16,total_copy_u16,arithmetic_ok,copy_ok,changed,stable_samples\n")
+end
+score_file:close()
+local score_previous=nil
+local score_stable=0
+local score_last_frame=-9999
+local function score_byte(addr)
+ local ok,v=pcall(memory.read_u8,addr,"WRAM")
+ if ok and type(v)=="number" then return v end
+ return nil
+end
+local function score_word(addr)
+ local lo,hi=score_byte(addr),score_byte(addr+1)
+ if lo==nil or hi==nil then return nil end
+ return lo+hi*256
+end
+local function score_log(frame,phase,force)
+ if not force and frame-score_last_frame<30 then return end
+ score_last_frame=frame
+ local a,b,c,d=score_byte(0x01CF3),score_word(0x01CF8),
+     score_word(0x01CFA),score_word(0x0DC06)
+ local key=table.concat({tostring(a),tostring(b),tostring(c),tostring(d)},":")
+ local changed=(score_previous~=nil and score_previous~=key)
+ score_stable=(score_previous==key) and score_stable+1 or 1
+ score_previous=key
+ local arithmetic=(a~=nil and b~=nil and c~=nil and c==a+b)
+ local copy=(c~=nil and d~=nil and c==d)
+ local h=assert(io.open(score_csv,"ab"))
+ h:write(csv({session,frame,phase,a,b,c,d,arithmetic,copy,changed,score_stable},11))
+ h:close()
+end
 local trigger_csv=root.."/csv/pass_trigger_v0811.csv"
 local trigger_header=assert(io.open(trigger_csv,"ab"))
 if trigger_header:seek("end")==0 then
@@ -564,6 +600,7 @@ end
 print("[ISSD.pass_lv1] commands="..command_path.." log="..log_path)
 release()
 while true do
+  if armed then score_log(emu.framecount(),"armed",false) end
   local p=observe()
   local sample_for_auto=nil
   if armed then
@@ -730,11 +767,20 @@ while true do
     auto_write(emu.framecount(),"time_score_new_visitor",spatial.holder,nil,"OBSERVE",
       "visited="..chain_visits.."/10|time_left="..tostring(pass_clock and pass_clock.time)..
       "|frames_since_last="..tostring(emu.framecount()-(pass_chain.time_score_last_frame or emu.framecount())))
+    local elapsed=emu.framecount()-(pass_chain.time_score_last_frame or emu.framecount())
+    if elapsed>=180 then
+      auto_write(emu.framecount(),"time_score_slow_segment",spatial.holder,nil,"OBSERVE",
+        "frames="..elapsed.."|visited="..chain_visits..
+        "|time_left="..tostring(pass_clock and pass_clock.time)..
+        "|policy=preserve_v0909")
+    end
+    score_log(emu.framecount(),"visitor_"..chain_visits,true)
     pass_chain.time_score_last_frame=emu.framecount()
     pass_chain.time_score_last_visits=chain_visits
   end
   if pass_chain.active and chain_visits>=10 then
     pass_chain.active=false;autopass.enabled=false;auto_finished=true
+    score_log(emu.framecount(),"ten_candidates",true)
     auto_write(emu.framecount(),"chain_complete_candidate",nil,spatial.holder,selected_pass_button,
       "visited=10/10|spatial_only|no_auto_shot")
     print("[ISSD.pass_lv1] chain candidate complete: 10/10 outfield players; FINISH="..tostring(finish.enabled))
