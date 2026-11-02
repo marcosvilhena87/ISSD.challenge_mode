@@ -570,7 +570,7 @@ while true do
       local eligible,early_why,m=Early.evaluate(sample_for_auto,holder,10,
         pass_chain.approach_frames or 0,pass_chain.early_710_used)
       if eligible then
-        plan={sequence={10},target=10,aligned=true}
+        plan={sequence={10},target=10,aligned=true,early_710_trial=true}
         early_candidate=true
         early_distance=m.distance
         pass_chain.early_710_used=true
@@ -1159,6 +1159,19 @@ while true do
       buttons={};reason=selector_reason or "invalid_handoff";autopass.enabled=false
       pass_chain.active=false;auto_finished=true
       auto_write(emu.framecount(),"feet_route_blocked",holder,nil,selected_pass_button,reason)
+    end
+    if autopass.early_710_trial and holder==7 and autopass.target==10 then
+      if reason=="target_selected" or reason=="possession_gate_ready"
+         or reason=="facing_directional" or reason=="facing_release"
+         or reason=="direction_and_B_hold" or reason=="pass_pulse"
+         or reason=="early_710_guard_out_of_band"
+         or reason=="early_710_guard_lateral_risk" then
+        auto_write(emu.framecount(),"early_710_execution",7,10,selected_pass_button,
+          "phase="..tostring(autopass.phase).."|reason="..tostring(reason)..
+          "|B="..tostring(buttons.B==true)..
+          "|direction="..tostring(autopass.facing_direction)..
+          "|distance="..tostring((Feet.measure(sample_for_auto,7,10) or {}).distance))
+      end
     end
     if holder==4 and autopass.target==5 and reason=="pre_down_step" then
       local src,dst=nil,nil
