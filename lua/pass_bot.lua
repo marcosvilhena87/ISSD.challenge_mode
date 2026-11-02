@@ -3112,6 +3112,8 @@ while true do
       ctrl.best_vertical=geom and math.abs(geom.dy) or math.huge
       ctrl.last_progress=frame
       ctrl.last_vertical_progress=frame
+      ctrl.previous_gap=geom and geom.distance or nil
+      ctrl.worse_frames=0
       ctrl.start_position=geom and {x=geom.xy.hx,y=geom.xy.hy} or nil
       auto_write(frame,"exclusive_priority_started",from,to,"MOVE",
         "distance="..tostring(geom and geom.distance)..
@@ -3125,12 +3127,23 @@ while true do
       ctrl.best_vertical=math.abs(geom.dy)
       ctrl.last_vertical_progress=frame
     end
+    if from==5 and geom then
+      if ctrl.previous_gap and geom.distance>ctrl.previous_gap+0.5 then
+        ctrl.worse_frames=ctrl.worse_frames+1
+      else
+        ctrl.worse_frames=0
+      end
+      ctrl.previous_gap=geom.distance
+    end
     local walked=geom and ctrl.start_position and math.sqrt(
       (geom.xy.hx-ctrl.start_position.x)^2+(geom.xy.hy-ctrl.start_position.y)^2) or 0
     local reason=nil
     if not geom then reason="missing_geometry"
     elseif not carrier or carrier>18 then reason="possession_unverified"
     elseif geom.distance>320 then reason="outside_bounded_route"
+    elseif from==5 and ctrl.worse_frames>=5 then reason="distance_increasing"
+    elseif from==5 and elapsed>=12 and geom.distance>250 and ctrl.best>geom.distance-15
+       then reason="poor_progress"
     elseif walked>155 then reason="walk_limit"
     elseif elapsed>=(from==6 and 66 or 78) then reason="frame_limit"
     elseif from==6 and elapsed>=26 and frame-ctrl.last_vertical_progress>=18
@@ -3160,7 +3173,8 @@ while true do
           -- Begin vertical correction early for 6->2; diagonal movement in
           -- v0.9.14 consumed the window while leaving a large Y difference.
           buttons[geom.dy>0 and "Down" or "Up"]=true
-          if geom.distance>220 and math.abs(geom.dx)>75 then
+          if math.abs(geom.dy)<=math.abs(geom.dx)*0.8 and
+             geom.distance>230 and math.abs(geom.dx)>90 then
             buttons[geom.dx>0 and "Right" or "Left"]=true
           end
         elseif math.abs(geom.dy)>95 and geom.distance<=200 then
@@ -3174,7 +3188,8 @@ while true do
           "|distance="..string.format("%.2f",geom.distance)..
           "|elapsed="..elapsed..
           "|vertical_remaining="..string.format("%.2f",math.abs(geom.dy))..
-          "|vertical_best="..string.format("%.2f",ctrl.best_vertical))
+          "|vertical_best="..string.format("%.2f",ctrl.best_vertical)..
+          "|worse_frames="..tostring(ctrl.worse_frames or 0))
       end
     end
   end
