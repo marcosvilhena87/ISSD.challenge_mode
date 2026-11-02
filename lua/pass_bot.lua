@@ -295,7 +295,7 @@ local function score_log(frame,phase,force)
  if score_armed_baseline==nil then score_armed_baseline=key end
  if key~=score_armed_baseline and a~=nil and b~=nil and c~=nil and
     c>0 and c==a+b then score_new_result=true end
- if score_new_result and c~=nil and d==c and c>0 and a+b==c then
+ if score_new_result and a~=nil and b~=nil and c~=nil and d==c and c>0 and a+b==c then
   local result_key=tostring(a)..":"..tostring(b)..":"..tostring(c)
   score_result_stable=(score_result_key==result_key) and score_result_stable+1 or 1
   score_result_key=result_key
