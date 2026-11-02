@@ -114,6 +114,7 @@ local selected_direction="AUTO"
 local trigger_mode="A"
 local calibration_mode="A"
 local timers=Timers.new()
+local pass_clock=nil
 local bonus=Bonus.new()
 local completion_frame=nil
 local last_spatial_frame=nil
@@ -325,6 +326,7 @@ local long_710={phase="ready",start=nil,initial=nil,direction=nil,shot_frame=nil
  final_target=nil,final_retries=0,final_next_retry=0,final_last_holder=nil,
  universal_previous_holder=nil,universal_support_cooldown={},queue_target=nil,queue_last_holder=nil,
  watchdog_key=nil,watchdog_start=0,watchdog_last_action=0,watchdog_release_until=0,
+ wd_active_start=0,wd_active_xy=nil,wd_active_distance=nil,wd_active_attempts={},
  align_start=0,align_origin=nil,align_initial_gap=nil,align_no_progress=0,align_mode=0,
  recovery_origin=nil,recovery_target=nil,recovery_start=nil,recovery_baseline=nil,
  recovery_initial_xy=nil,recovery_failures={},recovery_stall=0,recovery_last_gap=nil}
@@ -514,6 +516,7 @@ while true do
     spatial.read_error_logged=true
    end
    local ts=Timers.read(memory.read_u8,memory.read_u16_le)
+   pass_clock=ts
    local te=timers:step(ts,emu.framecount())
    if te then timer_write(te) end
    local count=0;for _ in pairs(spatial.visited) do count=count+1 end
@@ -635,6 +638,14 @@ while true do
   end
   local chain_visits=0
   for id in pairs(spatial.visited) do if type(id)=="number" and id>=2 and id<=11 then chain_visits=chain_visits+1 end end
+  -- Only the pass phase is subject to the main 30-second game clock.
+  if pass_chain.active and chain_visits<10 and pass_clock and
+     pass_clock.time==0 and timers.previous and
+     timers.previous.time==0 then
+    pass_chain.active=false;autopass.enabled=false;auto_finished=true
+    auto_write(emu.framecount(),"pass_time_budget_expired",spatial.holder,nil,"OBSERVE",
+      "time=0|visited="..chain_visits.."/10|limit=30_game_seconds")
+  end
   if pass_chain.active and chain_visits>=10 then
     pass_chain.active=false;autopass.enabled=false;auto_finished=true
     auto_write(emu.framecount(),"chain_complete_candidate",nil,spatial.holder,selected_pass_button,
@@ -709,6 +720,29 @@ while true do
     long_710.watchdog_last_action=wd_frame
     long_710.watchdog_release_until=0
   end
+  -- v0.9.4: take active control before the previously passive 90-frame watchdog.
+  local clock_left=pass_clock and pass_clock.time
+  local clock_valid=clock_left and clock_left>=0 and clock_left<=30
+  local wd_threshold=(clock_valid and clock_left<=10) and 12 or 24
+  if pass_chain.active and long_710.phase=="ready" and wd_target and
+     wd_frame-long_710.watchdog_last_action>=wd_threshold and
+     (not clock_valid or clock_left>0) then
+    local g=pair_geometry(sample_for_auto,spatial.holder,wd_target)
+    local possession=carrier_gap(sample_for_auto,spatial.holder)
+    local k=tostring(spatial.holder)..":"..tostring(wd_target)
+    local attempts=long_710.wd_active_attempts[k] or 0
+    if g and possession and possession<=18 and attempts<4 then
+      long_710.wd_active_attempts[k]=attempts+1
+      long_710.phase="watchdog_move"
+      long_710.origin=spatial.holder;long_710.target=wd_target
+      long_710.wd_active_start=wd_frame
+      long_710.wd_active_xy={x=g.xy.hx,y=g.xy.hy}
+      long_710.wd_active_distance=g.distance
+      auto_write(wd_frame,"watchdog_active_move",spatial.holder,wd_target,"MOVE",
+        "attempt="..(attempts+1).."|time_left="..tostring(clock_left)..
+        "|dx="..g.dx.."|dy="..g.dy.."|direction="..g.direction)
+    end
+  end
   if long_710.phase=="ready" and wd_target and
      wd_frame-long_710.watchdog_last_action>=90 then
     long_710.watchdog_release_until=wd_frame+48
@@ -724,7 +758,7 @@ while true do
       and not long_710.sidestep_97_exhausted
   local priority_lock=pass_chain.active and not wd_released and
       (priority_missing~=nil or relay_97 or long_710.return_due or
-       long_710.phase=="recover_approach" or long_710.phase=="align" or long_710.phase=="sidestep" or long_710.phase=="advance" or long_710.phase=="face" or
+       long_710.phase=="watchdog_move" or long_710.phase=="recover_approach" or long_710.phase=="align" or long_710.phase=="sidestep" or long_710.phase=="advance" or long_710.phase=="face" or
        long_710.phase=="observe")
   if armed and autopass.enabled and not auto_finished and sample_for_auto
       and not priority_lock
@@ -2398,6 +2432,51 @@ while true do
   end
   -- Shift part of the receiving burden to player 7, using observed motion
   -- rather than assuming the receiver will run to meet the ball.
+  -- v0.9.4: active watchdog approach, measured and bounded.
+  if long_710.phase=="watchdog_move" then
+    local frame=emu.framecount()
+    local from,to=long_710.origin,long_710.target
+    local g=pair_geometry(sample_for_auto,from,to)
+    local gap=carrier_gap(sample_for_auto,from)
+    buttons={}
+    pass_chain.next_frame=frame+2
+    if not g or spatial.holder~=from or not gap or gap>18 then
+      long_710.phase="ready";long_710.watchdog_last_action=frame
+      auto_write(frame,"watchdog_stall_detected",from,to,"MOVE",
+        "reason=possession_or_coordinates_changed")
+    else
+      local elapsed=frame-long_710.wd_active_start
+      local walked=math.sqrt((g.xy.hx-long_710.wd_active_xy.x)^2+
+                             (g.xy.hy-long_710.wd_active_xy.y)^2)
+      local gain=long_710.wd_active_distance-g.distance
+      local time_left=pass_clock and pass_clock.time
+      if elapsed>=12 or walked>=35 or gain>=12 or
+         (time_left and time_left>=0 and time_left<=30 and time_left==0) then
+        long_710.phase="ready"
+        long_710.watchdog_last_action=frame
+        long_710.cooldown_until=frame+2
+        auto_write(frame,"watchdog_motion_result",from,to,"MOVE",
+          "elapsed="..elapsed.."|walk="..string.format("%.2f",walked)..
+          "|gain="..string.format("%.2f",gain)..
+          "|remaining="..string.format("%.2f",g.distance)..
+          "|time_left="..tostring(time_left))
+        if gain<3 then
+          auto_write(frame,"watchdog_stall_detected",from,to,"MOVE",
+            "reason=no_distance_progress|walk="..string.format("%.2f",walked))
+        else
+          long_710.wd_active_attempts[tostring(from)..":"..tostring(to)]=0
+        end
+      else
+        buttons=approach_buttons(g)
+        local attempts=long_710.wd_active_attempts[tostring(from)..":"..tostring(to)] or 1
+        if attempts%3==2 then
+          buttons={ [g.dy>=0 and "Down" or "Up"]=true }
+        elseif attempts%3==0 then
+          buttons={ [g.dx>=0 and "Right" or "Left"]=true }
+        end
+      end
+    end
+  end
   -- v0.9.2: take over after ordinary approach timeout, with fresh geometry.
   if long_710.phase=="recover_approach" then
     local frame=emu.framecount()
