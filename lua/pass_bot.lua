@@ -339,6 +339,18 @@ local function gate_write(frame,gate,reason,p,sample)
   auto_finished and 1 or 0,sample and 1 or 0,spatial.holder,autopass.phase,p.status,reason},11)))
  assert(h:close())
 end
+-- v0.8.74: ball-to-carrier telemetry. The existing Ordered.step
+-- possession guard remains authoritative.
+local function ball_gap_710(sample)
+ if not sample or not sample.ball then return nil end
+ for _,p in ipairs(sample.players or {}) do
+  if p.id==7 then
+   local dx=sample.ball.x-p.x;local dy=sample.ball.y-p.y
+   return math.sqrt(dx*dx+dy*dy)
+  end
+ end
+ return nil
+end
 local function release() joypad.set({},1) end
 local function record(event,p)
   local raw=p.raw or {}
@@ -619,6 +631,15 @@ while true do
       local movement=pass_chain.approach_state
       movement.current_frame=emu.framecount()
       if holder==7 and target==10 then
+        local gap=ball_gap_710(sample_for_auto)
+        if gap then
+          auto_write(emu.framecount(),"approach_710_ball_gap",7,10,selected_pass_button,
+            "gap="..string.format("%.2f",gap)..
+            "|dash="..tostring(movement.burst_buttons and movement.burst_buttons.Y==true)..
+            "|approach_frames="..tostring(pass_chain.approach_frames or 0))
+        end
+      end
+      if holder==7 and target==10 then
         local v=Ordered.observe_710(movement,sample_for_auto,emu.framecount())
         if v and emu.framecount()%12==0 then
           local measured=Feet.measure(sample_for_auto,7,10)
@@ -652,7 +673,33 @@ while true do
       elseif movement.recovery_phase=="awaiting_sample" then
         pass_chain.approach_neutral=true
       end
-      if reason=="approach_right_settle" then
+      -- A dash-separated ball gets three neutral observations, not a forced B.
+      -- If the existing 18-WRAM foot guard stays invalid, fail closed.
+      if holder==7 and target==10 and (movement.dash_ball_pause or 0)>0 then
+        local gap=ball_gap_710(sample_for_auto)
+        movement.dash_ball_pause=movement.dash_ball_pause-1
+        buttons={};reason="approach_710_dash_ball_neutral"
+        if gap and gap<=18 then
+          movement.dash_ball_pause=0
+          movement.burst_remaining=0;movement.burst_buttons=nil
+          pass_chain.approach_neutral=false
+          auto_write(emu.framecount(),"approach_710_dash_ball_recovered",7,10,selected_pass_button,
+            "gap="..tostring(gap))
+        elseif movement.dash_ball_pause==0 then
+          buttons={};pass_chain.active=false;autopass.enabled=false;auto_finished=true
+          reason="approach_710_dash_ball_unrecovered"
+          auto_write(emu.framecount(),"approach_aborted",7,10,selected_pass_button,reason)
+        end
+      elseif holder==7 and target==10 and
+             (movement.burst_buttons and movement.burst_buttons.Y) and
+             (ball_gap_710(sample_for_auto) or math.huge)>18 then
+        movement.dash_ball_pause=3
+        movement.burst_remaining=0;movement.burst_buttons=nil
+        buttons={};reason="approach_710_dash_ball_neutral"
+        pass_chain.approach_neutral=false
+        auto_write(emu.framecount(),"approach_710_dash_ball_pause",7,10,selected_pass_button,
+          "gap="..tostring(ball_gap_710(sample_for_auto)).."|neutral_frames=3")
+      elseif reason=="approach_right_settle" then
         -- Four neutral frames establish the residual motion baseline.
       elseif (pass_chain.approach_frames or 0)>=approach_limit and not pass_chain.approach_neutral then
         local measurement=Feet.measure(sample_for_auto,holder,target)
@@ -1157,7 +1204,7 @@ while true do
             end
             local desired_burst=(holder==5 and target==8 and not movement.right_suspended and buttons.Right) and 8 or Ordered.BURST_FRAMES
             if holder==7 and target==10 and buttons.Right and not buttons.Left and not buttons.B then
-              desired_burst=Ordered.CONTINUOUS_HOLD_710
+              desired_burst=8
             elseif holder==6 and target==7 and buttons.Up and buttons.Right and not buttons.B then
               desired_burst=Ordered.CONTINUOUS_HOLD_67
             end
