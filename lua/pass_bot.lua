@@ -1153,7 +1153,7 @@ while true do
                 "|lateral="..tostring(initial and initial.lateral))
             else
               movement.burst_direction=nil
-              for key,pressed in pairs(buttons) do if pressed then movement.burst_direction=key end end
+              for _,key in ipairs({"Right","Left","Up","Down"}) do if buttons[key] then movement.burst_direction=key;break end end
             end
             local desired_burst=(holder==5 and target==8 and not movement.right_suspended and buttons.Right) and 8 or Ordered.BURST_FRAMES
             if holder==7 and target==10 and buttons.Right and not buttons.Left and not buttons.B then
