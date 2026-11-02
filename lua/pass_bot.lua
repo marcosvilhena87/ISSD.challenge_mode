@@ -672,6 +672,32 @@ while true do
       "dx="..align_g.dx.."|dy="..align_g.dy..
       "|direction="..align_g.direction.."|distance="..string.format("%.2f",align_g.distance))
   end
+  -- v0.9.3: spatial possession changes invalidate a stale ordinary gate.
+  -- Reconcile only when an outfield holder has actually changed.
+  if pass_chain.active and armed and spatial.holder and
+      autopass.phase~="idle" and autopass.origin and
+      spatial.holder~=autopass.origin and
+      spatial.holder>=2 and spatial.holder<=11 then
+    local previous_origin=autopass.origin
+    local previous_target=autopass.target
+    local new_holder=spatial.holder
+    local fresh=Auto.new()
+    fresh.enabled=true;fresh.button="B"
+    fresh.direction=selected_direction
+    fresh.calibration_mode=calibration_mode
+    fresh.start_frame=emu.framecount()
+    autopass=fresh
+    pass_chain.approach_frames=0
+    pass_chain.approach_neutral=false
+    pass_chain.approach_state={}
+    pass_chain.next_frame=emu.framecount()+4
+    auto_finished=false
+    long_710.watchdog_last_action=emu.framecount()
+    auto_write(emu.framecount(),"possession_spatial_resync",previous_origin,new_holder,"B",
+      "stale_target="..tostring(previous_target)..
+      "|next_unvisited="..tostring(first_unvisited(spatial.visited,new_holder))..
+      "|reason=holder_changed_reset_ordinary_gate")
+  end
   -- v0.8.98: do not let an idle special-route priority lock the ordinary controller.
   local wd_frame=emu.framecount()
   local wd_target=first_unvisited(spatial.visited,spatial.holder)
@@ -1801,7 +1827,8 @@ while true do
       end
       if reason=="possession_gate_timeout" then
         auto_write(emu.framecount(),"possession_gate_timeout",autopass.origin,autopass.target,selected_pass_button,
-          "streak="..tostring(autopass.gate_tracker and autopass.gate_tracker.streak))
+          "streak="..tostring(autopass.gate_tracker and autopass.gate_tracker.streak)..
+          "|spatial_holder="..tostring(spatial.holder))
       end
       auto_write(emu.framecount(),"single_pass_result",autopass.origin,autopass.target,selected_pass_button,reason.."|direction="..selected_direction.."|max_ball_displacement="..string.format("%.2f",autopass.ball_max_displacement))
       calibration_write(emu.framecount(),reason,autopass.last_attempt,reason=="transfer_candidate_observed" and holder or nil,reason=="transfer_candidate_observed" and emu.framecount() or nil)
@@ -1885,6 +1912,23 @@ while true do
         end
       else
         pass_chain.active=false;autopass.enabled=false;auto_finished=true
+      end
+      if reason=="possession_gate_timeout" and pass_chain.active and
+          spatial.holder and spatial.holder>=2 and spatial.holder<=11 then
+        local old_origin,old_target=autopass.origin,autopass.target
+        local fresh=Auto.new()
+        fresh.enabled=true;fresh.button="B";fresh.direction=selected_direction
+        fresh.calibration_mode=calibration_mode
+        fresh.start_frame=emu.framecount()
+        autopass=fresh
+        pass_chain.active=true;auto_finished=false
+        pass_chain.approach_frames=0;pass_chain.approach_state={}
+        pass_chain.approach_neutral=false
+        pass_chain.next_frame=emu.framecount()+6
+        long_710.watchdog_last_action=emu.framecount()
+        auto_write(emu.framecount(),"possession_gate_restarted",old_origin,spatial.holder,"B",
+          "stale_target="..tostring(old_target)..
+          "|next_unvisited="..tostring(first_unvisited(spatial.visited,spatial.holder)))
       end
       print("[ISSD.pass_lv1] single-pass result: "..reason.." max_ball_displacement="..string.format("%.2f",completed_displacement))
     end
