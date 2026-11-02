@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.77",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,CONTINUOUS_HOLD_710=24,CONTINUOUS_HOLD_67=12,STALL_WINDOW=6}
+local M={VERSION="0.8.78",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,CONTINUOUS_HOLD_710=24,CONTINUOUS_HOLD_67=12,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -32,6 +32,22 @@ function M.goalward_checkpoint(state,frames,measurement)
  local baseline=state.pair_710_checkpoint_distance or state.initial_distance
  if not baseline or baseline-measurement.distance<25 or measurement.distance>state.best_distance+12 then return false,"insufficient_stage_gain" end
  return true,"goalward_receiver_stage_progress"
+end
+-- Positive recent *measured* closing is sufficient for one bounded
+-- extension even when older best-distance checkpoints have regressed.
+function M.recent_closure_710(state,frames,measurement)
+ if not state or not measurement or frames>=M.MAX_APPROACH_ABSOLUTE then return false,"absolute_or_missing" end
+ if (state.pair_710_recent_extensions or 0)>=2 then return false,"recent_extension_budget" end
+ local samples=state.pair_710_closure_samples or {}
+ local sum,positives,total=0,0,0
+ for _,v in ipairs(samples) do
+  if state.current_frame-v.frame<=16 then
+   sum=sum+v.closing;total=total+1
+   if v.closing>0.2 then positives=positives+1 end
+  end
+ end
+ if total>=6 and positives>=4 and sum/total>=0.35 then return true,"pair_710_recent_measured_closure" end
+ return false,"recent_closure_insufficient"
 end
 function M.can_extend(state,frames,measurement)
  if frames>=M.MAX_APPROACH_ABSOLUTE or not measurement then return false,"absolute_limit_or_missing_measurement" end
