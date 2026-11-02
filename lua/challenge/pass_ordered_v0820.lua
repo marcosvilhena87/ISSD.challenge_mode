@@ -116,6 +116,16 @@ function M.step(sample,holder,target,state)
  local safe,why,metrics=Feet.check(sample,holder,target)
  if safe then return {},"target_in_range",metrics end
  if why~="too_far" and why~="diagonal_risk" then return {},why,metrics end
+ -- Stop a 7->11 fallback when both absolute and best-relative distances
+ -- have worsened after substantial movement; the caller aborts without B.
+ if holder==7 and target==11 and state
+   and (state.approach_frames or 0)>=24
+   and state.initial_distance
+   and state.best_distance
+   and metrics.distance>state.initial_distance+15
+   and metrics.distance>state.best_distance+28 then
+  return {},"pair_711_net_regression_stop",metrics
+ end
  local dx,dy=metrics.dx,metrics.dy
  local forecast=(holder==8 and target==9) and M.receiver_prediction(state,sample,holder,target,state and state.current_frame) or nil
  if forecast then dx,dy=forecast.dx,forecast.dy end
