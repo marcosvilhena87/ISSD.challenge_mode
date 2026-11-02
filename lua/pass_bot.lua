@@ -2173,9 +2173,13 @@ while true do
           local support_key=tostring(from)..":"..tostring(blocker)
           local support_count=long_710.support_attempts[support_key] or 0
           local support_g=support_receiver(sample_for_auto,from,target,blocker)
-          if support_g and support_count<2 then
+          local next_leg=support_g and pair_geometry(sample_for_auto,blocker,target)
+          local good_support=next_leg and next_leg.distance+12<distance
+            and not lane_blocker(sample_for_auto,blocker,target)
+          if support_g and good_support and support_count<2 and
+             blocker~=long_710.universal_previous_holder then
             long_710.support_attempts[support_key]=support_count+1
-            long_710.original_target=missing or target
+            long_710.original_target=queue_target or target
             long_710.support_target=blocker
             long_710.origin=from
             long_710.target=blocker
