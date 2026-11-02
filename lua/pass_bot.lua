@@ -2160,12 +2160,25 @@ while true do
     pass_chain.next_frame=frame+2
     buttons={}
     if long_710.phase=="face" then
-      local gap=ball_gap_710(sample_for_auto)
-      if spatial.holder~=long_710.origin or not gap or gap>18 or
-         not Ordered.capture(sample_for_auto,long_710.origin,long_710.target) then
+      -- Possession must be measured against the ACTUAL origin, not player 7.
+      local gap=carrier_gap(sample_for_auto,long_710.origin)
+      local coords=Ordered.capture(sample_for_auto,long_710.origin,long_710.target)
+      local failure=nil
+      if spatial.holder~=long_710.origin then
+        failure="holder_changed"
+      elseif not coords then
+        failure="invalid_coordinates"
+      elseif not gap then
+        failure="missing_ball_or_origin"
+      elseif gap>18 then
+        failure="ball_out_of_range"
+      end
+      if failure then
         long_710.phase="done";long_710.cooldown_until=frame+36
         auto_write(frame,"long_710_aborted",long_710.origin,long_710.target,selected_pass_button,
-          "reason=lost_possession_or_invalid_geometry")
+          "reason="..failure.."|actual_holder="..tostring(spatial.holder)..
+          "|ball_gap="..tostring(gap).."|origin="..tostring(long_710.origin)..
+          "|target="..tostring(long_710.target))
       else
         local elapsed=frame-long_710.start
         local g=pair_geometry(sample_for_auto,long_710.origin,long_710.target)
