@@ -320,7 +320,8 @@ local long_710={phase="ready",start=nil,initial=nil,direction=nil,shot_frame=nil
  advance_start=nil,advance_origin=nil,advance_target=nil,
  attempts={},cooldown_until=0,receiver_start=nil,carrier_start=nil,
  sidestep_97_count=0,sidestep_97_initial=nil,sidestep_97_blocker=nil,
- sidestep_97_last_cross=nil,sidestep_97_exhausted=false}
+ sidestep_97_last_cross=nil,sidestep_97_exhausted=false,
+ support_attempts={},support_target=nil,original_target=nil,fast_pass=false}
 -- Last missing outfield player: player IDs 2..11 (10 players), spatial evidence only.
 local function last_missing_710(visited,holder)
  if not visited then return nil end
@@ -369,6 +370,16 @@ local function approach_buttons(g)
  if math.abs(g.dx)>24 then b[g.dx>0 and "Right" or "Left"]=true end
  if math.abs(g.dy)>24 then b[g.dy>0 and "Down" or "Up"]=true end
  return b
+end
+-- A blocker can become a legal support receiver even if already visited.
+local function support_receiver(sample,from,to,blocker)
+ if not blocker or blocker==from or blocker==to then return nil end
+ if blocker<2 or blocker>11 then return nil end
+ local g=pair_geometry(sample,from,blocker)
+ if not g or g.distance<28 or g.distance>410 then return nil end
+ local second=lane_blocker(sample,from,blocker)
+ if second then return nil end
+ return g
 end
 local function carrier_gap(sample,id)
  if not sample or not sample.ball then return nil end
@@ -2093,7 +2104,7 @@ while true do
       local progress=math.sqrt(dx*dx+dy*dy)
       local elapsed=frame-long_710.advance_start
       if elapsed>=18 or progress>=40 then
-        long_710.phase="face";long_710.start=frame
+        long_710.phase="face";long_710.start=frame;long_710.fast_pass=true
         auto_write(frame,"long_710_advance_finished",7,10,"B",
           "carrier_dx="..dx.."|carrier_dy="..dy..
           "|carrier_walk="..string.format("%.2f",progress)..
@@ -2185,10 +2196,40 @@ while true do
         if g then long_710.direction=g.direction end
         local blocker=lane_blocker(sample_for_auto,long_710.origin,long_710.target)
         if blocker then
-          buttons={};long_710.phase="ready"
-          long_710.cooldown_until=frame+12
+          local key=tostring(long_710.origin)..":"..tostring(blocker)
+          local count=long_710.support_attempts[key] or 0
+          local sg=support_receiver(sample_for_auto,long_710.origin,long_710.target,blocker)
+          if sg and count<2 and long_710.origin~=blocker then
+            long_710.support_attempts[key]=count+1
+            long_710.original_target=long_710.original_target or long_710.target
+            long_710.target=blocker
+            long_710.direction=sg.direction
+            long_710.fast_pass=true
+            long_710.start=frame
+            long_710.shot_frame=nil
+            buttons={}
+            auto_write(frame,"relay_support_blocker_selected",long_710.origin,blocker,"B",
+              "original_target="..tostring(long_710.original_target)..
+              "|already_visited="..tostring(spatial.visited[blocker]==true)..
+              "|direction="..sg.direction.."|attempt="..(count+1))
+          else
+            buttons={};long_710.phase="ready"
+            long_710.cooldown_until=frame+12
+            auto_write(frame,"relay_support_unavailable",long_710.origin,long_710.target,"B",
+              "blocker="..tostring(blocker).."|attempts="..count)
+          end
           auto_write(frame,"relay_pass_cancelled_blocker",long_710.origin,long_710.target,"B",
             "blocker="..tostring(blocker))
+        elseif long_710.fast_pass and elapsed<2 then
+          buttons={[long_710.direction]=true,B=true}
+          if not long_710.shot_frame then
+            long_710.shot_frame=frame
+            auto_write(frame,"relay_fast_directional_b",long_710.origin,long_710.target,"B",
+              "direction="..long_710.direction.."|distance="..string.format("%.2f",g.distance))
+          end
+        elseif long_710.fast_pass then
+          long_710.fast_pass=false
+          long_710.phase="observe"
         elseif elapsed<3 then
           buttons=approach_buttons(g)
         elseif elapsed<5 then
@@ -2213,6 +2254,7 @@ while true do
       end
     else
       if spatial.holder==long_710.target then
+        long_710.fast_pass=false;long_710.original_target=nil
         long_710.phase="done";long_710.cooldown_until=frame+36
         local xy=Ordered.capture(sample_for_auto,long_710.origin,long_710.target)
         if xy and long_710.receiver_start and long_710.carrier_start then
