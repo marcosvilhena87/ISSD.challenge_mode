@@ -1,9 +1,11 @@
 -- PASS v0.8.13: one opt-in X shot after 10 spatial visitors + matching bonus countdown.
 -- Goal position is derived from stadium geometry; endpoint/attack side require calibration.
-local M={VERSION="0.8.66",MAX_GOALKEEPER_X=135,MAX_APPROACH_FRAMES=120}
+local M={VERSION="0.8.66",MAX_GOALKEEPER_X=135,MAX_APPROACH_FRAMES=210}
 function M.new()
  return {enabled=false,phase="waiting",completion_frame=nil,shot_frame=nil,shots=0,
-  aim=nil,aim_reason=nil,approach_frames=0,approach_x_start=nil,approach_best=nil}
+  aim=nil,aim_reason=nil,approach_frames=0,approach_x_start=nil,approach_best=nil,
+  approach_last_gap=nil,approach_stall_frames=0,approach_mode=0,
+  approach_recoveries=0,approach_last_event=nil,approach_last_dy=nil}
 end
 function M.geometry(sample)
  if not sample or not sample.ball or not sample.goal_reference then return nil,"no_stadium_goal_reference" end
@@ -32,7 +34,7 @@ function M.step(t,frame,completion_frame,bonus_first_decrement,sample,stable_hol
  if not bonus_first_decrement or bonus_first_decrement<completion_frame then
   return {},"await_bonus_countdown_correspondence"
  end
- if frame-bonus_first_decrement>180 or frame-completion_frame>240 then
+ if frame-bonus_first_decrement>330 or frame-completion_frame>390 then
   t.enabled=false;return {},"finish_window_expired"
  end
  if t.phase=="waiting" or t.phase=="approach_goal" then
@@ -48,6 +50,23 @@ function M.step(t,frame,completion_frame,bonus_first_decrement,sample,stable_hol
    if (t.approach_frames or 0)>=M.MAX_APPROACH_FRAMES then
     t.enabled=false;return {},"shot_blocked_too_far"
    end
+   -- Measure true progress; if movement stalls, alternate diagonal/cardinal
+   -- alignment before giving up. Never shoot when still out of range.
+   if t.approach_last_gap and gap<t.approach_last_gap-0.5 then
+    t.approach_stall_frames=0
+   else
+    t.approach_stall_frames=(t.approach_stall_frames or 0)+1
+   end
+   t.approach_last_gap=gap
+   if t.approach_stall_frames>=15 then
+    t.approach_stall_frames=0
+    t.approach_mode=(t.approach_mode+1)%3
+    t.approach_recoveries=t.approach_recoveries+1
+    t.approach_last_event="finish_approach_recovery"
+   end
+   if t.approach_recoveries>=9 then
+    t.enabled=false;return {},"shot_blocked_no_progress"
+   end
    -- Only move when the ball is demonstrably at the current holder's feet.
    local holder_found=false
    for _,p in ipairs(sample.players or {}) do
@@ -61,12 +80,15 @@ function M.step(t,frame,completion_frame,bonus_first_decrement,sample,stable_hol
    t.phase="approach_goal"
    t.approach_frames=t.approach_frames+1
    local move={}
-   move[dx>0 and "Right" or "Left"]=true
-   -- Correct severe Y mismatch gradually; no pass or X during approach.
-   if math.abs(dy)>90 then move[dy>0 and "Down" or "Up"]=true end
+   if t.approach_mode~=2 then move[dx>0 and "Right" or "Left"]=true end
+   if math.abs(dy)>40 and t.approach_mode~=1 then
+    move[dy>0 and "Down" or "Up"]=true
+   end
+   if not next(move) then move.Right=true end
    return move,"finish_goal_approach"
   end
   t.aim=aim;t.aim_reason=why;t.completion_frame=completion_frame
+  t.approach_last_event="finish_shot_ready"
   t.phase="release";return {},"completion_and_bonus_observed"
  elseif t.phase=="release" then
   t.phase="shoot";return {},"release"
