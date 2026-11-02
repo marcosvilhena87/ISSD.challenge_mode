@@ -1895,6 +1895,7 @@ while true do
     if long_710.last_holder==10 and spatial.holder==7 and
        long_710.returns<1 then
       long_710.return_due=true
+      if long_710.phase=="done" then long_710.phase="ready" end
       auto_write(emu.framecount(),"return_710_queued",7,10,"B",
         "reason=observed_holder_transition_10_to_7")
     end
