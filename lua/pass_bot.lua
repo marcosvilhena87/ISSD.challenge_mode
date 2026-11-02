@@ -390,6 +390,25 @@ local function pair_geometry(sample,from,to)
  return {xy=xy,dx=dx,dy=dy,distance=math.sqrt(dx*dx+dy*dy),
          direction=direction}
 end
+-- v0.9.8: rank safe direct passes ahead of expensive walking.
+-- Select only observable, unvisited receivers; preserve old order as fallback.
+local function pass_first_target(sample,from,visited)
+ local best,best_score,best_gap=nil,nil,nil
+ if not sample or not from then return nil,nil end
+ for id=2,11 do
+  if id~=from and not visited[id] then
+   local g=pair_geometry(sample,from,id)
+   if g and g.distance>=28 and g.distance<=185 and
+      math.abs(g.dy)<=105 and not lane_blocker(sample,from,id) then
+     local score=g.distance+math.abs(g.dy)*0.30
+     if not best_score or score<best_score then
+      best,best_score,best_gap=id,score,g.distance
+     end
+   end
+  end
+ end
+ return best,best_gap
+end
 -- Diagonal travel is allowed as movement only, never with B.
 local function approach_buttons(g)
  local b={}
@@ -672,6 +691,13 @@ while true do
     auto_write(emu.framecount(),"pass_time_budget_expired",spatial.holder,nil,"OBSERVE",
       "time=0|visited="..chain_visits.."/10|limit=30_game_seconds")
   end
+  if pass_chain.active and chain_visits>(pass_chain.time_score_last_visits or 0) then
+    auto_write(emu.framecount(),"time_score_new_visitor",spatial.holder,nil,"OBSERVE",
+      "visited="..chain_visits.."/10|time_left="..tostring(pass_clock and pass_clock.time)..
+      "|frames_since_last="..tostring(emu.framecount()-(pass_chain.time_score_last_frame or emu.framecount())))
+    pass_chain.time_score_last_frame=emu.framecount()
+    pass_chain.time_score_last_visits=chain_visits
+  end
   if pass_chain.active and chain_visits>=10 then
     pass_chain.active=false;autopass.enabled=false;auto_finished=true
     auto_write(emu.framecount(),"chain_complete_candidate",nil,spatial.holder,selected_pass_button,
@@ -691,7 +717,7 @@ while true do
   end
   -- Priority lock: normal approach/repeat must not compete with recovery.
   -- v0.8.99: active diagonal alignment for any holder/first-unvisited pair.
-  local align_target=first_unvisited(spatial.visited,spatial.holder)
+  local align_target=pass_first_target(sample_for_auto,spatial.holder,spatial.visited) or first_unvisited(spatial.visited,spatial.holder)
   local align_g=align_target and pair_geometry(sample_for_auto,spatial.holder,align_target)
   local align_gap=spatial.holder and carrier_gap(sample_for_auto,spatial.holder)
   if armed and pass_chain.active and autopass.enabled and not auto_finished and
@@ -738,7 +764,7 @@ while true do
   end
   -- v0.8.98: do not let an idle special-route priority lock the ordinary controller.
   local wd_frame=emu.framecount()
-  local wd_target=first_unvisited(spatial.visited,spatial.holder)
+  local wd_target=pass_first_target(sample_for_auto,spatial.holder,spatial.visited) or first_unvisited(spatial.visited,spatial.holder)
   local wd_key=tostring(spatial.holder)..":"..tostring(wd_target)
   if wd_key~=long_710.watchdog_key then
     long_710.align_no_progress=0;long_710.align_mode=0
@@ -2284,10 +2310,16 @@ while true do
   -- v0.8.85: first protect the final missing receiver, even after a detour.
   -- Never count a speculative pass as a verified visit.
   local missing=last_missing_710(spatial.visited,spatial.holder)
-  local queue_target=first_unvisited(spatial.visited,spatial.holder)
+  local pass_first,pass_first_gap=pass_first_target(sample_for_auto,spatial.holder,spatial.visited)
+  local queue_target=pass_first or first_unvisited(spatial.visited,spatial.holder)
+  if pass_first and queue_target~=long_710.queue_target then
+    auto_write(emu.framecount(),"time_score_pass_first",spatial.holder,pass_first,"B",
+      "strategy=direct_unvisited|distance="..string.format("%.2f",pass_first_gap)..
+      "|time_left="..tostring(pass_clock and pass_clock.time))
+  end
   if queue_target~=long_710.queue_target then
     auto_write(emu.framecount(),"queue_target_changed",spatial.holder,queue_target,"B",
-      "previous="..tostring(long_710.queue_target).."|order=ascending_unvisited")
+      "previous="..tostring(long_710.queue_target).."|order="..(pass_first and "pass_first" or "ascending_fallback"))
     long_710.queue_target=queue_target
     long_710.attempts={}
   end
