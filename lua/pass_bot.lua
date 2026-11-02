@@ -323,13 +323,21 @@ local long_710={phase="ready",start=nil,initial=nil,direction=nil,shot_frame=nil
  sidestep_97_last_cross=nil,sidestep_97_exhausted=false,
  support_attempts={},support_target=nil,original_target=nil,fast_pass=false,
  final_target=nil,final_retries=0,final_next_retry=0,final_last_holder=nil,
- universal_previous_holder=nil,universal_support_cooldown={}}
+ universal_previous_holder=nil,universal_support_cooldown={},queue_target=nil,queue_last_holder=nil}
 -- Last missing outfield player: player IDs 2..11 (10 players), spatial evidence only.
 local function last_missing_710(visited,holder)
  if not visited then return nil end
  local absent,count=nil,0
  for id=2,11 do if not visited[id] then absent=id;count=count+1 end end
  if count==1 and holder~=absent then return absent end
+ return nil
+end
+-- Strict queue: first not-yet-observed outfielder in ascending ID order.
+local function first_unvisited(visited,holder)
+ if not visited then return nil end
+ for id=2,11 do
+  if not visited[id] and id~=holder then return id end
+ end
  return nil
 end
 local function lane_blocker(sample,from,to)
@@ -2038,15 +2046,28 @@ while true do
   -- v0.8.85: first protect the final missing receiver, even after a detour.
   -- Never count a speculative pass as a verified visit.
   local missing=last_missing_710(spatial.visited,spatial.holder)
+  local queue_target=first_unvisited(spatial.visited,spatial.holder)
+  if queue_target~=long_710.queue_target then
+    auto_write(emu.framecount(),"queue_target_changed",spatial.holder,queue_target,"B",
+      "previous="..tostring(long_710.queue_target).."|order=ascending_unvisited")
+    long_710.queue_target=queue_target
+    long_710.attempts={}
+  end
+  if queue_target and spatial.holder~=long_710.queue_last_holder then
+    long_710.queue_last_holder=spatial.holder
+    auto_write(emu.framecount(),"queue_holder_changed",spatial.holder,queue_target,"B",
+      "priority=unvisited_first")
+  end
   if armed and pass_chain.active and sample_for_auto and
      long_710.phase=="ready" and spatial.holder and
      (missing or long_710.return_due or
       (spatial.holder==9 and not spatial.visited[7]) or (spatial.holder==7 and
         (Ordered.next(nil,7,spatial.visited)==10 or
          (pass_chain.repeat_710_started and not pass_chain.repeat_710_used))) or
-      Ordered.next(nil,spatial.holder,spatial.visited)~=nil) then
+      queue_target~=nil or Ordered.next(nil,spatial.holder,spatial.visited)~=nil) then
     local from=spatial.holder
-    local target=missing or (long_710.return_due and from==7 and 10) or (from==9 and not spatial.visited[7] and 7)
+    local target=queue_target or missing or (long_710.return_due and from==7 and 10)
+       or (from==9 and not spatial.visited[7] and 7)
        or ((from==7) and 10 or nil) or Ordered.next(nil,from,spatial.visited)
     if target and target~=from then
       local xy=Ordered.capture(sample_for_auto,from,target)
@@ -2070,7 +2091,14 @@ while true do
         local support_count=support_key and (long_710.support_attempts[support_key] or 0) or 0
         local loop_back=blocker and blocker==long_710.universal_previous_holder
         local cooldown=blocker and (long_710.universal_support_cooldown[support_key] or 0) or 0
-        if blocker and support_g and support_count<2 and not loop_back and
+        -- An already-visited relay is allowed only if it shortens the
+        -- remaining route to the SAME first-unvisited queue target.
+        local remaining=support_g and pair_geometry(sample_for_auto,blocker,target)
+        local improves=support_g and remaining and
+          remaining.distance+12<distance and
+          remaining.distance<distance and
+          (not lane_blocker(sample_for_auto,blocker,target))
+        if blocker and support_g and improves and support_count<2 and not loop_back and
            emu.framecount()>=cooldown then
           long_710.support_attempts[support_key]=support_count+1
           long_710.universal_support_cooldown[support_key]=emu.framecount()+90
@@ -2089,7 +2117,10 @@ while true do
             "primary_target="..tostring(target)..
             "|already_visited="..tostring(spatial.visited[blocker]==true)..
             "|attempt="..(support_count+1)..
-            "|direction="..support_g.direction)
+            "|direction="..support_g.direction..
+            "|primary_distance="..string.format("%.2f",distance)..
+            "|remaining_distance="..string.format("%.2f",remaining.distance)..
+            "|queue_target="..tostring(queue_target))
         elseif blocker and from==9 and target==7 and
            not long_710.sidestep_97_exhausted and
            long_710.sidestep_97_count<4 then
@@ -2125,7 +2156,8 @@ while true do
             "primary_target="..tostring(target)..
             "|reason="..(loop_back and "immediate_return" or
               (support_count>=2 and "attempt_limit" or
-              (not support_g and "invalid_geometry" or "cooldown"))))
+              (not support_g and "invalid_geometry" or
+              (not improves and "no_queue_progress" or "cooldown")))))
         elseif blocker and missing and not long_710.return_due and
            long_710.walk_ticks<4 then
           long_710.phase="sidestep"
@@ -2411,7 +2443,7 @@ while true do
   end
   -- Audit actual input and paired coordinates for ANY selected relay.
   if armed and sample_for_auto and spatial.holder then
-    local target=last_missing_710(spatial.visited,spatial.holder) or long_710.target
+    local target=first_unvisited(spatial.visited,spatial.holder) or long_710.target
     if not target and long_710.phase=="ready" then
       target=last_missing_710(spatial.visited,spatial.holder)
         or Ordered.next(nil,spatial.holder,spatial.visited)
