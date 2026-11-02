@@ -571,8 +571,9 @@ while true do
   end
   -- Priority lock: normal approach/repeat must not compete with recovery.
   local priority_missing=last_missing_710(spatial.visited,spatial.holder)
+  local relay_97=pass_chain.active and spatial.holder==9 and not spatial.visited[7]
   local priority_lock=pass_chain.active and
-      (priority_missing~=nil or long_710.return_due or
+      (priority_missing~=nil or relay_97 or long_710.return_due or
        long_710.phase=="sidestep" or long_710.phase=="advance" or long_710.phase=="face" or
        long_710.phase=="observe")
   if armed and autopass.enabled and not auto_finished and sample_for_auto
@@ -1915,12 +1916,14 @@ while true do
   local missing=last_missing_710(spatial.visited,spatial.holder)
   if armed and pass_chain.active and sample_for_auto and
      long_710.phase=="ready" and spatial.holder and
-     (missing or long_710.return_due or (spatial.holder==7 and
+     (missing or long_710.return_due or
+      (spatial.holder==9 and not spatial.visited[7]) or (spatial.holder==7 and
         (Ordered.next(nil,7,spatial.visited)==10 or
          (pass_chain.repeat_710_started and not pass_chain.repeat_710_used)))) then
     local from=spatial.holder
     local target=(long_710.return_due and from==7 and 10)
-       or missing or ((from==7) and 10 or nil)
+       or missing or (from==9 and not spatial.visited[7] and 7)
+       or ((from==7) and 10 or nil)
     if target and target~=from then
       local xy=Ordered.capture(sample_for_auto,from,target)
       local gap=ball_gap_710(sample_for_auto)
@@ -1964,10 +1967,16 @@ while true do
           long_710.advance_target={x=xy.tx,y=xy.ty}
           long_710.receiver_start={x=xy.tx,y=xy.ty}
           long_710.carrier_start={x=xy.hx,y=xy.hy}
+          if from==9 and target==7 then
+            auto_write(emu.framecount(),"relay_97_started",9,7,"B",
+              "distance="..string.format("%.2f",distance)..
+              "|dx="..dx.."|dy="..dy.."|gap="..string.format("%.2f",gap))
+          end
           long_710.initial=distance;long_710.target=target
           long_710.origin=from
           long_710.trial_kind=long_710.return_due and "return_7_to_10"
-             or (missing and "last_missing" or "relay_710")
+             or (missing and "last_missing" or
+                (from==9 and target==7 and "relay_9_to_7" or "relay_710"))
           if long_710.return_due then
             long_710.return_due=false;long_710.returns=long_710.returns+1
           end
@@ -2093,7 +2102,9 @@ while true do
     end
     if long_710.phase=="done" then pass_chain.next_frame=frame+1 end
   end
-  if pass_chain.active and last_missing_710(spatial.visited,spatial.holder)
+  if pass_chain.active and
+      (last_missing_710(spatial.visited,spatial.holder) or
+       (spatial.holder==9 and not spatial.visited[7]))
       and long_710.phase=="ready" then
     -- Do not allow stale ordinary approach commands to move toward player 10.
     buttons={}
