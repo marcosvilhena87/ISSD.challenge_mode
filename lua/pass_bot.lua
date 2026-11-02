@@ -362,6 +362,14 @@ local function pair_geometry(sample,from,to)
  return {xy=xy,dx=dx,dy=dy,distance=math.sqrt(dx*dx+dy*dy),
          direction=direction}
 end
+-- Diagonal travel is allowed as movement only, never with B.
+local function approach_buttons(g)
+ local b={}
+ if not g then return b end
+ if math.abs(g.dx)>24 then b[g.dx>0 and "Right" or "Left"]=true end
+ if math.abs(g.dy)>24 then b[g.dy>0 and "Down" or "Up"]=true end
+ return b
+end
 local function carrier_gap(sample,id)
  if not sample or not sample.ball then return nil end
  for _,p in ipairs(sample.players or {}) do
@@ -378,7 +386,9 @@ end
 local function lane_escape(sample,from,to)
  local g=pair_geometry(sample,from,to)
  if not g then return nil end
- local options={{"Up",0,-12},{"Down",0,12},{"Left",-12,0},{"Right",12,0}}
+ local options={{"Up",0,-12},{"Down",0,12},{"Left",-12,0},{"Right",12,0},
+                {"UpRight",12,-12},{"DownRight",12,12},
+                {"UpLeft",-12,-12},{"DownLeft",-12,12}}
  local best,best_score=nil,-math.huge
  for _,a in ipairs(options) do
   local shifted={players={},ball=sample.ball}
@@ -2092,7 +2102,7 @@ while true do
           "|distance_after="..string.format("%.2f",math.sqrt(
             (xy.tx-xy.hx)^2+(xy.ty-xy.hy)^2)))
       else
-        buttons={[long_710.direction]=true}
+        buttons=approach_buttons(pair_geometry(sample_for_auto,7,10))
       end
     end
   end
@@ -2115,11 +2125,22 @@ while true do
         and "relay_97_sidestep_aborted" or "last_missing_sidestep_aborted",
         long_710.origin,long_710.target,"B","reason=loss_of_possession")
     elseif frame-long_710.walk_start<6 then
-      buttons={[long_710.walk_dir]=true}
+      if long_710.walk_dir=="UpRight" then buttons={Up=true,Right=true}
+      elseif long_710.walk_dir=="DownRight" then buttons={Down=true,Right=true}
+      elseif long_710.walk_dir=="UpLeft" then buttons={Up=true,Left=true}
+      elseif long_710.walk_dir=="DownLeft" then buttons={Down=true,Left=true}
+      else buttons={[long_710.walk_dir]=true} end
     else
       long_710.phase="ready"
       local is97=long_710.origin==9 and long_710.target==7
       local blocker,cross=lane_blocker(sample_for_auto,long_710.origin,long_710.target)
+      if not blocker and long_710.origin and long_710.target then
+        long_710.phase="face";long_710.start=frame
+        local g=pair_geometry(sample_for_auto,long_710.origin,long_710.target)
+        if g then long_710.direction=g.direction end
+        auto_write(frame,"relay_lane_open_pass_queued",long_710.origin,long_710.target,"B",
+          "direction="..tostring(long_710.direction))
+      end
       local origin=long_710.sidestep_97_initial
       local delta_x=origin and xy.hx-origin.x or 0
       local delta_y=origin and xy.hy-origin.y or 0
@@ -2149,8 +2170,14 @@ while true do
         local elapsed=frame-long_710.start
         local g=pair_geometry(sample_for_auto,long_710.origin,long_710.target)
         if g then long_710.direction=g.direction end
-        if elapsed<3 then
-          buttons={[long_710.direction]=true}
+        local blocker=lane_blocker(sample_for_auto,long_710.origin,long_710.target)
+        if blocker then
+          buttons={};long_710.phase="ready"
+          long_710.cooldown_until=frame+12
+          auto_write(frame,"relay_pass_cancelled_blocker",long_710.origin,long_710.target,"B",
+            "blocker="..tostring(blocker))
+        elseif elapsed<3 then
+          buttons=approach_buttons(g)
         elseif elapsed<5 then
           buttons={}
         elseif elapsed<7 then
