@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.71",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,CONTINUOUS_HOLD_710=24,CONTINUOUS_HOLD_67=12,STALL_WINDOW=6}
+local M={VERSION="0.8.72",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,CONTINUOUS_HOLD_710=24,CONTINUOUS_HOLD_67=12,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -108,6 +108,33 @@ function M.receiver_prediction(state,sample,holder,target,frame)
   predicted_x=b.x+offx,predicted_y=b.y+offy,
   vx=v.vx,vy=v.vy,horizon=horizon}
 end
+-- 7->10 short-horizon receiver velocity from stable WRAM samples.
+-- Reject outliers and clamp the lead so the bot cannot chase a remote guess.
+function M.observe_710(state,sample,frame)
+ if not state or type(frame)~="number" then return nil end
+ local a,b=find(sample,7),find(sample,10)
+ if not a or not b then state.pair_710_velocity=nil;return nil end
+ local prior=state.pair_710_receiver_position
+ state.pair_710_receiver_position={x=b.x,y=b.y,frame=frame}
+ if not prior then return nil end
+ local dt=frame-prior.frame
+ if dt<1 or dt>12 then state.pair_710_velocity=nil;return nil end
+ local vx,vy=(b.x-prior.x)/dt,(b.y-prior.y)/dt
+ if math.abs(vx)>12 or math.abs(vy)>12 then state.pair_710_velocity=nil;return nil end
+ local old=state.pair_710_velocity
+ if old then vx=(vx+old.vx)/2;vy=(vy+old.vy)/2 end
+ state.pair_710_velocity={vx=vx,vy=vy,frame=frame}
+ return state.pair_710_velocity
+end
+function M.predict_710(state,sample,frame)
+ local a,b=find(sample,7),find(sample,10)
+ local v=state and state.pair_710_velocity
+ if not a or not b or not v or not frame or frame-v.frame>8 then return nil end
+ local horizon=4
+ local leadx=math.max(-24,math.min(24,v.vx*horizon))
+ local leady=math.max(-24,math.min(24,v.vy*horizon))
+ return {dx=b.x+leadx-a.x,dy=b.y+leady-a.y,vx=v.vx,vy=v.vy}
+end
 function M.step(sample,holder,target,state)
  local a,b=find(sample,holder),find(sample,target)
  if not a or not b or not sample.ball then return {},"missing_geometry" end
@@ -127,6 +154,15 @@ function M.step(sample,holder,target,state)
   return {},"pair_711_net_regression_stop",metrics
  end
  local dx,dy=metrics.dx,metrics.dy
+ if holder==7 and target==10 and state then
+  local prediction=M.predict_710(state,sample,state.current_frame)
+  if prediction then
+   dx,dy=prediction.dx,prediction.dy
+   state.pair_710_predicted=prediction
+  else
+   state.pair_710_predicted=nil
+  end
+ end
  local forecast=(holder==8 and target==9) and M.receiver_prediction(state,sample,holder,target,state and state.current_frame) or nil
  if forecast then dx,dy=forecast.dx,forecast.dy end
  -- A persistently regressing 6→7 direction is excluded for the next
@@ -181,24 +217,15 @@ function M.step(sample,holder,target,state)
    return {[choice.key]=true},"approach_step",metrics
   end
  end
- -- 7→10: horizontal geometry governs the initial decision, without
- -- requiring two successful RIGHT bursts before RIGHT can even be tried.
- if holder==7 and target==10 and state and dx>20 then
-  local vertical_needed=math.abs(dy)>math.max(90,math.abs(dx)*0.8)
-  local correction=(dy>0) and "Down" or "Up"
-  local correction_good=state.motion and state.motion[correction] and state.motion[correction].count>=1
-  local vertical_budget=state.pair_710_vertical_count or 0
-  local right_stalls=state.pair_710_right_stalls or 0
-  local key="Right"
-  if vertical_needed and correction_good and vertical_budget<1 then key=correction end
-  if right_stalls>=2 and correction_good and vertical_budget<2 then key=correction end
-  if key=="Right" then
-   state.pair_710_vertical_count=0
-  else
-   state.pair_710_vertical_count=vertical_budget+1
-  end
-  state.direction=key;state.axis=(key=="Right") and "x" or "y"
-  state.geometry_reason=(key=="Right") and "pair_710_coordinate_right" or "pair_710_limited_vertical_correction"
+ -- 7->10: select the dominant predicted coordinate error. Re-evaluate
+ -- every neutral burst; never persist RIGHT solely because it worked earlier.
+ if holder==7 and target==10 and state then
+  local key
+  if math.abs(dx)>=math.abs(dy) then key=dx>=0 and "Right" or "Left"
+  else key=dy>=0 and "Down" or "Up" end
+  state.direction=key
+  state.axis=(key=="Right" or key=="Left") and "x" or "y"
+  state.geometry_reason=state.pair_710_predicted and "pair_710_predictive_chase" or "pair_710_measured_chase"
   return {[key]=true},"approach_step",metrics
  end
  -- 7→10: favor RIGHT only while the carrier actually advances toward
