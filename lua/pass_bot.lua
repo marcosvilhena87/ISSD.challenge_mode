@@ -313,6 +313,8 @@ local armed=false
 local previous=nil
 local auto_finished=false
 local pass_chain={active=false,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0,route_index=1,approach_frames=0,approach_neutral=false,approach_state={}}
+-- v0.8.84 long-range pass trial integrated in the normal relay sequence.
+local long_710={phase="ready",start=nil,initial=nil,direction=nil,shot_frame=nil}
 local reach=Reach.new()
 local reach_path=root.."/csv/pass_reach_v0864.csv"
 local rf=assert(io.open(reach_path,"ab"))
@@ -1847,6 +1849,74 @@ while true do
         st.pair_710_output_neutral=0
       end
     end
+  end
+  -- v0.8.84: intercept only the selected 7->10 relay at final input.
+  -- A directional B press is essential; never issue an isolated B.
+  if armed and pass_chain.active and sample_for_auto and
+     long_710.phase=="ready" and spatial.holder==7 and
+     (Ordered.next(nil,7,spatial.visited)==10 or
+       (pass_chain.repeat_710_started and not pass_chain.repeat_710_used)) then
+    local xy=Ordered.capture(sample_for_auto,7,10)
+    local gap=ball_gap_710(sample_for_auto)
+    if xy and gap and gap<=18 then
+      local dx,dy=xy.tx-xy.hx,xy.ty-xy.hy
+      local distance=math.sqrt(dx*dx+dy*dy)
+      if distance>=180 and distance<=410 and math.abs(dy)<=100 then
+        long_710.phase="face";long_710.start=emu.framecount()
+        long_710.initial=distance
+        long_710.direction=(math.abs(dx)>=math.abs(dy))
+           and (dx>=0 and "Right" or "Left")
+           or (dy>=0 and "Down" or "Up")
+        auto_write(emu.framecount(),"long_710_started",7,10,selected_pass_button,
+          "distance="..string.format("%.2f",distance)..
+          "|dx="..dx.."|dy="..dy.."|direction="..long_710.direction..
+          "|ball_gap="..string.format("%.2f",gap))
+      end
+    end
+  end
+  if long_710.phase=="face" or long_710.phase=="observe" then
+    local frame=emu.framecount()
+    -- Preserve normal route state; delay the ordinary controller until
+    -- the trial completes, then resume with actual receiver observations.
+    pass_chain.next_frame=frame+2
+    buttons={}
+    if long_710.phase=="face" then
+      local gap=ball_gap_710(sample_for_auto)
+      if spatial.holder~=7 or not gap or gap>18 or
+         not Ordered.capture(sample_for_auto,7,10) then
+        long_710.phase="done"
+        auto_write(frame,"long_710_aborted",7,10,selected_pass_button,
+          "reason=lost_possession_or_invalid_geometry")
+      else
+        local elapsed=frame-long_710.start
+        if elapsed<3 then
+          buttons={[long_710.direction]=true}
+        elseif elapsed<5 then
+          buttons={}
+        elseif elapsed<7 then
+          buttons={[long_710.direction]=true,B=true}
+          if not long_710.shot_frame then
+            long_710.shot_frame=frame
+            auto_write(frame,"long_710_directional_b",7,10,"B",
+              "distance="..tostring(long_710.initial)..
+              "|direction="..long_710.direction.."|simultaneous=true")
+          end
+        else
+          long_710.phase="observe"
+        end
+      end
+    else
+      if spatial.holder==10 then
+        long_710.phase="done"
+        auto_write(frame,"long_710_receiver_observed",7,10,"B",
+          "holder=10|confidence=spatial_only")
+      elseif frame-(long_710.shot_frame or frame)>=120 then
+        long_710.phase="done"
+        auto_write(frame,"long_710_observation_timeout",7,10,"B",
+          "holder="..tostring(spatial.holder).."|success_unverified")
+      end
+    end
+    if long_710.phase=="done" then pass_chain.next_frame=frame+1 end
   end
   joypad.set(buttons,1)
   emu.frameadvance()
