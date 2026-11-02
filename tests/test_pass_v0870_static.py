@@ -18,6 +18,10 @@ class TestV0870(unittest.TestCase):
         self.assertIn('close.lateral>Early.MAX_LATERAL', BOT)
         self.assertIn('selector_reason="approach_required"', BOT)
         self.assertIn('bridge_info.target=10', BOT)
+    def test_fresh_early_module(self):
+        self.assertIn('package.loaded["challenge.pass_early_v0865"]=nil', BOT)
+        self.assertIn('Early.VERSION=="0.8.70"', BOT)
+        self.assertIn('Early.TARGET_DISTANCE==160', BOT)
     def test_telemetry_and_prior_safety(self):
         self.assertIn('"approach_710_close_gate"', BOT)
         self.assertIn('early_710_guard_out_of_band', BOT)
