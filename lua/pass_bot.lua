@@ -574,6 +574,7 @@ while true do
   -- Priority lock: normal approach/repeat must not compete with recovery.
   local priority_missing=last_missing_710(spatial.visited,spatial.holder)
   local relay_97=pass_chain.active and spatial.holder==9 and not spatial.visited[7]
+      and not long_710.sidestep_97_exhausted
   local priority_lock=pass_chain.active and
       (priority_missing~=nil or relay_97 or long_710.return_due or
        long_710.phase=="sidestep" or long_710.phase=="advance" or long_710.phase=="face" or
@@ -2139,7 +2140,8 @@ while true do
   end
   if pass_chain.active and
       (last_missing_710(spatial.visited,spatial.holder) or
-       (spatial.holder==9 and not spatial.visited[7]))
+       (spatial.holder==9 and not spatial.visited[7]
+        and not long_710.sidestep_97_exhausted))
       and long_710.phase=="ready" then
     -- Do not allow stale ordinary approach commands to move toward player 10.
     buttons={}
