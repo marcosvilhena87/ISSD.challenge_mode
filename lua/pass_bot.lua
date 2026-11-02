@@ -1883,7 +1883,7 @@ while true do
         "|read_error="..tostring(goal_error))
     end
     local shot,reason=Finish.step(finish,emu.framecount(),completion_frame,bonus.first_decrement_frame,sample_for_auto,spatial.holder)
-    if reason=="shoot_pulse" or reason=="completion_and_bonus_observed" or reason=="finish_window_expired" or reason=="shot_blocked_too_far" or reason=="goalkeeper_coordinate_mismatch" or reason=="invalid_coordinate_domain" then
+    if reason=="shoot_pulse" or reason=="completion_and_bonus_observed" or reason=="finish_window_expired" or reason=="shot_blocked_too_far" or reason=="shot_blocked_no_progress" or reason=="goalkeeper_coordinate_mismatch" or reason=="invalid_coordinate_domain" then
       finish_write(emu.framecount(),reason)
       auto_write(emu.framecount(),"finish_"..reason,spatial.holder,nil,"X",
         "aim="..tostring(finish.aim_reason).."|direction="..tostring(finish.aim and (finish.aim.Left and "Left" or "Right"))..
@@ -1891,16 +1891,38 @@ while true do
     end
     if reason=="finish_goal_approach" then
       buttons=shot;autopass.enabled=false
+      if finish.approach_last_event=="finish_approach_recovery" then
+        finish.approach_last_event=nil
+        auto_write(emu.framecount(),"finish_approach_recovery",spatial.holder,nil,"MOVE",
+          "mode="..tostring(finish.approach_mode)..
+          "|recoveries="..tostring(finish.approach_recoveries)..
+          "|gap="..tostring(finish.approach_last_gap))
+      end
       if finish.approach_frames%10==1 then
+        local goal_g=Finish.geometry(sample_for_auto)
         auto_write(emu.framecount(),"finish_goal_approach",spatial.holder,nil,"MOVE",
           "frames="..tostring(finish.approach_frames)..
           "|best_gap="..tostring(finish.approach_best)..
-          "|start_gap="..tostring(finish.approach_x_start))
+          "|start_gap="..tostring(finish.approach_x_start)..
+          "|current_gap="..tostring(goal_g and goal_g.gap)..
+          "|dx="..tostring(goal_g and goal_g.dx)..
+          "|dy="..tostring(goal_g and goal_g.dy)..
+          "|mode="..tostring(finish.approach_mode)..
+          "|up="..tostring(buttons.Up==true)..
+          "|down="..tostring(buttons.Down==true)..
+          "|right="..tostring(buttons.Right==true)..
+          "|left="..tostring(buttons.Left==true))
       end
     end
     -- Finalization only emits X once; it must never combine with pass B.
     if shot.X then
       buttons=shot;autopass.enabled=false
+      auto_write(emu.framecount(),"finish_x_output",spatial.holder,nil,"X",
+        "right="..tostring(buttons.Right==true)..
+        "|left="..tostring(buttons.Left==true)..
+        "|up="..tostring(buttons.Up==true)..
+        "|down="..tostring(buttons.Down==true)..
+        "|X="..tostring(buttons.X==true))
       trajectory_write(emu.framecount(),0,sample_for_auto,"shot_x")
       if goal_monitor then
         goal_monitor.complete=completion_frame
