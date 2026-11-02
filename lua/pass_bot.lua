@@ -688,10 +688,45 @@ while true do
         local pos=Ordered.capture(sample_for_auto,7,10)
         if pos and (pass_chain.approach_frames or 0)%4==0 then
           auto_write(emu.framecount(),"approach_710_ab_probe",7,10,selected_pass_button,
-            "phase="..((math.floor((pass_chain.approach_frames or 0)/8)%2==0) and "RIGHT_ONLY" or "RIGHT_Y")..
+            "phase="DIRECTION_ONLY_V0877"..
             "|holder_x="..tostring(pos.hx).."|holder_y="..tostring(pos.hy)..
             "|receiver_x="..tostring(pos.tx).."|receiver_y="..tostring(pos.ty)..
             "|gap="..tostring(ball_gap_710(sample_for_auto)))
+        end
+        -- Measure relative closing by comparing actual WRAM X positions,
+        -- not requested directional input or predicted receiver velocity.
+        local current=Ordered.capture(sample_for_auto,7,10)
+        local previous=movement.pair_710_relative_sample
+        if current then
+          if previous and emu.framecount()>previous.frame then
+            local dt=emu.framecount()-previous.frame
+            local holder_vx=(current.hx-previous.hx)/dt
+            local receiver_vx=(current.tx-previous.tx)/dt
+            local closing=holder_vx-receiver_vx
+            local near_stop=math.abs(receiver_vx)<=0.4
+            if near_stop then
+              movement.pair_710_slow_frames=(movement.pair_710_slow_frames or 0)+dt
+            else
+              movement.pair_710_slow_frames=0
+            end
+            if emu.framecount()%4==0 then
+              auto_write(emu.framecount(),"approach_710_relative_closure",7,10,selected_pass_button,
+                "holder_vx="..string.format("%.3f",holder_vx)..
+                "|receiver_vx="..string.format("%.3f",receiver_vx)..
+                "|closing_vx="..string.format("%.3f",closing)..
+                "|receiver_slow_frames="..tostring(movement.pair_710_slow_frames)..
+                "|holder_x="..tostring(current.hx)..
+                "|receiver_x="..tostring(current.tx)..
+                "|gap="..tostring(ball_gap_710(sample_for_auto)))
+              if movement.pair_710_slow_frames>=8 then
+                auto_write(emu.framecount(),"approach_710_receiver_slow_window",7,10,selected_pass_button,
+                  "frames="..tostring(movement.pair_710_slow_frames)..
+                  "|receiver_x="..tostring(current.tx)..
+                  "|closing_vx="..string.format("%.3f",closing))
+              end
+            end
+          end
+          movement.pair_710_relative_sample={hx=current.hx,tx=current.tx,frame=emu.framecount()}
         end
         local gap=ball_gap_710(sample_for_auto)
         if gap then
@@ -1242,9 +1277,7 @@ while true do
           if reason=="approach_step" then
             -- Dash applies ONLY to movement during 7->10, never a pass.
             -- Keep burst_direction cardinal; Y is not a steering axis.
-            if holder==7 and target==10 and not movement.dash_710_disabled
-                and math.floor((pass_chain.approach_frames or 0)/8)%2==1
-                and (ball_gap_710(sample_for_auto) or math.huge)<=12 and not buttons.B and
+            if false and holder==7 and target==10 and not buttons.B and
                 (buttons.Right or buttons.Left or buttons.Up or buttons.Down) then
               buttons.Y=true
               auto_write(emu.framecount(),"approach_710_dash_start",7,10,selected_pass_button,
@@ -1351,6 +1384,16 @@ while true do
     if buttons.Y and (buttons.B or buttons.X or reason~="approach_step"
        or holder~=7 or not pass_chain.active) then
       buttons.Y=nil
+    end
+    if holder==7 and pass_chain.active and pass_chain.approach_state and
+       pass_chain.approach_state.target==10 and emu.framecount()%4==0 then
+      auto_write(emu.framecount(),"approach_710_actual_input",7,10,selected_pass_button,
+        "right="..tostring(buttons.Right==true)..
+        "|left="..tostring(buttons.Left==true)..
+        "|up="..tostring(buttons.Up==true)..
+        "|down="..tostring(buttons.Down==true)..
+        "|actual_Y="..tostring(buttons.Y==true)..
+        "|reason="..tostring(reason))
     end
     if autopass.early_710_trial and holder==7 and autopass.target==10 then
       if reason=="target_selected" or reason=="possession_gate_ready"
