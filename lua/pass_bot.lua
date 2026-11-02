@@ -115,6 +115,10 @@ local trigger_mode="A"
 local calibration_mode="A"
 local timers=Timers.new()
 local pass_clock=nil
+local clock_start_pending=false
+local clock_started=false
+local clock_expired_logged=false
+local previous_clock_read=nil
 local bonus=Bonus.new()
 local completion_frame=nil
 local last_spatial_frame=nil
@@ -517,6 +521,17 @@ while true do
    end
    local ts=Timers.read(memory.read_u8,memory.read_u16_le)
    pass_clock=ts
+   if clock_start_pending and previous_clock_read and ts and
+      previous_clock_read.time and ts.time and
+      previous_clock_read.time<=30 and previous_clock_read.time>ts.time and ts.time>0 then
+     clock_start_pending=false;clock_started=true
+     autopass.enabled=true;autopass.start_frame=emu.framecount()
+     pass_chain.active=true;pass_chain.next_frame=emu.framecount()
+     long_710.watchdog_last_action=emu.framecount()
+     auto_write(emu.framecount(),"pass_clock_started",spatial.holder,nil,"AUTO",
+       "previous="..previous_clock_read.time.."|current="..ts.time)
+   end
+   previous_clock_read=ts
    local te=timers:step(ts,emu.framecount())
    if te then timer_write(te) end
    local count=0;for _ in pairs(spatial.visited) do count=count+1 end
@@ -599,10 +614,12 @@ while true do
       -- Probe is not proof of gameplay; explicit LV.1 selection is a safety gate.
       if p.status=="candidate" and p.challenge=="PASS" and p.level==1 then
         armed=true;reach=Reach.new();tracker=Tracking.new_tracker(3);possession=Possession.new({minimum=3});spatial=Spatial.new({threshold=24,gap=6,stable=4});timers=Timers.new();bonus=Bonus.new();completion_frame=nil;last_spatial_frame=nil;autopass=Auto.new();finish=Finish.new();goal_monitor=GoalEvidence.new(GoalEvidence.read(memory.read_u8,memory.read_u16_le,emu.framecount()));finish.enabled=auto_finish_queued;auto_finish_queued=false
-        autopass.enabled=pending_auto and selected_pass_button=="B";autopass.button=selected_pass_button;autopass.start_frame=emu.framecount();autopass.direction=selected_direction;autopass.trigger_delay=trigger_mode=="B" and 12 or 0;autopass.calibration_mode=calibration_mode
+        clock_start_pending=pending_auto and selected_pass_button=="B"
+        clock_started=false;clock_expired_logged=false;previous_clock_read=nil;pass_clock=nil
+        autopass.enabled=false;autopass.button=selected_pass_button;autopass.start_frame=emu.framecount();autopass.direction=selected_direction;autopass.trigger_delay=trigger_mode=="B" and 12 or 0;autopass.calibration_mode=calibration_mode
         pending_auto=false;auto_finished=false;previous_gate=nil
-        pass_chain={active=autopass.enabled,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0,route_index=1,approach_frames=0,approach_neutral=false,approach_state={}}
-        auto_write(emu.framecount(),autopass.enabled and "auto_arm" or "observation_arm",nil,nil,selected_pass_button,"opt_in_required")
+        pass_chain={active=false,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0,route_index=1,approach_frames=0,approach_neutral=false,approach_state={}}
+        auto_write(emu.framecount(),clock_start_pending and "auto_queued_clock_start" or "observation_arm",nil,nil,selected_pass_button,"opt_in_required")
         record("armed_candidate_only",p)
         print("[ISSD.pass_lv1] armed for observation; PASS LV.1 identity remains unconfirmed")
       else
@@ -613,7 +630,7 @@ while true do
     elseif cmd:match("^SNAP:[A-Z0-9_]+$") then
       dump_wram(cmd:sub(6))
     elseif cmd=="STOP" then
-      armed=false;autopass.enabled=false;finish.enabled=false;pending_auto=false;auto_finish_queued=false;pass_chain.active=false;record("stopped",p);release()
+      armed=false;autopass.enabled=false;finish.enabled=false;pending_auto=false;clock_start_pending=false;clock_started=false;auto_finish_queued=false;pass_chain.active=false;record("stopped",p);release()
     else
       print("[ISSD.pass_lv1] unknown command: "..line)
     end
@@ -639,10 +656,12 @@ while true do
   local chain_visits=0
   for id in pairs(spatial.visited) do if type(id)=="number" and id>=2 and id<=11 then chain_visits=chain_visits+1 end end
   -- Only the pass phase is subject to the main 30-second game clock.
-  if pass_chain.active and chain_visits<10 and pass_clock and
-     pass_clock.time==0 and timers.previous and
-     timers.previous.time==0 then
-    pass_chain.active=false;autopass.enabled=false;auto_finished=true
+  if armed and clock_started and not clock_expired_logged and pass_clock and pass_clock.time==0 then
+    clock_expired_logged=true;clock_start_pending=false
+    if chain_visits<10 then
+      pass_chain.active=false;autopass.enabled=false;auto_finished=true
+      long_710.phase="ready"
+    end
     auto_write(emu.framecount(),"pass_time_budget_expired",spatial.holder,nil,"OBSERVE",
       "time=0|visited="..chain_visits.."/10|limit=30_game_seconds")
   end
@@ -724,13 +743,20 @@ while true do
   local clock_left=pass_clock and pass_clock.time
   local clock_valid=clock_left and clock_left>=0 and clock_left<=30
   local wd_threshold=(clock_valid and clock_left<=10) and 12 or 24
-  if pass_chain.active and long_710.phase=="ready" and wd_target and
+  if pass_chain.active and clock_started and not clock_expired_logged and
+     long_710.phase=="ready" and wd_target and
      wd_frame-long_710.watchdog_last_action>=wd_threshold and
      (not clock_valid or clock_left>0) then
     local g=pair_geometry(sample_for_auto,spatial.holder,wd_target)
     local possession=carrier_gap(sample_for_auto,spatial.holder)
     local k=tostring(spatial.holder)..":"..tostring(wd_target)
     local attempts=long_710.wd_active_attempts[k] or 0
+    if (not g or not possession or possession>18 or attempts>=4) and wd_frame%12==0 then
+      auto_write(wd_frame,"watchdog_active_blocked",spatial.holder,wd_target,"OBSERVE",
+        "geometry="..tostring(g~=nil).."|ball_gap="..tostring(possession)..
+        "|attempts="..attempts.."|phase="..long_710.phase..
+        "|time_left="..tostring(clock_left))
+    end
     if g and possession and possession<=18 and attempts<4 then
       long_710.wd_active_attempts[k]=attempts+1
       long_710.phase="watchdog_move"
@@ -743,7 +769,8 @@ while true do
         "|dx="..g.dx.."|dy="..g.dy.."|direction="..g.direction)
     end
   end
-  if long_710.phase=="ready" and wd_target and
+  if clock_started and not clock_expired_logged and
+     long_710.phase=="ready" and wd_target and
      wd_frame-long_710.watchdog_last_action>=90 then
     long_710.watchdog_release_until=wd_frame+48
     long_710.watchdog_last_action=wd_frame
