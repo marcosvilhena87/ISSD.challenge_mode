@@ -26,7 +26,10 @@ package.loaded["challenge.pass_priority_v087"]=nil
 package.loaded["challenge.pass_ordered_v0820"]=nil
 local Priority=require("challenge.pass_priority_v087")
 local Ordered=require("challenge.pass_ordered_v0820")
+package.loaded["challenge.pass_early_v0865"]=nil
 local Early=require("challenge.pass_early_v0865")
+assert(Early.VERSION=="0.8.70" and Early.TARGET_DISTANCE==160 and Early.MAX_DISTANCE==180,
+  "v0.8.70 requires updated challenge.pass_early_v0865; restart main.lua")
 local Reach=require("challenge.pass_reach_v0863")
 assert(type(Ordered.observe)=="function" and type(Ordered.step)=="function",
   "v0.8.23 requires updated challenge.pass_ordered_v0820; restart main.lua")
