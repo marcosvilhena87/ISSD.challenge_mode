@@ -325,7 +325,9 @@ local long_710={phase="ready",start=nil,initial=nil,direction=nil,shot_frame=nil
  final_target=nil,final_retries=0,final_next_retry=0,final_last_holder=nil,
  universal_previous_holder=nil,universal_support_cooldown={},queue_target=nil,queue_last_holder=nil,
  watchdog_key=nil,watchdog_start=0,watchdog_last_action=0,watchdog_release_until=0,
- align_start=0,align_origin=nil,align_initial_gap=nil,align_no_progress=0,align_mode=0}
+ align_start=0,align_origin=nil,align_initial_gap=nil,align_no_progress=0,align_mode=0,
+ recovery_origin=nil,recovery_target=nil,recovery_start=nil,recovery_baseline=nil,
+ recovery_initial_xy=nil,recovery_failures={},recovery_stall=0,recovery_last_gap=nil}
 -- Last missing outfield player: player IDs 2..11 (10 players), spatial evidence only.
 local function last_missing_710(visited,holder)
  if not visited then return nil end
@@ -696,7 +698,7 @@ while true do
       and not long_710.sidestep_97_exhausted
   local priority_lock=pass_chain.active and not wd_released and
       (priority_missing~=nil or relay_97 or long_710.return_due or
-       long_710.phase=="align" or long_710.phase=="sidestep" or long_710.phase=="advance" or long_710.phase=="face" or
+       long_710.phase=="recover_approach" or long_710.phase=="align" or long_710.phase=="sidestep" or long_710.phase=="advance" or long_710.phase=="face" or
        long_710.phase=="observe")
   if armed and autopass.enabled and not auto_finished and sample_for_auto
       and not priority_lock
@@ -1087,10 +1089,32 @@ while true do
             auto_write(emu.framecount(),"approach_recovery_started",holder,target,selected_pass_button,
               "direction="..dir.."|limit="..movement.approach_limit.."|cause="..why)
           else
-          reason="approach_timeout";buttons={};autopass.enabled=false
-          pass_chain.active=false;auto_finished=true
+          reason="approach_timeout";buttons={}
+          local retry_key=tostring(holder)..":"..tostring(target)
+          local failures=long_710.recovery_failures[retry_key] or 0
+          local g=pair_geometry(sample_for_auto,holder,target)
           auto_write(emu.framecount(),"approach_timeout",holder,target,selected_pass_button,
-            "limit="..approach_limit.."|absolute="..approach_absolute.."|reason="..why)
+            "limit="..approach_limit.."|absolute="..approach_absolute..
+            "|reason="..why.."|recovery_attempts="..failures)
+          if g and failures<3 and carrier_gap(sample_for_auto,holder) and
+              carrier_gap(sample_for_auto,holder)<=18 then
+            long_710.phase="recover_approach"
+            long_710.recovery_origin=holder;long_710.recovery_target=target
+            long_710.recovery_start=emu.framecount()
+            long_710.recovery_initial_xy={x=g.xy.hx,y=g.xy.hy}
+            long_710.recovery_baseline=g.distance
+            long_710.recovery_last_gap=g.distance
+            long_710.recovery_stall=0
+            long_710.recovery_failures[retry_key]=failures+1
+            autopass.enabled=false
+            auto_write(emu.framecount(),"approach_timeout_recovery_started",holder,target,"MOVE",
+              "attempt="..(failures+1).."|dx="..g.dx.."|dy="..g.dy..
+              "|distance="..string.format("%.2f",g.distance).."|cause="..why)
+          else
+            autopass.enabled=false;pass_chain.active=false;auto_finished=true
+            auto_write(emu.framecount(),"approach_timeout_recovery_exhausted",holder,target,"MOVE",
+              "reason="..(g and "retry_limit_or_no_possession" or "invalid_geometry"))
+          end
           end
         end
       elseif pass_chain.approach_neutral and (movement.right_followup_left or 0)>0 then
@@ -2330,6 +2354,62 @@ while true do
   end
   -- Shift part of the receiving burden to player 7, using observed motion
   -- rather than assuming the receiver will run to meet the ball.
+  -- v0.9.2: take over after ordinary approach timeout, with fresh geometry.
+  if long_710.phase=="recover_approach" then
+    local frame=emu.framecount()
+    local from,to=long_710.recovery_origin,long_710.recovery_target
+    local g=pair_geometry(sample_for_auto,from,to)
+    local gap=carrier_gap(sample_for_auto,from)
+    buttons={}
+    if not g or spatial.holder~=from or not gap or gap>18 then
+      long_710.phase="ready"
+      long_710.cooldown_until=frame+18
+      auto_write(frame,"approach_timeout_recovery_aborted",from,to,"MOVE",
+        "reason=possession_or_geometry_changed")
+    else
+      local elapsed=frame-long_710.recovery_start
+      local moved=math.sqrt((g.xy.hx-long_710.recovery_initial_xy.x)^2+
+                            (g.xy.hy-long_710.recovery_initial_xy.y)^2)
+      local gained=long_710.recovery_baseline-g.distance
+      if long_710.recovery_last_gap-g.distance>=0.5 then
+        long_710.recovery_stall=0
+      else
+        long_710.recovery_stall=long_710.recovery_stall+1
+      end
+      long_710.recovery_last_gap=g.distance
+      if gained>=12 or elapsed>=30 or moved>=50 or long_710.recovery_stall>=12 then
+        long_710.phase="ready"
+        long_710.cooldown_until=frame+8
+        long_710.watchdog_last_action=frame
+        local progressed=gained>=5
+        auto_write(frame,"approach_timeout_recovery_result",from,to,"MOVE",
+          "reason="..(progressed and "distance_reduced" or "no_net_progress")..
+          "|elapsed="..elapsed.."|walk="..string.format("%.2f",moved)..
+          "|gain="..string.format("%.2f",gained)..
+          "|remaining="..string.format("%.2f",g.distance))
+        -- Rebuild the ordinary controller instead of reusing its timed-out
+        -- approach state; the special coordinate controller may also act.
+        local next_auto=Auto.new()
+        next_auto.enabled=true
+        next_auto.button="B"
+        next_auto.direction=selected_direction
+        next_auto.calibration_mode=calibration_mode
+        autopass=next_auto
+        pass_chain.approach_frames=0
+        pass_chain.approach_neutral=false
+        pass_chain.approach_state={}
+        pass_chain.next_frame=frame+8
+        auto_finished=false;pass_chain.active=true
+        if not progressed then
+          long_710.watchdog_release_until=frame+48
+          auto_write(frame,"approach_timeout_recovery_fallback",from,to,"MOVE",
+            "reason=insufficient_progress|release_frames=48")
+        end
+      else
+        buttons=approach_buttons(g)
+      end
+    end
+  end
   if long_710.phase=="align" then
     local frame=emu.framecount()
     local g=pair_geometry(sample_for_auto,long_710.origin,long_710.target)
