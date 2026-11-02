@@ -1131,6 +1131,15 @@ while true do
         else
           buttons,reason=Ordered.step(sample_for_auto,holder,target,movement)
           if reason=="approach_step" then
+            -- Dash applies ONLY to movement during 7->10, never a pass.
+            -- Keep burst_direction cardinal; Y is not a steering axis.
+            if holder==7 and target==10 and not buttons.B and
+                (buttons.Right or buttons.Left or buttons.Up or buttons.Down) then
+              buttons.Y=true
+              auto_write(emu.framecount(),"approach_710_dash_start",7,10,selected_pass_button,
+                "dash=Y|direction="..tostring(movement.direction)..
+                "|distance="..tostring((Feet.measure(sample_for_auto,7,10) or {}).distance))
+            end
             movement.burst_buttons=buttons
             movement.target=target
             local initial=Feet.measure(sample_for_auto,holder,target)
@@ -1144,7 +1153,7 @@ while true do
                 "|lateral="..tostring(initial and initial.lateral))
             else
               movement.burst_direction=nil
-              for key,pressed in pairs(buttons) do if pressed then movement.burst_direction=key end end
+              for _,key in ipairs({"Right","Left","Up","Down"}) do if buttons[key] then movement.burst_direction=key;break end end
             end
             local desired_burst=(holder==5 and target==8 and not movement.right_suspended and buttons.Right) and 8 or Ordered.BURST_FRAMES
             if holder==7 and target==10 and buttons.Right and not buttons.Left and not buttons.B then
@@ -1220,6 +1229,12 @@ while true do
       buttons={};reason=selector_reason or "invalid_handoff";autopass.enabled=false
       pass_chain.active=false;auto_finished=true
       auto_write(emu.framecount(),"feet_route_blocked",holder,nil,selected_pass_button,reason)
+    end
+    -- Fail closed: release Dash whenever not actively approaching 7->10,
+    -- and never allow Dash to accompany B or X.
+    if buttons.Y and (buttons.B or buttons.X or reason~="approach_step"
+       or holder~=7 or not pass_chain.active) then
+      buttons.Y=nil
     end
     if autopass.early_710_trial and holder==7 and autopass.target==10 then
       if reason=="target_selected" or reason=="possession_gate_ready"
