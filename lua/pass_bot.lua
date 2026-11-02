@@ -3079,6 +3079,7 @@ while true do
       end
     end
   end
+  local exclusive_pass_62=false
   -- Priority arbitration happens AFTER other controllers, BEFORE joypad output.
   -- Never interfere with the bonus finish or release an unverified B pulse.
   if armed and clock_started and pass_chain.active and not auto_finished and
@@ -3112,6 +3113,7 @@ while true do
          not lane_blocker(sample_for_auto,6,2) then
         buttons[geom.direction]=true
         buttons.B=true
+        exclusive_pass_62=true
         exclusive_62.shots=exclusive_62.shots+1
         exclusive_62.state="done"
         auto_write(frame,"exclusive_6_to_2_B",6,2,"B",
@@ -3138,7 +3140,7 @@ while true do
     local sender=spatial.holder
     local special=(long_710.phase=="face" or long_710.phase=="observe")
       and long_710.origin==sender and long_710.target
-    local receiver=special or autopass.target
+    local receiver=exclusive_pass_62 and 2 or special or autopass.target
     if not receiver and autopass.last_attempt and autopass.last_attempt.from==sender then
       receiver=autopass.last_attempt.to
     end
