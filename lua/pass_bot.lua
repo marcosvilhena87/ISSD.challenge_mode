@@ -1993,6 +1993,17 @@ while true do
     long_710.attempts={}
     long_710.sidestep_97_exhausted=false
   end
+  if final_target and long_710.support_target and
+      spatial.holder==long_710.support_target then
+    auto_write(emu.framecount(),"final_support_received",spatial.holder,final_target,"B",
+      "support_target="..tostring(long_710.support_target)..
+      "|next_target="..tostring(final_target))
+    long_710.support_target=nil
+    long_710.original_target=nil
+    long_710.attempts={}
+    long_710.phase="ready"
+    long_710.cooldown_until=emu.framecount()+8
+  end
   if final_target and spatial.holder and spatial.holder~=long_710.final_last_holder then
     auto_write(emu.framecount(),"final_holder_changed",spatial.holder,final_target,"B",
       "previous_holder="..tostring(long_710.final_last_holder))
@@ -2083,6 +2094,42 @@ while true do
           auto_write(emu.framecount(),"last_missing_sidestep_started",from,target,"B",
             "blocker="..tostring(blocker).."|direction="..long_710.walk_dir)
         elseif blocker then
+          -- v0.8.95: choose a previously visited teammate as support during
+          -- PLANNING, not only after entering the face phase.
+          local support_key=tostring(from)..":"..tostring(blocker)
+          local support_count=long_710.support_attempts[support_key] or 0
+          local support_g=support_receiver(sample_for_auto,from,target,blocker)
+          if support_g and support_count<2 then
+            long_710.support_attempts[support_key]=support_count+1
+            long_710.original_target=missing or target
+            long_710.support_target=blocker
+            long_710.origin=from
+            long_710.target=blocker
+            long_710.initial=support_g.distance
+            long_710.direction=support_g.direction
+            long_710.receiver_start={x=support_g.xy.tx,y=support_g.xy.ty}
+            long_710.carrier_start={x=support_g.xy.hx,y=support_g.xy.hy}
+            long_710.start=emu.framecount()
+            long_710.shot_frame=nil
+            long_710.fast_pass=true
+            long_710.phase="face"
+            long_710.cooldown_until=0
+            auto_write(emu.framecount(),"final_support_planned",from,blocker,"B",
+              "final_target="..tostring(missing or target)..
+              "|support_target="..tostring(blocker)..
+              "|already_visited="..tostring(spatial.visited[blocker]==true)..
+              "|direction="..support_g.direction..
+              "|distance="..string.format("%.2f",support_g.distance)..
+              "|attempt="..(support_count+1))
+          else
+            if not long_710.last_support_reject_frame or
+                emu.framecount()-long_710.last_support_reject_frame>=24 then
+              long_710.last_support_reject_frame=emu.framecount()
+              auto_write(emu.framecount(),"final_support_rejected",from,blocker,"B",
+                "final_target="..tostring(missing or target)..
+                "|reason="..(support_count>=2 and "attempt_limit" or "invalid_support_geometry"))
+            end
+          end
           if not long_710.last_blocker_frame or
              emu.framecount()-long_710.last_blocker_frame>=24 then
             long_710.last_blocker_frame=emu.framecount()
