@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.68",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,CONTINUOUS_HOLD_710=24,CONTINUOUS_HOLD_67=12,STALL_WINDOW=6}
+local M={VERSION="0.8.69",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,EXTEND_FRAMES=30,BURST_FRAMES=4,CONTINUOUS_HOLD_710=24,CONTINUOUS_HOLD_67=12,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -348,12 +348,16 @@ function M.guard_right(state,metrics,motion)
  local actual_projection=motion and motion.projection or nil
  state.last_right_distance_change=distance_change
  if distance_change>8 or (actual_projection and actual_projection< -6) then
-  state.right_suspended=true
-  state.right_block_reason="measured_regression"
+  -- 5→8: one adverse window can be inertia or a moving receiver.
+  -- Demand three independent adverse bursts before a controlled retry.
+  state.right_58_regressions=(state.right_58_regressions or 0)+1
   state.right_progress_streak=0
-  state.penalties=state.penalties or {}
-  state.penalties.Right=(state.penalties.Right or 0)+24
-  return "right_regressed",distance_change
+  if state.right_58_regressions>=3 then
+   state.right_suspended=true
+   state.right_block_reason="persistent_regression_58"
+   return "right_persistent_regression",distance_change
+  end
+  return "right_transient_regression",distance_change
  end
  if distance_change>0 or (actual_projection and actual_projection<0) then
   state.right_small_negative=(state.right_small_negative or 0)+1
@@ -368,6 +372,7 @@ function M.guard_right(state,metrics,motion)
     (math.abs(actual_projection or 0)<0.5 and
      (metrics.lateral < state.burst_start.lateral-0.5 or distance_change< -0.1)) then
   state.right_still=0
+  state.right_58_regressions=0
   state.right_small_negative=0;state.right_cumulative_regression=0
   state.right_progress_streak=(state.right_progress_streak or 0)+1
   return (math.abs(actual_projection or 0)<0.5) and "right_lateral_progress" or "right_progress",distance_change
