@@ -1,6 +1,6 @@
 -- v0.8.23: progress-guided approach with bounded axis switching.
 local Feet=require("challenge.pass_feet_v0815")
-local M={VERSION="0.8.79",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,MAX_APPROACH_710_ABSOLUTE=480,EXTEND_FRAMES=30,BURST_FRAMES=4,CONTINUOUS_HOLD_710=24,CONTINUOUS_HOLD_67=12,STALL_WINDOW=6}
+local M={VERSION="0.8.80",ROUTE={6,2,3,4,5,8,9,7,10,11},MAX_APPROACH=90,MAX_APPROACH_ABSOLUTE=210,MAX_APPROACH_710_ABSOLUTE=480,EXTEND_FRAMES=30,BURST_FRAMES=4,CONTINUOUS_HOLD_710=24,CONTINUOUS_HOLD_67=12,STALL_WINDOW=6}
 local function find(sample,id)
  for _,p in ipairs(sample and sample.players or {}) do if p.id==id then return p end end
 end
@@ -481,6 +481,12 @@ end
 function M.capture(sample,holder,target)
  local a,b=find(sample,holder),find(sample,target)
  if not a or not b then return nil end
+ local function valid(p)
+  return type(p.x)=="number" and type(p.y)=="number"
+     and p.x==p.x and p.y==p.y and math.abs(p.x)<10000
+     and math.abs(p.y)<10000 and not (p.x==0 and p.y==0)
+ end
+ if not valid(a) or not valid(b) then return nil end
  return {hx=a.x,hy=a.y,tx=b.x,ty=b.y}
 end
 function M.observe_motion(state,sample,holder,target)
