@@ -321,7 +321,8 @@ local long_710={phase="ready",start=nil,initial=nil,direction=nil,shot_frame=nil
  attempts={},cooldown_until=0,receiver_start=nil,carrier_start=nil,
  sidestep_97_count=0,sidestep_97_initial=nil,sidestep_97_blocker=nil,
  sidestep_97_last_cross=nil,sidestep_97_exhausted=false,
- support_attempts={},support_target=nil,original_target=nil,fast_pass=false}
+ support_attempts={},support_target=nil,original_target=nil,fast_pass=false,
+ final_target=nil,final_retries=0,final_next_retry=0,final_last_holder=nil}
 -- Last missing outfield player: player IDs 2..11 (10 players), spatial evidence only.
 local function last_missing_710(visited,holder)
  if not visited then return nil end
@@ -1981,6 +1982,43 @@ while true do
     auto_write(emu.framecount(),"long_pass_rearmed",spatial.holder,nil,"B",
       "reason=finished_previous_trial")
   end
+  -- v0.8.94: the sole unvisited outfielder always owns the destination.
+  local final_target=last_missing_710(spatial.visited,spatial.holder)
+  if final_target~=long_710.final_target then
+    auto_write(emu.framecount(),"final_target_changed",spatial.holder,final_target,"B",
+      "previous="..tostring(long_710.final_target).."|reason=visited_set_update")
+    long_710.final_target=final_target
+    long_710.final_retries=0
+    long_710.final_next_retry=0
+    long_710.attempts={}
+    long_710.sidestep_97_exhausted=false
+  end
+  if final_target and spatial.holder and spatial.holder~=long_710.final_last_holder then
+    auto_write(emu.framecount(),"final_holder_changed",spatial.holder,final_target,"B",
+      "previous_holder="..tostring(long_710.final_last_holder))
+    long_710.final_last_holder=spatial.holder
+    long_710.attempts={}
+    long_710.final_retries=0
+    long_710.final_next_retry=0
+    if long_710.phase=="done" then long_710.phase="ready" end
+  end
+  if final_target and long_710.phase=="done" and
+     emu.framecount()>=(long_710.final_next_retry or 0) and
+     emu.framecount()>=(long_710.cooldown_until or 0) then
+    long_710.phase="ready"
+    long_710.final_retries=long_710.final_retries+1
+    long_710.attempts={}
+    auto_write(emu.framecount(),"final_retry_rearmed",spatial.holder,final_target,"B",
+      "retry="..long_710.final_retries.."|reason=resume_after_trial")
+  end
+  if final_target and long_710.phase=="ready" and
+      long_710.target and long_710.target~=final_target and
+      long_710.original_target~=final_target then
+    auto_write(emu.framecount(),"final_stale_target_cleared",spatial.holder,final_target,"B",
+      "stale="..tostring(long_710.target))
+    long_710.target=nil
+    long_710.support_target=nil
+  end
   -- v0.8.85: first protect the final missing receiver, even after a detour.
   -- Never count a speculative pass as a verified visit.
   local missing=last_missing_710(spatial.visited,spatial.holder)
@@ -1991,8 +2029,7 @@ while true do
         (Ordered.next(nil,7,spatial.visited)==10 or
          (pass_chain.repeat_710_started and not pass_chain.repeat_710_used)))) then
     local from=spatial.holder
-    local target=(long_710.return_due and from==7 and 10)
-       or missing or (from==9 and not spatial.visited[7] and 7)
+    local target=missing or (long_710.return_due and from==7 and 10) or (from==9 and not spatial.visited[7] and 7)
        or ((from==7) and 10 or nil)
     if target and target~=from then
       local xy=Ordered.capture(sample_for_auto,from,target)
@@ -2186,6 +2223,7 @@ while true do
       end
       if failure then
         long_710.phase="done";long_710.cooldown_until=frame+36
+        long_710.final_next_retry=frame+36
         auto_write(frame,"long_710_aborted",long_710.origin,long_710.target,selected_pass_button,
           "reason="..failure.."|actual_holder="..tostring(spatial.holder)..
           "|ball_gap="..tostring(gap).."|origin="..tostring(long_710.origin)..
@@ -2284,7 +2322,7 @@ while true do
   end
   -- Audit actual input and paired coordinates for ANY selected relay.
   if armed and sample_for_auto and spatial.holder then
-    local target=long_710.target
+    local target=last_missing_710(spatial.visited,spatial.holder) or long_710.target
     if not target and long_710.phase=="ready" then
       target=last_missing_710(spatial.visited,spatial.holder)
         or Ordered.next(nil,spatial.holder,spatial.visited)
