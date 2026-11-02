@@ -1855,7 +1855,7 @@ while true do
   -- decisions are overridden from first verified 7-possession onward.
   if armed and static_710.phase~="finished" then
     local frame=emu.framecount()
-    if static_710.phase=="await_7" and holder==7 and sample_for_auto then
+    if static_710.phase=="await_7" and spatial.holder==7 and sample_for_auto then
       local pos=Ordered.capture(sample_for_auto,7,10)
       local gap=ball_gap_710(sample_for_auto)
       if pos and gap and gap<=18 then
