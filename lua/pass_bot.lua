@@ -315,7 +315,8 @@ local auto_finished=false
 local pass_chain={active=false,passes=0,next_frame=0,limit=18,started=false,previous=nil,consecutive_relays=0,route_index=1,approach_frames=0,approach_neutral=false,approach_state={}}
 -- v0.8.84 long-range pass trial integrated in the normal relay sequence.
 local long_710={phase="ready",start=nil,initial=nil,direction=nil,shot_frame=nil,
- target=nil,origin=nil,trial_kind=nil}
+ target=nil,origin=nil,trial_kind=nil,returns=0,missing_attempts=0,
+ last_holder=nil,return_due=false,walk_ticks=0,walk_start=nil,walk_dir=nil}
 -- Last missing outfield player: player IDs 2..11 (10 players), spatial evidence only.
 local function last_missing_710(visited,holder)
  if not visited then return nil end
@@ -566,7 +567,14 @@ while true do
     calibration_write(emu.framecount(),"holder_detection_timeout",nil,nil,nil)
     print("[ISSD.pass_lv1] single-pass result: holder_detection_timeout")
   end
+  -- Priority lock: normal approach/repeat must not compete with recovery.
+  local priority_missing=last_missing_710(spatial.visited,spatial.holder)
+  local priority_lock=pass_chain.active and
+      (priority_missing~=nil or long_710.return_due or
+       long_710.phase=="sidestep" or long_710.phase=="face" or
+       long_710.phase=="observe")
   if armed and autopass.enabled and not auto_finished and sample_for_auto
+      and not priority_lock
       and (spatial.holder or autopass.phase~="idle")
       and (not pass_chain.active or emu.framecount()>=pass_chain.next_frame) then
     local holder=spatial.holder
@@ -1881,16 +1889,28 @@ while true do
       end
     end
   end
+  -- Observe a genuine holder change 10->7; perform one 7->10 return
+  -- before resuming the outstanding last-player recovery.
+  if armed and pass_chain.active and spatial.holder then
+    if long_710.last_holder==10 and spatial.holder==7 and
+       long_710.returns<1 then
+      long_710.return_due=true
+      auto_write(emu.framecount(),"return_710_queued",7,10,"B",
+        "reason=observed_holder_transition_10_to_7")
+    end
+    long_710.last_holder=spatial.holder
+  end
   -- v0.8.85: first protect the final missing receiver, even after a detour.
   -- Never count a speculative pass as a verified visit.
   local missing=last_missing_710(spatial.visited,spatial.holder)
   if armed and pass_chain.active and sample_for_auto and
      long_710.phase=="ready" and spatial.holder and
-     (missing or (spatial.holder==7 and
+     (missing or long_710.return_due or (spatial.holder==7 and
         (Ordered.next(nil,7,spatial.visited)==10 or
          (pass_chain.repeat_710_started and not pass_chain.repeat_710_used)))) then
     local from=spatial.holder
-    local target=missing or ((from==7) and 10 or nil)
+    local target=(long_710.return_due and from==7 and 10)
+       or missing or ((from==7) and 10 or nil)
     if target and target~=from then
       local xy=Ordered.capture(sample_for_auto,from,target)
       local gap=ball_gap_710(sample_for_auto)
@@ -1904,7 +1924,16 @@ while true do
         local dx,dy=xy.tx-xy.hx,xy.ty-xy.hy
         local distance=math.sqrt(dx*dx+dy*dy)
         local blocker,cross=lane_blocker(sample_for_auto,from,target)
-        if blocker then
+        if blocker and missing and not long_710.return_due and
+           long_710.walk_ticks<4 then
+          long_710.phase="sidestep"
+          long_710.walk_start=emu.framecount()
+          long_710.walk_ticks=long_710.walk_ticks+1
+          long_710.origin=from;long_710.target=target
+          long_710.walk_dir=(long_710.walk_ticks%2==1) and "Up" or "Down"
+          auto_write(emu.framecount(),"last_missing_sidestep_started",from,target,"B",
+            "blocker="..tostring(blocker).."|direction="..long_710.walk_dir)
+        elseif blocker then
           if not long_710.last_blocker_frame or
              emu.framecount()-long_710.last_blocker_frame>=24 then
             long_710.last_blocker_frame=emu.framecount()
@@ -1916,7 +1945,11 @@ while true do
           long_710.phase="face";long_710.start=emu.framecount()
           long_710.initial=distance;long_710.target=target
           long_710.origin=from
-          long_710.trial_kind=missing and "last_missing" or "relay_710"
+          long_710.trial_kind=long_710.return_due and "return_7_to_10"
+             or (missing and "last_missing" or "relay_710")
+          if long_710.return_due then
+            long_710.return_due=false;long_710.returns=long_710.returns+1
+          end
           long_710.direction=(math.abs(dx)>=math.abs(dy))
              and (dx>=0 and "Right" or "Left")
              or (dy>=0 and "Down" or "Up")
@@ -1928,6 +1961,33 @@ while true do
             "|kind="..long_710.trial_kind.."|ball_gap="..string.format("%.2f",gap))
         end
       end
+    end
+  end
+  if long_710.phase=="sidestep" then
+    local frame=emu.framecount()
+    local xy=Ordered.capture(sample_for_auto,long_710.origin,long_710.target)
+    local gap=ball_gap_710(sample_for_auto)
+    if long_710.origin~=7 and sample_for_auto and sample_for_auto.ball then
+      for _,p in ipairs(sample_for_auto.players or {}) do
+        if p.id==long_710.origin then
+          gap=math.sqrt((sample_for_auto.ball.x-p.x)^2+
+                        (sample_for_auto.ball.y-p.y)^2)
+        end
+      end
+    end
+    buttons={}
+    if not xy or not gap or gap>18 or spatial.holder~=long_710.origin then
+      long_710.phase="ready"
+      auto_write(frame,"last_missing_sidestep_aborted",
+        long_710.origin,long_710.target,"B","reason=loss_of_possession")
+    elseif frame-long_710.walk_start<6 then
+      buttons={[long_710.walk_dir]=true}
+    else
+      long_710.phase="ready"
+      auto_write(frame,"last_missing_sidestep_finished",
+        long_710.origin,long_710.target,"B",
+        "direction="..long_710.walk_dir..
+        "|holder_x="..xy.hx.."|holder_y="..xy.hy)
     end
   end
   if long_710.phase=="face" or long_710.phase=="observe" then
@@ -1973,6 +2033,11 @@ while true do
       end
     end
     if long_710.phase=="done" then pass_chain.next_frame=frame+1 end
+  end
+  if pass_chain.active and last_missing_710(spatial.visited,spatial.holder)
+      and long_710.phase=="ready" then
+    -- Do not allow stale ordinary approach commands to move toward player 10.
+    buttons={}
   end
   joypad.set(buttons,1)
   emu.frameadvance()
