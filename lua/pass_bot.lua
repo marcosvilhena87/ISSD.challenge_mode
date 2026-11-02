@@ -3109,7 +3109,9 @@ while true do
     if ctrl.state=="ready" then
       ctrl.state="moving";ctrl.start=frame
       ctrl.best=geom and geom.distance or math.huge
+      ctrl.best_vertical=geom and math.abs(geom.dy) or math.huge
       ctrl.last_progress=frame
+      ctrl.last_vertical_progress=frame
       ctrl.start_position=geom and {x=geom.xy.hx,y=geom.xy.hy} or nil
       auto_write(frame,"exclusive_priority_started",from,to,"MOVE",
         "distance="..tostring(geom and geom.distance)..
@@ -3119,6 +3121,10 @@ while true do
     if geom and geom.distance<ctrl.best-1 then
       ctrl.best=geom.distance;ctrl.last_progress=frame
     end
+    if from==6 and geom and math.abs(geom.dy)<ctrl.best_vertical-1 then
+      ctrl.best_vertical=math.abs(geom.dy)
+      ctrl.last_vertical_progress=frame
+    end
     local walked=geom and ctrl.start_position and math.sqrt(
       (geom.xy.hx-ctrl.start_position.x)^2+(geom.xy.hy-ctrl.start_position.y)^2) or 0
     local reason=nil
@@ -3126,8 +3132,11 @@ while true do
     elseif not carrier or carrier>18 then reason="possession_unverified"
     elseif geom.distance>320 then reason="outside_bounded_route"
     elseif walked>155 then reason="walk_limit"
-    elseif elapsed>=78 then reason="frame_limit"
-    elseif frame-ctrl.last_progress>=14 then reason="progress_stall"
+    elseif elapsed>=(from==6 and 66 or 78) then reason="frame_limit"
+    elseif from==6 and elapsed>=26 and frame-ctrl.last_vertical_progress>=18
+       and math.abs(geom.dy)>95 then reason="vertical_stall"
+    elseif frame-ctrl.last_progress>=14 and
+       not (from==6 and frame-ctrl.last_vertical_progress<12) then reason="progress_stall"
     end
     if reason then
       ctrl.state="done"
@@ -3147,7 +3156,14 @@ while true do
           string.format("%.2f",geom.distance).."|frames="..elapsed)
       else
         -- Once close enough, spend remaining movement on vertical correction.
-        if math.abs(geom.dy)>95 and geom.distance<=200 then
+        if from==6 and math.abs(geom.dy)>95 then
+          -- Begin vertical correction early for 6->2; diagonal movement in
+          -- v0.9.14 consumed the window while leaving a large Y difference.
+          buttons[geom.dy>0 and "Down" or "Up"]=true
+          if geom.distance>220 and math.abs(geom.dx)>75 then
+            buttons[geom.dx>0 and "Right" or "Left"]=true
+          end
+        elseif math.abs(geom.dy)>95 and geom.distance<=200 then
           buttons[geom.dy>0 and "Down" or "Up"]=true
         else
           if math.abs(geom.dx)>20 then buttons[geom.dx>0 and "Right" or "Left"]=true end
@@ -3156,7 +3172,9 @@ while true do
         auto_write(frame,"exclusive_priority_move",from,to,"MOVE",
           "dx="..geom.dx.."|dy="..geom.dy..
           "|distance="..string.format("%.2f",geom.distance)..
-          "|elapsed="..elapsed)
+          "|elapsed="..elapsed..
+          "|vertical_remaining="..string.format("%.2f",math.abs(geom.dy))..
+          "|vertical_best="..string.format("%.2f",ctrl.best_vertical))
       end
     end
   end
