@@ -322,7 +322,8 @@ local long_710={phase="ready",start=nil,initial=nil,direction=nil,shot_frame=nil
  sidestep_97_count=0,sidestep_97_initial=nil,sidestep_97_blocker=nil,
  sidestep_97_last_cross=nil,sidestep_97_exhausted=false,
  support_attempts={},support_target=nil,original_target=nil,fast_pass=false,
- final_target=nil,final_retries=0,final_next_retry=0,final_last_holder=nil}
+ final_target=nil,final_retries=0,final_next_retry=0,final_last_holder=nil,
+ universal_previous_holder=nil,universal_support_cooldown={}}
 -- Last missing outfield player: player IDs 2..11 (10 players), spatial evidence only.
 local function last_missing_710(visited,holder)
  if not visited then return nil end
@@ -2030,6 +2031,10 @@ while true do
     long_710.target=nil
     long_710.support_target=nil
   end
+  -- v0.8.96: remember the previous holder, preventing immediate support ping-pong.
+  if spatial.holder and spatial.holder~=long_710.last_holder then
+    long_710.universal_previous_holder=long_710.last_holder
+  end
   -- v0.8.85: first protect the final missing receiver, even after a detour.
   -- Never count a speculative pass as a verified visit.
   local missing=last_missing_710(spatial.visited,spatial.holder)
@@ -2038,10 +2043,11 @@ while true do
      (missing or long_710.return_due or
       (spatial.holder==9 and not spatial.visited[7]) or (spatial.holder==7 and
         (Ordered.next(nil,7,spatial.visited)==10 or
-         (pass_chain.repeat_710_started and not pass_chain.repeat_710_used)))) then
+         (pass_chain.repeat_710_started and not pass_chain.repeat_710_used))) or
+      Ordered.next(nil,spatial.holder,spatial.visited)~=nil) then
     local from=spatial.holder
     local target=missing or (long_710.return_due and from==7 and 10) or (from==9 and not spatial.visited[7] and 7)
-       or ((from==7) and 10 or nil)
+       or ((from==7) and 10 or nil) or Ordered.next(nil,from,spatial.visited)
     if target and target~=from then
       local xy=Ordered.capture(sample_for_auto,from,target)
       local gap=ball_gap_710(sample_for_auto)
@@ -2058,7 +2064,33 @@ while true do
         local dx,dy=xy.tx-xy.hx,xy.ty-xy.hy
         local distance=math.sqrt(dx*dx+dy*dy)
         local blocker,cross=lane_blocker(sample_for_auto,from,target)
-        if blocker and from==9 and target==7 and
+        -- Universal support BEFORE sidestep, for every intended pass.
+        local support_g=blocker and support_receiver(sample_for_auto,from,target,blocker) or nil
+        local support_key=blocker and (tostring(from)..":"..tostring(blocker)) or nil
+        local support_count=support_key and (long_710.support_attempts[support_key] or 0) or 0
+        local loop_back=blocker and blocker==long_710.universal_previous_holder
+        local cooldown=blocker and (long_710.universal_support_cooldown[support_key] or 0) or 0
+        if blocker and support_g and support_count<2 and not loop_back and
+           emu.framecount()>=cooldown then
+          long_710.support_attempts[support_key]=support_count+1
+          long_710.universal_support_cooldown[support_key]=emu.framecount()+90
+          long_710.original_target=target
+          long_710.support_target=blocker
+          long_710.origin=from;long_710.target=blocker
+          long_710.initial=support_g.distance
+          long_710.direction=support_g.direction
+          long_710.receiver_start={x=support_g.xy.tx,y=support_g.xy.ty}
+          long_710.carrier_start={x=support_g.xy.hx,y=support_g.xy.hy}
+          long_710.start=emu.framecount()
+          long_710.shot_frame=nil
+          long_710.fast_pass=true
+          long_710.phase="face"
+          auto_write(emu.framecount(),"universal_support_planned",from,blocker,"B",
+            "primary_target="..tostring(target)..
+            "|already_visited="..tostring(spatial.visited[blocker]==true)..
+            "|attempt="..(support_count+1)..
+            "|direction="..support_g.direction)
+        elseif blocker and from==9 and target==7 and
            not long_710.sidestep_97_exhausted and
            long_710.sidestep_97_count<4 then
           long_710.phase="sidestep"
@@ -2084,6 +2116,16 @@ while true do
               "attempts="..long_710.sidestep_97_count..
               "|blocker="..blocker.."|cross="..string.format("%.2f",cross))
           end
+        elseif blocker and (loop_back or support_count>=2 or not support_g or
+             emu.framecount()<cooldown) and
+             (not long_710.last_universal_reject_frame or
+              emu.framecount()-long_710.last_universal_reject_frame>=24) then
+          long_710.last_universal_reject_frame=emu.framecount()
+          auto_write(emu.framecount(),"universal_support_rejected",from,blocker,"B",
+            "primary_target="..tostring(target)..
+            "|reason="..(loop_back and "immediate_return" or
+              (support_count>=2 and "attempt_limit" or
+              (not support_g and "invalid_geometry" or "cooldown"))))
         elseif blocker and missing and not long_710.return_due and
            long_710.walk_ticks<4 then
           long_710.phase="sidestep"
